@@ -22,3 +22,18 @@ test('lockstep survives packet loss, peers stay in sync', () => {
   assert.ok(a.net.frame > 1500 && b.net.frame > 1500, `frames ${a.net.frame} ${b.net.frame}`);
   assert.equal(a.net.desync || b.net.desync, false);
 });
+
+// Banner rule: brief stalls (jitter, a dropped packet) stay hidden; a real hold-up (peer silent 250 ms+) shows.
+test('lagging only after a sustained stall', () => {
+  const net = new Netplay(() => {}, 0, 2);
+  const tick = () => net.tick(() => 0, () => {}, () => 0);
+  tick(); tick(); // frames 0-1 come prefilled
+  for (let i = 0; i < 3; i++) tick();
+  assert.equal(net.stalled, true);
+  assert.equal(net.lagging, false, 'micro-stall must not show the banner');
+  net.onMessage({ t: 'in', f: 2, b: [0] });
+  tick();
+  assert.equal(net.stallTicks, 0);
+  for (let i = 0; i < 15; i++) tick();
+  assert.equal(net.lagging, true);
+});

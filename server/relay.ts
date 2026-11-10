@@ -35,7 +35,7 @@ const newCode = () => {
   return c;
 };
 
-// Median of 3 app-level pings, ms. (Protocol-level ws pings get answered by hosting proxies, so they read ~0.)
+// Worst of 3 app-level pings, ms. (Protocol-level ws pings get answered by hosting proxies, so they read ~0.)
 // Falls back to 300 if the client doesn't answer.
 const pongs = new WeakMap<WebSocket, () => void>();
 const rtt = (ws: WebSocket) => new Promise<number>((done) => {
@@ -45,7 +45,7 @@ const rtt = (ws: WebSocket) => new Promise<number>((done) => {
   pongs.set(ws, () => {
     samples.push(performance.now() - t);
     if (samples.length < 3) return go();
-    pongs.delete(ws); done(samples.sort((a, b) => a - b)[1]);
+    pongs.delete(ws); done(Math.max(...samples)); // worst of 3: jitter margin
   });
   go();
   setTimeout(() => { pongs.delete(ws); done(300); }, 3000);
