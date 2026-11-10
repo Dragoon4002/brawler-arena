@@ -1,4 +1,4 @@
-import { newGame, step, hash, IN, type GameState } from './sim/sim.ts';
+import { newGame, step, hash, IN, type GameState, type StageId } from './sim/sim.ts';
 import { createRenderer } from './render/draw.ts';
 import { localInputs, soloInput } from './input.ts';
 import { Netplay, linkPeer } from './net.ts';
@@ -13,7 +13,9 @@ const SERVER = params.get('server') ?? import.meta.env.VITE_SERVER_URL ??
   (import.meta.env.DEV ? `ws://${location.hostname}:8787` : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
 
 let mode: 'menu' | 'local' | 'online' = 'menu';
-let state: GameState = newGame();
+// ponytail: ?stage=grove|docks picks the arena until the Play screen's arena select lands.
+const STAGE_ID = (['ember', 'grove', 'docks'].includes(params.get('stage') ?? '') ? params.get('stage') : 'ember') as StageId;
+let state: GameState = newGame(undefined, STAGE_ID);
 let net: Netplay | null = null;
 let ws: WebSocket | null = null;
 let peer: ReturnType<typeof linkPeer> | null = null;
@@ -23,13 +25,13 @@ let overFrames = 0;
 
 // Shared by local + online so rematch is deterministic too.
 function advance(inputs: number[]) {
-  if (state.winner >= 0 && ++overFrames > 90 && inputs.every((b) => b & IN.JUMP)) { state = newGame(); overFrames = 0; }
+  if (state.winner >= 0 && ++overFrames > 90 && inputs.every((b) => b & IN.JUMP)) { state = newGame(undefined, STAGE_ID); overFrames = 0; }
   step(state, inputs);
   renderer.onEvents(state.events);
 }
 
 function start(m: typeof mode) {
-  mode = m; state = newGame(); overFrames = 0; banner = '';
+  mode = m; state = newGame(undefined, STAGE_ID); overFrames = 0; banner = '';
   menu.hidden = m !== 'menu';
 }
 

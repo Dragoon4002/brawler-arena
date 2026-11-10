@@ -1,5 +1,6 @@
 // Canvas renderer: dynamic camera, stage, fighters, hit FX, HUD. Render-only state (particles, shake) lives here.
-import { STAGE, HURT_H, MAX_HP, hitboxOf, type GameState, type SimEvent } from '../sim/sim.ts';
+import { STAGES, HURT_H, MAX_HP, hitboxOf, type GameState, type SimEvent, type StageId } from '../sim/sim.ts';
+import { paintBackground, paintStage, paintFront } from './stage.ts';
 import { drawMonster, poseFor, type Look } from './rig.ts';
 
 export const W = 1280, H = 720;
@@ -19,6 +20,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   const parts: Particle[] = [];
   const squash = [0, 0];
   let showBoxes = false;
+  let stageId: StageId = 'ember';
   addEventListener('keydown', (e) => { if (e.code === 'Backquote') showBoxes = !showBoxes; });
 
   function resize() {
@@ -45,7 +47,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
         parts.push({ x: e.x, y: e.y, vx: 0, vy: 0, life: 12, max: 12, size: big ? 90 : 50, color: '#fff', kind: 'ring' });
         shake = Math.max(shake, Math.min(22, e.power * 0.7));
       } else if (e.kind === 'ko') {
-        const bz = STAGE.blast;
+        const bz = STAGES[stageId].blast;
         const x = Math.max(bz.x0 + 120, Math.min(bz.x1 - 120, e.x)), y = Math.max(bz.y0 + 120, Math.min(bz.y1 - 120, e.y));
         parts.push({ x, y, vx: 0, vy: 0, life: 40, max: 40, size: 1, color: LOOKS[e.who].body, kind: 'beam' });
         burst(x, y, 40, 26, LOOKS[e.who].body, 'spark', 7, 34);
@@ -62,43 +64,12 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   function updateCamera(s: GameState) {
     const live = s.fighters.filter((f) => f.state !== 'dead');
     const xs = live.length ? live.map((f) => f.x) : [800], ys = live.length ? live.map((f) => f.y - 45) : [500];
-    const x0 = Math.min(...xs, 500), x1 = Math.max(...xs, 1100), y0 = Math.min(...ys, 380), y1 = Math.max(...ys, 640);
+    const b = STAGES[s.stage].cam;
+    const x0 = Math.min(...xs, b.x0), x1 = Math.max(...xs, b.x1), y0 = Math.min(...ys, b.y0), y1 = Math.max(...ys, b.y1);
     const z = Math.max(0.42, Math.min(1.0, W / (x1 - x0 + 520), H / (y1 - y0 + 380)));
     cam.x += ((x0 + x1) / 2 - cam.x) * 0.1;
     cam.y += ((y0 + y1) / 2 - cam.y) * 0.1;
     cam.z += (z - cam.z) * 0.08;
-  }
-
-  function background() {
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#20163f'); g.addColorStop(0.6, '#5b3a73'); g.addColorStop(1, '#e58f6a');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    // parallax hills
-    for (const [k, col, base, amp] of [[0.15, '#3a2a5c', 470, 70], [0.3, '#2b1f47', 540, 55]] as const) {
-      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(0, H);
-      for (let x = 0; x <= W; x += 40) {
-        const wx = x + cam.x * k;
-        ctx.lineTo(x, base + Math.sin(wx / 140) * amp * 0.6 + Math.sin(wx / 53) * amp * 0.25);
-      }
-      ctx.lineTo(W, H); ctx.fill();
-    }
-  }
-
-  function stage() {
-    const m = STAGE.main;
-    // floating island underside
-    ctx.fillStyle = '#4a3a5e';
-    ctx.beginPath(); ctx.moveTo(m.x0, m.y);
-    ctx.lineTo(m.x0 + 40, m.y1 + 40); ctx.lineTo((m.x0 + m.x1) / 2, m.y1 + 170); ctx.lineTo(m.x1 - 40, m.y1 + 40); ctx.lineTo(m.x1, m.y); ctx.fill();
-    ctx.fillStyle = '#6b5a7e'; ctx.fillRect(m.x0, m.y, m.x1 - m.x0, m.y1 - m.y);
-    ctx.fillStyle = '#7fd36b'; ctx.fillRect(m.x0 - 6, m.y - 4, m.x1 - m.x0 + 12, 16);
-    ctx.fillStyle = '#5fae52'; ctx.fillRect(m.x0 - 6, m.y + 10, m.x1 - m.x0 + 12, 4);
-    for (const p of STAGE.soft) {
-      ctx.fillStyle = '#a8794e'; ctx.fillRect(p.x0, p.y, p.x1 - p.x0, 12);
-      ctx.fillStyle = '#c99a68'; ctx.fillRect(p.x0, p.y, p.x1 - p.x0, 4);
-      ctx.fillStyle = '#6e4b2e';
-      for (const x of [p.x0 + 20, p.x1 - 26]) ctx.fillRect(x, p.y + 12, 6, 26);
-    }
   }
 
   function fighters(s: GameState) {
@@ -192,13 +163,15 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   }
 
   function draw(s: GameState, banner = '', info = '') {
+    if (s.stage !== stageId) { stageId = s.stage; parts.length = 0; }
     updateCamera(s);
-    background();
+    const t = performance.now() / 1000;
+    paintBackground(ctx, stageId, cam);
     ctx.save();
     const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
     shake *= 0.85;
     ctx.translate(W / 2 + sx, H / 2 + sy); ctx.scale(cam.z, cam.z); ctx.translate(-cam.x, -cam.y);
-    stage(); fighters(s); particles();
+    paintStage(ctx, stageId, t); fighters(s); particles(); paintFront(ctx, stageId, t);
     ctx.restore();
     hud(s, banner, info);
   }
