@@ -6,6 +6,7 @@ import { breedPair, children, history, monster, monsters } from '../store.ts';
 import { Logo, MonsterCard, Portrait, StageThumb, Stats } from './ui.tsx';
 import { STAGES, STAGE_IDS, type StageId } from '../stages.ts';
 import { prepareFight } from './arena.tsx';
+import { getAudio, setAudio } from '../audio.ts';
 
 const DEMO_NOTE = 'Demo collection stored in this browser. Monsters move on-chain to NEAR in the next build.';
 
@@ -261,6 +262,24 @@ export function Account() {
           </ul>
         </section>
       </div>
+      <SoundSettings />
     </>
+  );
+}
+
+function SoundSettings() {
+  const [a, setA] = useState(getAudio);
+  const set = (p: Parameters<typeof setAudio>[0]) => setA({ ...setAudio(p) });
+  return (
+    <section className="slab" style={{ display: 'grid', gap: 12 }} aria-label="Sound">
+      <h2>Sound</h2>
+      <label className="row">Music
+        <input type="range" min={0} max={1} step={0.05} value={a.music} onChange={(e) => set({ music: +e.target.value })} style={{ flex: 1, minHeight: 0, padding: 0 }} />
+      </label>
+      <label className="row">Effects
+        <input type="range" min={0} max={1} step={0.05} value={a.sfx} onChange={(e) => set({ sfx: +e.target.value })} style={{ flex: 1, minHeight: 0, padding: 0 }} />
+      </label>
+      <label className="row"><input type="checkbox" checked={a.muted} onChange={(e) => set({ muted: e.target.checked })} style={{ minHeight: 0 }} /> Mute everything (M in a fight)</label>
+    </section>
   );
 }

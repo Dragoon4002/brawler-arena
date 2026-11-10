@@ -4,6 +4,7 @@ import { startLocal, startOnline, type Player } from '../game/session.ts';
 import { recordResult } from '../store.ts';
 import type { Monster } from '../genes.ts';
 import type { StageId } from '../stages.ts';
+import { getAudio, toggleMute } from '../audio.ts';
 
 export type FightSetup =
   | { kind: 'local'; mons: [Monster, Monster]; stage: StageId }
@@ -19,11 +20,15 @@ export function Arena() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState('');
   const [live, setLive] = useState(false);
+  const [muted, setMuted] = useState(getAudio().muted);
 
   useEffect(() => {
     const s = setup;
     if (!s) { location.hash = '#/play'; return; }
-    const back = (e: KeyboardEvent) => { if (e.code === 'Escape') location.hash = '#/play'; };
+    const back = (e: KeyboardEvent) => {
+      if (e.code === 'Escape') location.hash = '#/play';
+      if (e.code === 'KeyM') setMuted(toggleMute().muted);
+    };
     addEventListener('keydown', back);
     const hooks = {
       status: setStatus,
@@ -43,6 +48,9 @@ export function Arena() {
   return (
     <div className="arena">
       <canvas ref={canvas} />
+      <button type="button" className="chip sound-toggle" aria-pressed={muted} onClick={() => setMuted(toggleMute().muted)}>
+        {muted ? 'Sound off (M)' : 'Sound on (M)'}
+      </button>
       {!live && (
         <div className="arena-overlay">
           <div className="slab" role="status">

@@ -138,6 +138,8 @@ input::placeholder { color: var(--muted); }
 .arena { position: fixed; inset: 0; display: grid; place-items: center; background: var(--sky-0); }
 .arena-overlay { position: fixed; inset: 0; display: grid; place-items: center; background: var(--scrim); }
 .arena-overlay .slab { display: grid; gap: 16px; justify-items: center; text-align: center; max-width: 440px; }
+.sound-toggle { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); cursor: pointer; font: inherit; font-size: 14px; }
+.sound-toggle:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
 .code { font-family: var(--font-display); font-size: 56px; color: var(--gold); text-shadow: 0 4px 0 var(--ink); }
 
 /* hatch reveal */
@@ -155,3 +157,4 @@ input::placeholder { color: var(--muted); }
   .tile:hover { transform: none; }
   .reveal { animation: none; }
 }
+input[type='range'], input[type='checkbox'] { accent-color: var(--ember); border: 0; background: none; }

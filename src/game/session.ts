@@ -6,6 +6,7 @@ import { localInputs, soloInput } from '../input.ts';
 import { Netplay, linkPeer } from '../net.ts';
 import { lookOf, sanitize, statsOf, type Dna } from '../genes.ts';
 import { STAGE_IDS, type StageId } from '../stages.ts';
+import { music, playEvents } from '../audio.ts';
 
 export interface Player { name: string; dna: Dna }
 export interface Hooks {
@@ -34,6 +35,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
     }
     step(state, inputs);
     renderer.onEvents(state.events);
+    playEvents(state);
     if (state.winner >= 0 && !reported) { reported = true; hooks.result?.(state.winner, state.fighters.map((_, i) => 3 - state.fighters[1 - i].stocks), seat); }
   }
 
@@ -51,12 +53,13 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
     raf = requestAnimationFrame(frame);
   }
   raf = requestAnimationFrame(frame);
+  music(stage);
   (globalThis as any).__net = () => ({ net, link, frame: state.frame }); // debug/test hook
 
   return {
     attach(n: Netplay, label: string) { net = n; link = label; },
     setBanner(t: string) { banner = t; },
-    stop() { cancelAnimationFrame(raf); renderer.destroy(); },
+    stop() { cancelAnimationFrame(raf); renderer.destroy(); music(null); },
   };
 }
 
