@@ -1,13 +1,32 @@
 // Tiny relay for lockstep netplay: pairs two clients by room code and forwards their input/hash packets.
 // No game logic here; both clients run the same deterministic sim.
+// Also serves the built game from dist/ so one process = whole deploy.
 import { WebSocketServer, type WebSocket } from 'ws';
 import { randomInt } from 'node:crypto';
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, join, normalize } from 'node:path';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
 const RELAYED = new Set(['in', 'hash']);
 const rooms = new Map<string, WebSocket[]>();
-const wss = new WebSocketServer({ port: PORT, maxPayload: 1024 });
+const DIST = join(import.meta.dirname, '..', 'dist');
+const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
+
+const http = createServer(async (req, res) => {
+  const path = normalize(decodeURIComponent((req.url ?? '/').split('?')[0])).replace(/^(\.\.[/\\])+/, '');
+  const file = join(DIST, path === '/' ? 'index.html' : path);
+  if (!file.startsWith(DIST)) { res.writeHead(403).end(); return; }
+  try {
+    const body = await readFile(file);
+    res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream' }).end(body);
+  } catch {
+    res.writeHead(404).end('not found (run npm run build?)');
+  }
+});
+const wss = new WebSocketServer({ server: http, maxPayload: 1024 });
+http.listen(PORT);
 
 const send = (ws: WebSocket, msg: object) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(msg));
 const newCode = () => {
@@ -43,4 +62,4 @@ wss.on('connection', (ws) => {
   });
 });
 
-console.log(`relay listening on ws://localhost:${PORT}`);
+console.log(`game + relay on http://localhost:${PORT}`);

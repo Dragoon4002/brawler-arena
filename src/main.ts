@@ -6,7 +6,9 @@ import { Netplay } from './net.ts';
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const menu = $('menu'), status = $('status');
 const renderer = createRenderer($<HTMLCanvasElement>('game'));
-const SERVER = new URLSearchParams(location.search).get('server') ?? import.meta.env.VITE_SERVER_URL ?? `ws://${location.hostname}:8787`;
+// Dev: separate relay on :8787. Prod: relay serves the page, so same host.
+const SERVER = new URLSearchParams(location.search).get('server') ?? import.meta.env.VITE_SERVER_URL ??
+  (import.meta.env.DEV ? `ws://${location.hostname}:8787` : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
 
 let mode: 'menu' | 'local' | 'online' = 'menu';
 let state: GameState = newGame();

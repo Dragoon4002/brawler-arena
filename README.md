@@ -13,6 +13,7 @@ npm test          # simulation tests
 
 - **Local versus:** click *Local Versus*.
 - **Online:** player A clicks *Host Online* and shares the 4-letter code. Player B types it and clicks *Join*.
+- **Production (one process):** `npm run build && npm start` serves the game and the relay on `$PORT` (default 8787). Deploy as a single Node web service, for example on Railway or Render.
 - **Remote server:** open the game with `?server=wss://your-host` or set `VITE_SERVER_URL` at build time.
 
 ## Controls
