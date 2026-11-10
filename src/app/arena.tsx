@@ -3,11 +3,12 @@ import { useEffect, useRef, useState } from 'react';
 import { startLocal, startOnline, type Player } from '../game/session.ts';
 import { recordResult } from '../store.ts';
 import type { Monster } from '../genes.ts';
+import type { StageId } from '../stages.ts';
 
 export type FightSetup =
-  | { kind: 'local'; mons: [Monster, Monster] }
-  | { kind: 'host'; mon: Monster }
-  | { kind: 'join'; mon: Monster; code: string };
+  | { kind: 'local'; mons: [Monster, Monster]; stage: StageId }
+  | { kind: 'host'; mon: Monster; stage: StageId }
+  | { kind: 'join'; mon: Monster; code: string; stage: StageId };
 
 let setup: FightSetup | null = null;
 export const prepareFight = (s: FightSetup) => { setup = s; location.hash = '#/fight'; };
@@ -33,8 +34,8 @@ export function Arena() {
       },
     };
     const game = s.kind === 'local'
-      ? startLocal(canvas.current!, [asPlayer(s.mons[0]), asPlayer(s.mons[1])], hooks)
-      : startOnline(canvas.current!, s.kind === 'host' ? { t: 'host' } : { t: 'join', code: s.code }, asPlayer(s.mon), hooks);
+      ? startLocal(canvas.current!, [asPlayer(s.mons[0]), asPlayer(s.mons[1])], s.stage, hooks)
+      : startOnline(canvas.current!, s.kind === 'host' ? { t: 'host' } : { t: 'join', code: s.code }, asPlayer(s.mon), s.stage, hooks);
     return () => { removeEventListener('keydown', back); game.stop(); };
   }, []);
 

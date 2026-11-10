@@ -3,7 +3,8 @@ import { useNearWallet } from 'near-connect-hooks';
 import { yoctoToNear } from 'near-api-js';
 import { archetype, STAT_KEYS, type Dna, type Monster } from '../genes.ts';
 import { breedPair, children, history, monster, monsters } from '../store.ts';
-import { Logo, MonsterCard, Portrait, Stats } from './ui.tsx';
+import { Logo, MonsterCard, Portrait, StageThumb, Stats } from './ui.tsx';
+import { STAGES, STAGE_IDS, type StageId } from '../stages.ts';
 import { prepareFight } from './arena.tsx';
 
 const DEMO_NOTE = 'Demo collection stored in this browser. Monsters move on-chain to NEAR in the next build.';
@@ -27,9 +28,12 @@ export function Title() {
             </div>
           </div>
         </div>
-        <div className="title-art row" style={{ justifyContent: 'center', flexWrap: 'nowrap' }}>
-          <Portrait dna={a.dna} size={260} className="" />
-          <Portrait dna={b.dna} size={260} flip className="" />
+        <div className="title-art">
+          <StageThumb id="ember" className="title-arena" />
+          <div className="title-duo">
+            <Portrait dna={a.dna} size={240} className="" />
+            <Portrait dna={b.dna} size={240} flip className="" />
+          </div>
         </div>
       </section>
     </div>
@@ -60,6 +64,7 @@ export function Play() {
   const [p1, setP1] = useState(list[0].id);
   const [p2, setP2] = useState(list[1]?.id ?? list[0].id);
   const [code, setCode] = useState('');
+  const [stage, setStage] = useState<StageId>('ember');
   const get = (id: string) => list.find((m) => m.id === id)!;
   return (
     <>
@@ -70,15 +75,28 @@ export function Play() {
       </div>
       <Picker list={list} value={p1} onPick={setP1} label={mode === 'local' ? 'Player 1 monster (WASD)' : 'Your monster'} />
       {mode === 'local' && <Picker list={list} value={p2} onPick={setP2} label="Player 2 monster (arrows)" />}
+      <section className="slab" aria-label="Arena">
+        <h3>Arena</h3>
+        <p className="sub">{mode === 'online' ? 'The host picks the arena.' : 'Where the fight happens.'}</p>
+        <div className="grid" style={{ marginTop: 14, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))' }}>
+          {STAGE_IDS.map((id) => (
+            <button key={id} type="button" className="tile" aria-pressed={id === stage} onClick={() => setStage(id)}>
+              <StageThumb id={id} className="portrait" />
+              <b>{STAGES[id].name}</b>
+              <span className="tile-meta">{STAGES[id].blurb}</span>
+            </button>
+          ))}
+        </div>
+      </section>
       <section className="slab row" aria-label="Start">
         {mode === 'local' ? (
-          <button className="btn big" onClick={() => prepareFight({ kind: 'local', mons: [get(p1), get(p2)] })}><span>Start fight</span></button>
+          <button className="btn big" onClick={() => prepareFight({ kind: 'local', mons: [get(p1), get(p2)], stage })}><span>Start fight</span></button>
         ) : (
           <>
-            <button className="btn big" onClick={() => prepareFight({ kind: 'host', mon: get(p1) })}><span>Host a room</span></button>
+            <button className="btn big" onClick={() => prepareFight({ kind: 'host', mon: get(p1), stage })}><span>Host a room</span></button>
             <span className="note">or join a friend</span>
             <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Room code" maxLength={4} aria-label="Room code" style={{ width: 160 }} />
-            <button className="btn alt" disabled={code.length !== 4} onClick={() => prepareFight({ kind: 'join', mon: get(p1), code })}><span>Join</span></button>
+            <button className="btn alt" disabled={code.length !== 4} onClick={() => prepareFight({ kind: 'join', mon: get(p1), code, stage })}><span>Join</span></button>
           </>
         )}
       </section>
@@ -156,7 +174,7 @@ export function Detail({ id }: { id: string }) {
             {kids.length > 0 && <><p className="sub">Offspring</p><div className="row" style={{ marginTop: 10 }}>{kids.map((k) => <a key={k.id} className="chip" href={`#/monster/${k.id}`}>{k.name}</a>)}</div></>}
           </section>
           <div className="row">
-            <button className="btn" onClick={() => prepareFight({ kind: 'host', mon: m })}><span>Fight online</span></button>
+            <button className="btn" onClick={() => prepareFight({ kind: 'host', mon: m, stage: 'ember' })}><span>Fight online</span></button>
             <a className="btn alt" href="#/breed"><span>Breed</span></a>
           </div>
         </div>

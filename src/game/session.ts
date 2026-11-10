@@ -5,6 +5,7 @@ import { createRenderer } from '../render/draw.ts';
 import { localInputs, soloInput } from '../input.ts';
 import { Netplay, linkPeer } from '../net.ts';
 import { lookOf, sanitize, statsOf, type Dna } from '../genes.ts';
+import { STAGE_IDS, type StageId } from '../stages.ts';
 
 export interface Player { name: string; dna: Dna }
 export interface Hooks {
@@ -18,9 +19,9 @@ const FORCE_RELAY = params.has('relay'); // ?relay -> skip P2P (debug fallback p
 export const SERVER = params.get('server') ?? import.meta.env.VITE_SERVER_URL ??
   (import.meta.env.DEV ? `ws://${location.hostname}:8787` : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
 
-function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, hooks: Hooks) {
+function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage: StageId, hooks: Hooks) {
   const renderer = createRenderer(canvas);
-  let state: GameState = newGame(players.map((p) => statsOf(p.dna)));
+  let state: GameState = newGame(players.map((p) => statsOf(p.dna)), stage);
   let overFrames = 0, reported = false, raf = 0;
   let net: Netplay | null = null;
   let banner = '', link = '';
@@ -29,7 +30,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, hooks:
   // Shared by local + online so rematch is deterministic too.
   function advance(inputs: number[]) {
     if (state.winner >= 0 && ++overFrames > 90 && inputs.every((b) => b & IN.JUMP)) {
-      state = newGame(players.map((p) => statsOf(p.dna))); overFrames = 0; reported = false;
+      state = newGame(players.map((p) => statsOf(p.dna)), stage); overFrames = 0; reported = false;
     }
     step(state, inputs);
     renderer.onEvents(state.events);
@@ -59,13 +60,14 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, hooks:
   };
 }
 
-export function startLocal(canvas: HTMLCanvasElement, players: [Player, Player], hooks: Hooks = {}) {
+export function startLocal(canvas: HTMLCanvasElement, players: [Player, Player], stage: StageId, hooks: Hooks = {}) {
   hooks.started?.(players, -1);
-  return loop(canvas, players, -1, hooks);
+  return loop(canvas, players, -1, stage, hooks);
 }
 
 // Free-tier hosts sleep when idle and refuse the first connections while waking (~30-60 s), so retry for ~75 s.
-export function startOnline(canvas: HTMLCanvasElement, first: { t: 'host' } | { t: 'join'; code: string }, me: Player, hooks: Hooks = {}) {
+// The host's arena wins; the guest's choice is ignored.
+export function startOnline(canvas: HTMLCanvasElement, first: { t: 'host' } | { t: 'join'; code: string }, me: Player, stage: StageId, hooks: Hooks = {}) {
   let ws: WebSocket | null = null;
   let peer: ReturnType<typeof linkPeer> | null = null;
   let game: ReturnType<typeof loop> | null = null;
@@ -80,13 +82,14 @@ export function startOnline(canvas: HTMLCanvasElement, first: { t: 'host' } | { 
     let opened = false;
     let seat = -1, delay = 4;
     let net: Netplay | null = null;
+    let theirStage: StageId = 'ember';
     let theirs: Player | null = null, ready: { send: any; delay: number; label: string } | null = null;
 
     // Fight starts once we know the opponent's monster AND the input channel is up.
     const maybeStart = () => {
       if (!theirs || !ready || game) return;
       const players = seat === 0 ? [me, theirs] : [theirs, me];
-      game = loop(canvas, players, seat, hooks);
+      game = loop(canvas, players, seat, seat === 0 ? stage : theirStage, hooks);
       net = new Netplay(ready.send, seat, ready.delay);
       game.attach(net, `${ready.label} · ${ready.delay}f delay`);
       hooks.started?.(players, seat);
@@ -108,10 +111,11 @@ export function startOnline(canvas: HTMLCanvasElement, first: { t: 'host' } | { 
       else if (m.t === 'start') {
         seat = m.seat; delay = m.delay;
         say('Opponent found — connecting…');
-        sock.send(JSON.stringify({ t: 'pick', name: me.name.slice(0, 24), dna: me.dna }));
+        sock.send(JSON.stringify({ t: 'pick', name: me.name.slice(0, 24), dna: me.dna, stage }));
         peer = linkPeer(sock, seat, delay, FORCE_RELAY, (d) => net?.onMessage(d), (send, d, label) => { ready = { send, delay: d, label }; maybeStart(); });
       } else if (m.t === 'pick') {
         theirs = { name: String(m.name ?? 'Rival').slice(0, 24) || 'Rival', dna: sanitize(m.dna) };
+        theirStage = STAGE_IDS.includes(m.stage) ? m.stage : 'ember';
         maybeStart();
       } else if (m.t === 'sdp' || m.t === 'ice' || m.t === 'go') peer?.signal(m);
       else if (m.t === 'left') game?.setBanner('Opponent left');

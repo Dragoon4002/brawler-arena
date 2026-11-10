@@ -2,6 +2,8 @@
 import { useEffect, useRef } from 'react';
 import { archetype, lookOf, STAT_KEYS, type Dna, type Monster } from '../genes.ts';
 import { drawMonster, idlePose, type Pose } from '../render/rig.ts';
+import { drawStageThumb } from '../render/stage.ts';
+import type { StageId } from '../stages.ts';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -10,7 +12,9 @@ export function Logo({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 520 150" role="img" aria-label="Brawler Arena">
       <g fontFamily="var(--font-display)" textAnchor="middle" strokeLinejoin="round" paintOrder="stroke">
-        <path d="M30 128 L60 30 L95 92 L130 22 L150 128 Z" fill="var(--ember)" stroke="var(--ink)" strokeWidth="8" />
+        {[0, 34, 68].map((dx) => (
+          <path key={dx} d={`M${40 + dx} 132 Q${58 + dx} 70 ${96 + dx} 16 Q${80 + dx} 78 ${62 + dx} 134 Z`} fill="var(--ember)" stroke="var(--ink)" strokeWidth="7" />
+        ))}
         <text x="330" y="78" fontSize="74" fill="var(--cream)" stroke="var(--ink)" strokeWidth="12">Brawler</text>
         <text x="330" y="138" fontSize="58" fill="var(--gold)" stroke="var(--ink)" strokeWidth="11">Arena</text>
       </g>
@@ -41,7 +45,7 @@ export function Portrait({ dna, size = 200, pose, flip = false, className = 'por
     paint();
     return () => cancelAnimationFrame(raf);
   }, [dna, size, pose, flip]);
-  return <canvas ref={ref} className={className} style={{ width: size, height: size }} aria-hidden="true" />;
+  return <canvas ref={ref} className={className} style={{ width: '100%', maxWidth: size, aspectRatio: '1', justifySelf: 'center' }} aria-hidden="true" />;
 }
 
 const STAT_LABEL = { str: 'Strength', dex: 'Dexterity', def: 'Defence', spd: 'Speed' } as const;
@@ -73,4 +77,18 @@ export function MonsterCard({ m, onClick, selected, href }: { m: Monster; onClic
   return href
     ? <a className="tile" href={href}>{body}</a>
     : <button type="button" className="tile" aria-pressed={selected} onClick={onClick}>{body}</button>;
+}
+
+// Static arena preview (painted once by the stage renderer).
+export function StageThumb({ id, className }: { id: StageId; className?: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = ref.current!, dpr = devicePixelRatio || 1;
+    const w = c.clientWidth || 320, h = Math.round(w * 9 / 16);
+    c.width = w * dpr; c.height = h * dpr;
+    const ctx = c.getContext('2d')!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawStageThumb(ctx, id, w, h);
+  }, [id]);
+  return <canvas ref={ref} className={className} style={{ width: '100%', aspectRatio: '16 / 9' }} aria-hidden="true" />;
 }
