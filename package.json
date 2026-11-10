@@ -1,0 +1,25 @@
+{
+  "name": "brawler-arena",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "server": "node --experimental-strip-types --no-warnings server/relay.ts",
+    "test": "node --experimental-strip-types --no-warnings --test src/sim/sim.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/ws": "^8.18.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7"
+  },
+  "dependencies": {
+    "ws": "^8.22.2"
+  }
+}
