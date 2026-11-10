@@ -7,26 +7,36 @@ export type Send = (m: object) => void;
 
 export class Netplay {
   frame = 0;
-  stalled = false;
+  stalled = false; // this tick couldn't advance (peer input late)
+  stallTicks = 0; // consecutive stalled ticks
   desync = false;
   private local = new Map<number, number>();
   private remote = new Map<number, number>();
   private hashes = new Map<number, number>();
   private remoteHashes = new Map<number, number>();
   private peerNeed = 0; // first local frame the peer hasn't received yet
+  private peerFrame = 0; // peer's sim frame, as of its last packet
+  private peerAdv = 0; // peer's (its frame - our frame as it last saw it)
+  private sinceSkip = 0;
   private send: Send;
   readonly seat: number;
   readonly delay: number;
+
+  // Show 'waiting' only for a real hold-up. 1-3 tick micro-stalls from jitter/frame hitches are invisible in play
+  // but used to flash the banner on every one of them.
+  get lagging() { return this.stallTicks >= 15; } // 250 ms
 
   constructor(send: Send, seat: number, delay = 4) {
     this.send = send; this.seat = seat; this.delay = delay;
     for (let f = 0; f < delay; f++) { this.local.set(f, 0); this.remote.set(f, 0); }
   }
 
-  onMessage(m: { t: string; f: number; b?: unknown; a?: number; h?: number }) {
+  onMessage(m: { t: string; f: number; b?: unknown; a?: number; h?: number; fr?: number; v?: number }) {
     if (m.t === 'in' && Array.isArray(m.b) && Number.isInteger(m.f)) {
       m.b.slice(0, 64).forEach((b, i) => { if (m.f + i >= this.frame) this.remote.set(m.f + i, Number(b) & 255); });
       if (Number.isInteger(m.a) && m.a! > this.peerNeed) this.peerNeed = m.a!;
+      if (Number.isInteger(m.fr) && m.fr! > this.peerFrame) this.peerFrame = m.fr!;
+      if (Number.isFinite(m.v)) this.peerAdv = m.v!;
     }
     if (m.t === 'hash') { this.remoteHashes.set(m.f, m.h!); this.check(m.f); }
   }
@@ -40,17 +50,23 @@ export class Netplay {
 
   // Called at 60 Hz. Advances 0..2 frames (2 = catching up after a stall), then sends one input packet.
   tick(readLocal: () => number, advance: (inputs: number[]) => void, hashNow: () => number) {
-    this.run(readLocal, advance, hashNow);
+    // Time sync: both sides see the other `latency` frames behind; half the difference is how far we're truly ahead.
+    // The side that's ahead would sit at the edge of the delay budget and stall on every timing wobble, so it
+    // skips at most 1 tick in 10 (invisible) until both sides share the margin. Timing only, sim stays deterministic.
+    const adv = this.frame - this.peerFrame;
+    if ((adv - this.peerAdv) / 2 > 1 && ++this.sinceSkip >= 10) { this.sinceSkip = 0; if (!this.remote.has(this.frame)) this.stallTicks++; }
+    else this.run(readLocal, advance, hashNow);
     for (const f of this.local.keys()) if (f < this.peerNeed && f < this.frame) this.local.delete(f);
     let need = this.frame;
     while (this.remote.has(need)) need++;
     const b: number[] = [];
     for (let f = this.peerNeed; this.local.has(f) && b.length < 64; f++) b.push(this.local.get(f)!);
-    this.send({ t: 'in', f: this.peerNeed, b, a: need });
+    this.send({ t: 'in', f: this.peerNeed, b, a: need, fr: this.frame, v: adv });
   }
 
   private run(readLocal: () => number, advance: (inputs: number[]) => void, hashNow: () => number) {
     this.stalled = false;
+    this.stallTicks++; // reset below once a frame advances
     for (let n = 0; n < 2; n++) {
       const target = this.frame + this.delay;
       if (!this.local.has(target)) this.local.set(target, readLocal());
@@ -58,6 +74,7 @@ export class Netplay {
       if (r === undefined) { this.stalled = n === 0; return; }
       const l = this.local.get(this.frame)!;
       advance(this.seat === 0 ? [l, r] : [r, l]);
+      this.stallTicks = 0;
       this.remote.delete(this.frame);
       this.frame++;
       if (this.frame % 60 === 0) {
@@ -97,12 +114,12 @@ export function linkPeer(
     ready(send, delay, p2p ? 'P2P' : 'RELAY');
   };
 
-  const measure = () => { // host: 3 app-level pings over the channel, median RTT -> delay
+  const measure = () => { // host: 3 app-level pings over the channel, worst RTT -> delay (covers jitter seen at connect)
     const iv = setInterval(() => {
       if (done) return clearInterval(iv);
       if (pongs.length < 3) return dc!.send(JSON.stringify({ t: 'p', s: performance.now() }));
       clearInterval(iv);
-      const rtt = pongs.sort((a, b) => a - b)[1];
+      const rtt = Math.max(...pongs);
       const delay = Math.min(15, Math.max(2, Math.ceil(rtt / 2 / FRAME_MS) + 2));
       rsend({ t: 'go', p2p: true, delay });
       finish(true, delay);
