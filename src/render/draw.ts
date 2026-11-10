@@ -157,7 +157,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
 
   const hpShown = [MAX_HP, MAX_HP]; // trailing "chip" bar
 
-  function hud(s: GameState, banner: string) {
+  function hud(s: GameState, banner: string, info: string) {
     s.fighters.forEach((f, i) => {
       const x = i === 0 ? 40 : W - 280, bw = 224;
       const hp = f.state === 'dead' ? 0 : Math.max(0, MAX_HP - f.damage), k = hp / MAX_HP;
@@ -179,6 +179,10 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       ctx.textAlign = 'left'; ctx.font = '13px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.75)';
       ctx.fillText(`knockback +${f.damage}%`, x + 16, 96);
     });
+    if (info) {
+      ctx.font = '12px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fillText(info, W / 2, H - 12);
+    }
     if (s.winner >= 0) banner = `${NAMES[s.winner]} WINS — both press JUMP for rematch`;
     if (banner) {
       ctx.font = 'bold 28px system-ui'; ctx.textAlign = 'center';
@@ -187,7 +191,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     }
   }
 
-  function draw(s: GameState, banner = '') {
+  function draw(s: GameState, banner = '', info = '') {
     updateCamera(s);
     background();
     ctx.save();
@@ -196,7 +200,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     ctx.translate(W / 2 + sx, H / 2 + sy); ctx.scale(cam.z, cam.z); ctx.translate(-cam.x, -cam.y);
     stage(); fighters(s); particles();
     ctx.restore();
-    hud(s, banner);
+    hud(s, banner, info);
   }
 
   return { draw, onEvents, setNames: (n: string[]) => NAMES.splice(0, 2, ...n) };

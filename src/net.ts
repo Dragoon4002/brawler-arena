@@ -1,6 +1,10 @@
 // Delay-based lockstep: frame f runs only when both players' inputs for f are known.
-// Local input is scheduled `delay` frames ahead to hide latency (relay picks it from measured ping).
-// ponytail: feels laggy above ~120 ms RTT; upgrade path = rollback (sim state is a plain object, snapshot via structuredClone).
+// Local input is scheduled `delay` frames ahead to hide latency.
+// Transport-agnostic: inputs go over a P2P WebRTC DataChannel when it connects, else over the relay WebSocket.
+// Every packet re-sends all local inputs the peer hasn't acked, so a lossy/unreliable channel never stalls for good.
+// ponytail: still delay-based; upgrade path = rollback (sim state is a plain object, snapshot via structuredClone).
+export type Send = (m: object) => void;
+
 export class Netplay {
   frame = 0;
   stalled = false;
@@ -9,17 +13,21 @@ export class Netplay {
   private remote = new Map<number, number>();
   private hashes = new Map<number, number>();
   private remoteHashes = new Map<number, number>();
-  private ws: WebSocket;
+  private peerNeed = 0; // first local frame the peer hasn't received yet
+  private send: Send;
   readonly seat: number;
   readonly delay: number;
 
-  constructor(ws: WebSocket, seat: number, delay = 4) {
-    this.ws = ws; this.seat = seat; this.delay = delay;
+  constructor(send: Send, seat: number, delay = 4) {
+    this.send = send; this.seat = seat; this.delay = delay;
     for (let f = 0; f < delay; f++) { this.local.set(f, 0); this.remote.set(f, 0); }
   }
 
-  onMessage(m: { t: string; f: number; b?: number; h?: number }) {
-    if (m.t === 'in') this.remote.set(m.f, m.b! | 0);
+  onMessage(m: { t: string; f: number; b?: unknown; a?: number; h?: number }) {
+    if (m.t === 'in' && Array.isArray(m.b) && Number.isInteger(m.f)) {
+      m.b.slice(0, 64).forEach((b, i) => { if (m.f + i >= this.frame) this.remote.set(m.f + i, Number(b) & 255); });
+      if (Number.isInteger(m.a) && m.a! > this.peerNeed) this.peerNeed = m.a!;
+    }
     if (m.t === 'hash') { this.remoteHashes.set(m.f, m.h!); this.check(m.f); }
   }
 
@@ -30,30 +38,115 @@ export class Netplay {
     this.hashes.delete(f); this.remoteHashes.delete(f);
   }
 
-  // Called at 60 Hz. Advances 0..2 frames (2 = catching up after a stall).
+  // Called at 60 Hz. Advances 0..2 frames (2 = catching up after a stall), then sends one input packet.
   tick(readLocal: () => number, advance: (inputs: number[]) => void, hashNow: () => number) {
+    this.run(readLocal, advance, hashNow);
+    for (const f of this.local.keys()) if (f < this.peerNeed && f < this.frame) this.local.delete(f);
+    let need = this.frame;
+    while (this.remote.has(need)) need++;
+    const b: number[] = [];
+    for (let f = this.peerNeed; this.local.has(f) && b.length < 64; f++) b.push(this.local.get(f)!);
+    this.send({ t: 'in', f: this.peerNeed, b, a: need });
+  }
+
+  private run(readLocal: () => number, advance: (inputs: number[]) => void, hashNow: () => number) {
     this.stalled = false;
     for (let n = 0; n < 2; n++) {
       const target = this.frame + this.delay;
-      if (!this.local.has(target)) {
-        const b = readLocal();
-        this.local.set(target, b);
-        this.ws.send(JSON.stringify({ t: 'in', f: target, b }));
-      }
+      if (!this.local.has(target)) this.local.set(target, readLocal());
       const r = this.remote.get(this.frame);
       if (r === undefined) { this.stalled = n === 0; return; }
       const l = this.local.get(this.frame)!;
       advance(this.seat === 0 ? [l, r] : [r, l]);
-      this.local.delete(this.frame); this.remote.delete(this.frame);
+      this.remote.delete(this.frame);
       this.frame++;
       if (this.frame % 60 === 0) {
         const h = hashNow();
         this.hashes.set(this.frame, h);
-        this.ws.send(JSON.stringify({ t: 'hash', f: this.frame, h }));
+        this.send({ t: 'hash', f: this.frame, h });
         this.check(this.frame);
       }
       // Second step only when the peer's sim is ahead of ours (its input `delay` frames out already arrived).
       if (!this.remote.has(this.frame + this.delay)) return;
     }
   }
+}
+
+const FRAME_MS = 1000 / 60;
+const P2P_TIMEOUT = 4000;
+
+// WebRTC DataChannel setup, signaled through the relay. Host (seat 0) decides the transport and delay and tells the
+// guest with a reliable 'go' over the relay, so both sides always agree. No answer within 4 s -> relay fallback.
+// ponytail: STUN only; players behind symmetric NAT fall back to relay. Add a TURN server if that's common.
+export function linkPeer(
+  relay: WebSocket, seat: number, relayDelay: number, forceRelay: boolean,
+  onData: (m: any) => void,
+  ready: (send: Send, delay: number, label: string) => void,
+) {
+  const rsend: Send = (m) => relay.readyState === WebSocket.OPEN && relay.send(JSON.stringify(m));
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  let dc: RTCDataChannel | null = null;
+  let done = false;
+  const pongs: number[] = [];
+
+  const finish = (p2p: boolean, delay: number) => {
+    if (done) return;
+    done = true;
+    if (!p2p) pc.close();
+    const send: Send = p2p ? (m) => dc?.readyState === 'open' && dc.send(JSON.stringify(m)) : rsend;
+    ready(send, delay, p2p ? 'P2P' : 'RELAY');
+  };
+
+  const measure = () => { // host: 3 app-level pings over the channel, median RTT -> delay
+    const iv = setInterval(() => {
+      if (done) return clearInterval(iv);
+      if (pongs.length < 3) return dc!.send(JSON.stringify({ t: 'p', s: performance.now() }));
+      clearInterval(iv);
+      const rtt = pongs.sort((a, b) => a - b)[1];
+      const delay = Math.min(15, Math.max(2, Math.ceil(rtt / 2 / FRAME_MS) + 2));
+      rsend({ t: 'go', p2p: true, delay });
+      finish(true, delay);
+    }, 100);
+  };
+
+  const wire = (ch: RTCDataChannel) => {
+    dc = ch;
+    ch.onmessage = (e) => {
+      let m: any;
+      try { m = JSON.parse(e.data); } catch { return; }
+      if (m.t === 'p') ch.send(JSON.stringify({ t: 'q', s: m.s }));
+      else if (m.t === 'q') pongs.push(performance.now() - m.s);
+      else onData(m);
+    };
+    if (seat === 0) ch.onopen = measure;
+  };
+
+  pc.onicecandidate = (e) => { if (e.candidate) rsend({ t: 'ice', c: e.candidate }); };
+  pc.ondatachannel = (e) => wire(e.channel);
+
+  if (seat === 0) {
+    const fallback = () => { if (!done) { rsend({ t: 'go', p2p: false, delay: relayDelay }); finish(false, relayDelay); } };
+    if (forceRelay) fallback();
+    else {
+      setTimeout(fallback, P2P_TIMEOUT);
+      wire(pc.createDataChannel('g', { ordered: false, maxRetransmits: 0 }));
+      pc.createOffer().then((o) => pc.setLocalDescription(o)).then(() => rsend({ t: 'sdp', d: pc.localDescription }));
+    }
+  }
+
+  // Signaling messages must apply in order (ICE can't be added before the remote description).
+  let chain = Promise.resolve();
+  const signal = (m: any) => {
+    if (m.t === 'go') return finish(!!m.p2p, m.delay); // outside the chain: a stuck WebRTC call must not block fallback
+    chain = chain.then(async () => {
+      if (m.t === 'sdp' && !done) {
+        await pc.setRemoteDescription(m.d);
+        if (m.d.type === 'offer') {
+          await pc.setLocalDescription(await pc.createAnswer());
+          rsend({ t: 'sdp', d: pc.localDescription });
+        }
+      } else if (m.t === 'ice' && !done) await pc.addIceCandidate(m.c);
+    }).catch(() => {});
+  };
+  return { signal, close: () => { done = true; pc.close(); } };
 }

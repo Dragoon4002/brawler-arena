@@ -9,7 +9,7 @@ import { extname, join, normalize } from 'node:path';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-const RELAYED = new Set(['in', 'hash']);
+const RELAYED = new Set(['in', 'hash', 'sdp', 'ice', 'go']);
 const rooms = new Map<string, WebSocket[]>();
 const DIST = join(import.meta.dirname, '..', 'dist');
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
@@ -25,7 +25,7 @@ const http = createServer(async (req, res) => {
     res.writeHead(404).end('not found (run npm run build?)');
   }
 });
-const wss = new WebSocketServer({ server: http, maxPayload: 1024 });
+const wss = new WebSocketServer({ server: http, maxPayload: 16 * 1024 });
 http.listen(PORT);
 
 const send = (ws: WebSocket, msg: object) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(msg));
@@ -73,7 +73,7 @@ wss.on('connection', (ws) => {
       pongs.get(ws)?.();
     } else if (msg.t && RELAYED.has(msg.t)) {
       const other = rooms.get(room)?.find((c) => c !== ws);
-      if (other?.readyState === other?.OPEN) other!.send(raw.toString());
+      if (other && other.readyState === other.OPEN) other.send(raw.toString());
     }
   });
   ws.on('close', () => {
