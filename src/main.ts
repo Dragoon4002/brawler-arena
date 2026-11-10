@@ -29,13 +29,20 @@ function start(m: typeof mode) {
   menu.hidden = m !== 'menu';
 }
 
-function online(first: object) {
+// Free-tier hosts sleep when idle and refuse the first connections while waking (~30-60 s), so retry for ~75 s.
+function online(first: object, tries = 0) {
   ws?.close();
-  status.textContent = 'Connecting…';
+  if (!tries) status.textContent = 'Connecting…';
   const sock = new WebSocket(SERVER);
   ws = sock;
-  sock.onopen = () => sock.send(JSON.stringify(first));
-  sock.onerror = () => { status.textContent = `Can't reach server ${SERVER}`; };
+  let opened = false;
+  sock.onopen = () => { opened = true; sock.send(JSON.stringify(first)); };
+  sock.onerror = () => {
+    if (opened || ws !== sock) return;
+    if (tries >= 30) { status.textContent = `Can't reach server ${SERVER}`; return; }
+    status.textContent = 'Waking up server… (can take up to a minute)';
+    setTimeout(() => ws === sock && online(first, tries + 1), 2500);
+  };
   sock.onclose = () => { if (mode === 'online') { banner = 'Connection closed'; } };
   sock.onmessage = (e) => {
     const m = JSON.parse(e.data);
