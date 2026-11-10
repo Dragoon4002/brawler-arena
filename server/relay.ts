@@ -9,7 +9,7 @@ import { extname, join, normalize } from 'node:path';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const LETTERS = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-const RELAYED = new Set(['in', 'hash', 'sdp', 'ice', 'go']);
+const RELAYED = new Set(['in', 'hash', 'sdp', 'ice', 'go', 'pick']);
 const rooms = new Map<string, WebSocket[]>();
 const DIST = join(import.meta.dirname, '..', 'dist');
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };

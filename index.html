@@ -4,38 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Brawler Arena</title>
-  <style>
-    html, body { margin: 0; height: 100%; background: #0d0a18; color: #fff; font-family: system-ui, sans-serif; overflow: hidden; }
-    body { display: grid; place-items: center; }
-    canvas { display: block; }
-    #menu { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(13, 10, 24, 0.82); }
-    #menu[hidden] { display: none; }
-    .card { text-align: center; display: grid; gap: 12px; width: min(360px, 90vw); }
-    h1 { margin: 0 0 8px; font-size: 44px; letter-spacing: 2px; }
-    button, input { font: inherit; font-size: 18px; padding: 12px; border-radius: 8px; border: 2px solid #3fc1b0; background: #1c1533; color: #fff; }
-    button { cursor: pointer; font-weight: 700; }
-    button:hover, button:focus-visible { background: #3fc1b0; color: #0d0a18; outline: none; }
-    .row { display: flex; gap: 8px; } .row input { flex: 1; min-width: 0; text-transform: uppercase; }
-    #status { min-height: 1.4em; color: #f4e9c8; }
-    .help { font-size: 13px; opacity: 0.7; line-height: 1.5; }
-  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <canvas id="game"></canvas>
-  <div id="menu">
-    <div class="card">
-      <h1>BRAWLER ARENA</h1>
-      <button id="local">Local Versus</button>
-      <button id="host">Host Online</button>
-      <div class="row"><input id="code" placeholder="ROOM CODE" maxlength="4" aria-label="Room code" /><button id="join">Join</button></div>
-      <div id="status" role="status"></div>
-      <div class="help">
-        P1: WASD move · Space jump · Z light · X heavy · C dodge<br />
-        P2: Arrows · Num0 jump · Num1 light · Num2 heavy · Num3 dodge<br />
-        Gamepads work. ` toggles hitboxes. Esc = menu.
-      </div>
-    </div>
-  </div>
-  <script type="module" src="/src/main.ts"></script>
+  <div id="root"><noscript>Brawler Arena needs JavaScript to run the game.</noscript></div>
+  <!-- ponytail: near-api-js pulls a Node util shim that reads `process`; this stub beats a polyfill plugin -->
+  <script>globalThis.process ??= { env: {} };</script>
+  <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

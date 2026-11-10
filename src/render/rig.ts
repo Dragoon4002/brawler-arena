@@ -2,6 +2,7 @@
 // Render-only. Reads sim state, never writes it.
 import { MOVES, type MoveId } from '../sim/moves.ts';
 import { startup, type Fighter } from '../sim/sim.ts';
+import type { Look } from '../genes.ts';
 
 // Angles in radians. Limbs: 0 = straight down, + = toward facing. Lower bones are relative to upper.
 // t = torso lean (+ forward), h = head tilt, y = hip drop, r = whole-body spin.
@@ -85,8 +86,7 @@ export function poseFor(f: Fighter, now: number): Pose {
   }
 }
 
-// Visual genes. Later filled from the monster NFT.
-export interface Look { body: string; belly: string; dark: string; horn: string; eye: string }
+export type { Look } from '../genes.ts';
 
 type V = [number, number];
 const down = (o: V, a: number, len: number): V => [o[0] + Math.sin(a) * len, o[1] + Math.cos(a) * len];
@@ -107,12 +107,76 @@ const blob = (ctx: CanvasRenderingContext2D, x: number, y: number, rx: number, r
   ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = line; ctx.stroke();
 };
 
+const tri = (ctx: CanvasRenderingContext2D, a: V, b: V, c: V) => {
+  ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.lineTo(...c); ctx.closePath(); ctx.fill(); ctx.stroke();
+};
+
+const INK = '#1b1426';
+const FLASH: Look = { body: '#fff', belly: '#fff', dark: '#ddd', horn: '#fff', eye: '#fff', mark: '#eee', hornStyle: 0, tailStyle: 0, pattern: 0, eyeStyle: 0, scale: 1 };
+
+function horns(ctx: CanvasRenderingContext2D, style: number, col: string) {
+  ctx.fillStyle = col; ctx.strokeStyle = INK; ctx.lineWidth = 3;
+  if (style === 3) { // single crest horn
+    ctx.beginPath(); ctx.moveTo(-2, -15); ctx.quadraticCurveTo(10, -34, 20, -46); ctx.quadraticCurveTo(14, -26, 12, -13); ctx.closePath(); ctx.fill(); ctx.stroke();
+    return;
+  }
+  for (const s of [-1, 1]) {
+    ctx.beginPath();
+    if (style === 0) { ctx.moveTo(s * 3, -13); ctx.quadraticCurveTo(s * 10, -26, s * 14, -40); ctx.quadraticCurveTo(s * 20, -22, s * 14, -8); }
+    else if (style === 1) { ctx.moveTo(s * 4, -14); ctx.lineTo(s * 9, -34); ctx.lineTo(s * 14, -11); }
+    else { // ram curl
+      ctx.moveTo(s * 6, -14); ctx.bezierCurveTo(s * 26, -30, s * 34, -4, s * 20, 2); ctx.bezierCurveTo(s * 26, -10, s * 20, -18, s * 12, -8);
+    }
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+}
+
+function tail(ctx: CanvasRenderingContext2D, style: number, hip: V, swing: number, L: Look) {
+  const ta = Math.PI / 2 + 0.6 - swing * 0.6;
+  const t1 = down(hip, -ta, 26), t2 = down(t1, -ta - 0.5 + swing * 0.3, 22);
+  limb(ctx, [hip, t1, t2], [14, 8], L.dark, INK);
+  ctx.fillStyle = L.horn; ctx.strokeStyle = INK; ctx.lineWidth = 2;
+  if (style === 0) { // dorsal spikes
+    for (const [pt, s] of [[t1, 7], [t2, 6]] as [V, number][]) tri(ctx, [pt[0] - s, pt[1]], [pt[0], pt[1] - s * 1.8], [pt[0] + s, pt[1]]);
+  } else if (style === 1) { // club
+    blob(ctx, t2[0], t2[1], 9, 8, 0, L.horn, INK);
+  } else { // leaf fin
+    ctx.fillStyle = L.mark;
+    ctx.beginPath(); ctx.moveTo(...t1); ctx.quadraticCurveTo(t2[0] - 4, t2[1] - 22, t2[0] - 12, t2[1] - 4); ctx.quadraticCurveTo(t2[0], t2[1] + 2, ...t1); ctx.fill(); ctx.stroke();
+  }
+}
+
+function eyes(ctx: CanvasRenderingContext2D, style: number, L: Look, angry: boolean) {
+  if (style === 3) { // big single eye
+    blob(ctx, 8, -4, 10, 10, 0, '#fff', INK);
+    ctx.fillStyle = L.mark; ctx.beginPath(); ctx.arc(11, -3, 5.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = L.eye; ctx.beginPath(); ctx.arc(12, -3, 3, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  blob(ctx, 10, -3, 7, 8, 0, '#fff', INK);
+  ctx.fillStyle = L.eye; ctx.beginPath(); ctx.arc(12.5, -2, 3.6, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = INK; ctx.lineWidth = 3; ctx.beginPath();
+  if (style === 1 || angry) { ctx.moveTo(3, -13); ctx.lineTo(17, -8); } // brow
+  else if (style === 2) { ctx.moveTo(3, -6); ctx.lineTo(17, -6); } // sleepy lid
+  ctx.stroke();
+}
+
+function markings(ctx: CanvasRenderingContext2D, style: number, mid: V, rot: number, col: string) {
+  if (!style) return;
+  ctx.save(); ctx.translate(...mid); ctx.rotate(rot);
+  ctx.beginPath(); ctx.ellipse(0, 0, 22, 26, 0, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = col; ctx.globalAlpha = 0.85;
+  if (style === 1) for (const y of [-14, -3, 8]) { ctx.beginPath(); ctx.moveTo(-24, y); ctx.lineTo(-6, y + 3); ctx.lineTo(-24, y + 7); ctx.fill(); }
+  else for (const [x, y, r] of [[-12, -12, 4], [-15, 2, 5], [-8, 13, 3.5], [-3, -18, 3]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+
 // Draw in fighter-local space: origin at feet, facing right. Caller handles translate/flip.
 export function drawMonster(ctx: CanvasRenderingContext2D, p: Pose, look: Look, flash: boolean) {
-  const L = flash ? { body: '#fff', belly: '#fff', dark: '#ddd', horn: '#fff', eye: '#fff' } : look;
-  const ink = '#1b1426';
+  const L = flash ? FLASH : look;
   const hip: V = [0, -44 + p.y];
   ctx.save();
+  ctx.scale(look.scale, look.scale);
   if (p.r) { ctx.translate(hip[0], hip[1]); ctx.rotate(p.r); ctx.translate(-hip[0], -hip[1]); }
 
   const neck: V = [hip[0] + Math.sin(p.t) * 30, hip[1] - Math.cos(p.t) * 30];
@@ -120,23 +184,17 @@ export function drawMonster(ctx: CanvasRenderingContext2D, p: Pose, look: Look, 
   const arm = (u: number, l: number): V[] => { const e = down(shoulder, u, 20); return [shoulder, e, down(e, u + l, 20)]; };
   const leg = (u: number, l: number): V[] => { const k = down(hip, u, 22); return [hip, k, down(k, u + l, 23)]; };
 
-  // tail: tapered spiked curve behind the hip
-  const ta = Math.PI / 2 + 0.6 - p.tail * 0.6;
-  const t1 = down(hip, -ta, 26), t2 = down(t1, -ta - 0.5 + p.tail * 0.3, 22);
-  limb(ctx, [hip, t1, t2], [14, 8], L.dark, ink);
-  ctx.fillStyle = L.horn;
-  for (const [pt, s] of [[t1, 7], [t2, 6]] as [V, number][]) {
-    ctx.beginPath(); ctx.moveTo(pt[0] - s, pt[1]); ctx.lineTo(pt[0], pt[1] - s * 1.8); ctx.lineTo(pt[0] + s, pt[1]); ctx.fill();
-  }
+  tail(ctx, look.tailStyle, hip, p.tail, L);
 
   const bl = leg(p.bt, p.bs), ba = arm(p.bu, p.bl);
-  limb(ctx, bl, [15, 12], L.dark, ink);
-  blob(ctx, bl[2][0] + 5, bl[2][1] - 2, 10, 5, 0, L.dark, ink);
-  limb(ctx, ba, [12, 10], L.dark, ink);
+  limb(ctx, bl, [15, 12], L.dark, INK);
+  blob(ctx, bl[2][0] + 5, bl[2][1] - 2, 10, 5, 0, L.dark, INK);
+  limb(ctx, ba, [12, 10], L.dark, INK);
 
   // torso
   const mid: V = [(hip[0] + neck[0]) / 2, (hip[1] + neck[1]) / 2];
-  blob(ctx, mid[0], mid[1], 23, 27, p.t, L.body, ink);
+  blob(ctx, mid[0], mid[1], 23, 27, p.t, L.body, INK);
+  markings(ctx, look.pattern, mid, p.t, L.mark);
   ctx.beginPath(); ctx.ellipse(mid[0] + Math.cos(p.t) * 7, mid[1] + Math.sin(p.t) * 7, 12, 19, p.t, 0, Math.PI * 2);
   ctx.fillStyle = L.belly; ctx.fill();
 
@@ -144,27 +202,23 @@ export function drawMonster(ctx: CanvasRenderingContext2D, p: Pose, look: Look, 
   const ha = p.t + p.h;
   const head: V = [neck[0] + Math.sin(ha) * 16, neck[1] - Math.cos(ha) * 16];
   ctx.save(); ctx.translate(...head); ctx.rotate(ha);
-  ctx.fillStyle = L.horn; ctx.strokeStyle = ink; ctx.lineWidth = 3;
-  for (const s of [-1, 1]) {
-    ctx.beginPath(); ctx.moveTo(s * 3, -13); ctx.quadraticCurveTo(s * 10, -26, s * 14, -40); ctx.quadraticCurveTo(s * 20, -22, s * 14, -8); ctx.closePath(); ctx.fill(); ctx.stroke();
-  }
+  horns(ctx, look.hornStyle, L.horn);
   // jaw opens on strikes
   ctx.save(); ctx.translate(6, 6); ctx.rotate(p.jaw * 0.6);
-  blob(ctx, 8, 6, 14, 7, 0, L.dark, ink);
+  blob(ctx, 8, 6, 14, 7, 0, L.dark, INK);
   ctx.restore();
-  blob(ctx, 2, 0, 21, 18, 0, L.body, ink);
+  blob(ctx, 2, 0, 21, 18, 0, L.body, INK);
   if (p.jaw > 0.2) {
     ctx.fillStyle = '#fff';
     for (const dx of [6, 12, 18]) { ctx.beginPath(); ctx.moveTo(dx - 3, 9); ctx.lineTo(dx, 15); ctx.lineTo(dx + 3, 9); ctx.fill(); }
   }
-  blob(ctx, 10, -3, 7, 8, 0, '#fff', ink);
-  ctx.fillStyle = L.eye; ctx.beginPath(); ctx.arc(12.5, -2, 3.6, 0, Math.PI * 2); ctx.fill();
+  eyes(ctx, look.eyeStyle, L, p.jaw > 0.4);
   ctx.restore();
 
   const fl = leg(p.ft, p.fs), fa = arm(p.fu, p.fl);
-  limb(ctx, fl, [16, 13], L.body, ink);
-  blob(ctx, fl[2][0] + 5, fl[2][1] - 2, 11, 5.5, 0, L.body, ink);
-  limb(ctx, fa, [13, 11], L.body, ink);
+  limb(ctx, fl, [16, 13], L.body, INK);
+  blob(ctx, fl[2][0] + 5, fl[2][1] - 2, 11, 5.5, 0, L.body, INK);
+  limb(ctx, fa, [13, 11], L.body, INK);
   // claws
   const hand = fa[2], fore = Math.atan2(hand[0] - fa[1][0], hand[1] - fa[1][1]);
   ctx.fillStyle = L.horn;
@@ -175,3 +229,7 @@ export function drawMonster(ctx: CanvasRenderingContext2D, p: Pose, look: Look, 
   ctx.restore();
 }
 
+// Idle pose for portraits / menus (render-only).
+export function idlePose(now: number): Pose {
+  return lerpPose(POSES.idle, POSES.idle2, (Math.sin(now / 9) + 1) / 2);
+}

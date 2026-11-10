@@ -1,13 +1,12 @@
 // Canvas renderer: dynamic camera, stage, fighters, hit FX, HUD. Render-only state (particles, shake) lives here.
 import { STAGE, HURT_H, MAX_HP, hitboxOf, type GameState, type SimEvent } from '../sim/sim.ts';
 import { drawMonster, poseFor, type Look } from './rig.ts';
+import { lookOf, randomDna } from '../genes.ts';
 
 export const W = 1280, H = 720;
 
-export const LOOKS: Look[] = [
-  { body: '#3fc1b0', belly: '#c9f2e4', dark: '#2a8a80', horn: '#f4e9c8', eye: '#1b1426' },
-  { body: '#f08a3c', belly: '#ffe0b8', dark: '#b85a22', horn: '#fff3d6', eye: '#1b1426' },
-];
+// Per-match players (set from the chosen monsters). Defaults: two fixed demo monsters.
+const LOOKS: Look[] = [lookOf({ ...randomDna(7), hue: 172 }), lookOf({ ...randomDna(8), hue: 24 })];
 const NAMES = ['P1', 'P2'];
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; kind: 'spark' | 'dust' | 'ring' | 'beam' }
@@ -19,7 +18,8 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   const parts: Particle[] = [];
   const squash = [0, 0];
   let showBoxes = false;
-  addEventListener('keydown', (e) => { if (e.code === 'Backquote') showBoxes = !showBoxes; });
+  const onKey = (e: KeyboardEvent) => { if (e.code === 'Backquote') showBoxes = !showBoxes; };
+  addEventListener('keydown', onKey);
 
   function resize() {
     const dpr = devicePixelRatio || 1;
@@ -203,5 +203,9 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     hud(s, banner, info);
   }
 
-  return { draw, onEvents, setNames: (n: string[]) => NAMES.splice(0, 2, ...n) };
+  return {
+    draw, onEvents,
+    setPlayers: (names: string[], looks?: Look[]) => { NAMES.splice(0, 2, ...names); if (looks) LOOKS.splice(0, 2, ...looks); },
+    destroy: () => { removeEventListener('keydown', onKey); removeEventListener('resize', resize); },
+  };
 }
