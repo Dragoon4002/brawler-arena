@@ -35,6 +35,20 @@ const newCode = () => {
   return c;
 };
 
+// Median of 3 pings, ms. Falls back to 300 if the client doesn't answer.
+const rtt = (ws: WebSocket) => new Promise<number>((done) => {
+  const samples: number[] = [];
+  let t = 0;
+  const go = () => { t = performance.now(); ws.ping(); };
+  const onPong = () => {
+    samples.push(performance.now() - t);
+    if (samples.length < 3) return go();
+    ws.off('pong', onPong); done(samples.sort((a, b) => a - b)[1]);
+  };
+  ws.on('pong', onPong); go();
+  setTimeout(() => { ws.off('pong', onPong); done(300); }, 2000);
+});
+
 wss.on('connection', (ws) => {
   let room = '';
   ws.on('message', (raw) => {
@@ -48,7 +62,11 @@ wss.on('connection', (ws) => {
       const r = rooms.get(code);
       if (!r || r.length !== 1) return send(ws, { t: 'error', msg: 'Room not found or full' });
       room = code; r.push(ws);
-      r.forEach((c, seat) => send(c, { t: 'start', seat }));
+      // Input delay must cover A -> relay -> B latency, plus 2 frames of jitter margin. Same value for both seats.
+      Promise.all(r.map(rtt)).then(([a, b]) => {
+        const delay = Math.min(15, Math.max(3, Math.ceil((a + b) / 2 / (1000 / 60)) + 2));
+        r.forEach((c, seat) => send(c, { t: 'start', seat, delay }));
+      });
     } else if (msg.t && RELAYED.has(msg.t)) {
       const other = rooms.get(room)?.find((c) => c !== ws);
       if (other?.readyState === other?.OPEN) other!.send(raw.toString());

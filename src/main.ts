@@ -42,7 +42,7 @@ function online(first: object) {
     if (m.t === 'room') status.textContent = `Room ${m.code} — share this code, waiting for opponent…`;
     else if (m.t === 'error') status.textContent = m.msg;
     else if (m.t === 'start') {
-      net = new Netplay(sock, m.seat);
+      net = new Netplay(sock, m.seat, m.delay);
       renderer.setNames(m.seat === 0 ? ['YOU', 'RIVAL'] : ['RIVAL', 'YOU']);
       start('online');
     } else if (m.t === 'left') banner = 'Opponent left';

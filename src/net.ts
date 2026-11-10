@@ -1,8 +1,6 @@
 // Delay-based lockstep: frame f runs only when both players' inputs for f are known.
-// Local input is scheduled DELAY frames ahead to hide latency.
+// Local input is scheduled `delay` frames ahead to hide latency (relay picks it from measured ping).
 // ponytail: feels laggy above ~120 ms RTT; upgrade path = rollback (sim state is a plain object, snapshot via structuredClone).
-export const DELAY = 4;
-
 export class Netplay {
   frame = 0;
   stalled = false;
@@ -13,10 +11,11 @@ export class Netplay {
   private remoteHashes = new Map<number, number>();
   private ws: WebSocket;
   readonly seat: number;
+  readonly delay: number;
 
-  constructor(ws: WebSocket, seat: number) {
-    this.ws = ws; this.seat = seat;
-    for (let f = 0; f < DELAY; f++) { this.local.set(f, 0); this.remote.set(f, 0); }
+  constructor(ws: WebSocket, seat: number, delay = 4) {
+    this.ws = ws; this.seat = seat; this.delay = delay;
+    for (let f = 0; f < delay; f++) { this.local.set(f, 0); this.remote.set(f, 0); }
   }
 
   onMessage(m: { t: string; f: number; b?: number; h?: number }) {
@@ -35,7 +34,7 @@ export class Netplay {
   tick(readLocal: () => number, advance: (inputs: number[]) => void, hashNow: () => number) {
     this.stalled = false;
     for (let n = 0; n < 2; n++) {
-      const target = this.frame + DELAY;
+      const target = this.frame + this.delay;
       if (!this.local.has(target)) {
         const b = readLocal();
         this.local.set(target, b);
