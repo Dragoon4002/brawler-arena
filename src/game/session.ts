@@ -35,7 +35,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
     }
     step(state, inputs);
     renderer.onEvents(state.events);
-    playEvents(state);
+    playEvents(state, seat);
     if (state.winner >= 0 && !reported) { reported = true; hooks.result?.(state.winner, state.fighters.map((_, i) => 3 - state.fighters[1 - i].stocks), seat); }
   }
 

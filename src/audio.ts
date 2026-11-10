@@ -112,7 +112,8 @@ function play(kind: keyof typeof SFX, param = 0) {
 
 // Called once per sim step. Swings/dodges are detected from state (t === 0 on the start frame).
 const seenWinner = new WeakSet<GameState>();
-export function playEvents(s: GameState) {
+// seat: local player's seat online (-1 = local hot-seat). Win jingle only for the winner's side.
+export function playEvents(s: GameState, seat = -1) {
   for (const e of s.events) {
     if (e.kind === 'hit') play('hit', e.power);
     else if (e.kind === 'ko') play('ko');
@@ -124,7 +125,7 @@ export function playEvents(s: GameState) {
     if (f.state === 'attack') play('swing', /Heavy|recovery|groundPound/.test(f.move ?? '') ? 1 : 0);
     else if (f.state === 'dodge') play('dodge');
   }
-  if (s.winner >= 0 && !seenWinner.has(s)) { seenWinner.add(s); play('win'); }
+  if (s.winner >= 0 && !seenWinner.has(s)) { seenWinner.add(s); if (seat < 0 || s.winner === seat) play('win'); }
 }
 
 /* ---------- generative music ---------- */
