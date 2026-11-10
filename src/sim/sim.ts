@@ -1,6 +1,8 @@
 // Deterministic fixed-step (60 Hz) platform-fighter simulation. No DOM, no RNG, no trig, no clock:
 // same inputs -> same state on every machine (required for lockstep netplay).
 import { MOVES, type MoveDef, type MoveId } from './moves.ts';
+import { STAGES, type StageDef, type StageId } from '../stages.ts';
+export { STAGES, type StageId };
 
 export const IN = { LEFT: 1, RIGHT: 2, UP: 4, DOWN: 8, JUMP: 16, LIGHT: 32, HEAVY: 64, DODGE: 128 } as const;
 const ACTIONS = IN.JUMP | IN.LIGHT | IN.HEAVY | IN.DODGE;
@@ -25,14 +27,11 @@ export interface Fighter {
 }
 
 export interface SimEvent { kind: 'hit' | 'ko' | 'jump' | 'land'; who: number; x: number; y: number; power: number }
-export interface GameState { frame: number; fighters: Fighter[]; winner: number; events: SimEvent[] }
+export interface GameState { frame: number; stage: StageId; fighters: Fighter[]; winner: number; events: SimEvent[] }
 
-export const STAGE = {
-  main: { x0: 400, x1: 1200, y: 600, y1: 700 },
-  soft: [{ x0: 480, x1: 740, y: 430 }, { x0: 860, x1: 1120, y: 430 }],
-  blast: { x0: -250, x1: 1850, y0: -450, y1: 1150 },
-  spawns: [{ x: 600, y: 300 }, { x: 1000, y: 300 }],
-};
+// Geometry of the stage being simulated. Set from GameState at the top of step()/newGame(), so every
+// helper below reads it without threading the state through. ponytail: module-level, fine while one sim runs per tick.
+let ST: StageDef = STAGES.ember;
 
 export const HURT_W = 50, HURT_H = 90;
 const G = 0.85, HIT_G = 0.55, MAX_FALL = 13, FAST_FALL = 19;
@@ -51,7 +50,7 @@ export function statMods(s: Stats) {
 }
 
 function newFighter(i: number, stats: Stats): Fighter {
-  const sp = STAGE.spawns[i];
+  const sp = ST.spawns[i];
   return {
     x: sp.x, y: sp.y, vx: 0, vy: 0, facing: i === 0 ? 1 : -1,
     state: 'air', t: 0, grounded: false,
@@ -64,8 +63,9 @@ function newFighter(i: number, stats: Stats): Fighter {
   };
 }
 
-export function newGame(stats: Stats[] = [DEFAULT_STATS, DEFAULT_STATS]): GameState {
-  return { frame: 0, fighters: stats.map((s, i) => newFighter(i, s)), winner: -1, events: [] };
+export function newGame(stats: Stats[] = [DEFAULT_STATS, DEFAULT_STATS], stage: StageId = 'ember'): GameState {
+  ST = STAGES[stage];
+  return { frame: 0, stage, fighters: stats.map((s, i) => newFighter(i, s)), winner: -1, events: [] };
 }
 
 const approach = (v: number, target: number, step: number) =>
@@ -164,7 +164,7 @@ function runAttack(f: Fighter, inp: number, act: number) {
 }
 
 function onSoft(f: Fighter) {
-  return STAGE.soft.some((p) => f.y === p.y && f.x >= p.x0 && f.x <= p.x1);
+  return ST.soft.some((p) => f.y === p.y && f.x >= p.x0 && f.x <= p.x1);
 }
 
 function physics(f: Fighter) {
@@ -179,14 +179,15 @@ function physics(f: Fighter) {
   const px = f.x, py = f.y, wasGrounded = f.grounded;
   f.x += f.vx; f.y += f.vy;
   f.grounded = false;
-  const hw = HURT_W / 2, mn = STAGE.main;
-  if (f.x + hw > mn.x0 && f.x - hw < mn.x1 && f.y > mn.y && f.y - HURT_H < mn.y1) {
+  const hw = HURT_W / 2;
+  for (const mn of ST.solids) {
+    if (!(f.x + hw > mn.x0 && f.x - hw < mn.x1 && f.y > mn.y && f.y - HURT_H < mn.y1)) continue;
     if (py <= mn.y) { f.y = mn.y; f.vy = 0; f.grounded = true; }
     else if (py - HURT_H >= mn.y1) { f.y = mn.y1 + HURT_H; f.vy = 0; }
     else { f.x = px < (mn.x0 + mn.x1) / 2 ? mn.x0 - hw : mn.x1 + hw; f.vx = 0; }
   }
   if (!f.grounded && f.vy >= 0 && f.dropT <= 0 && f.state !== 'hitstun') {
-    for (const p of STAGE.soft) {
+    for (const p of ST.soft) {
       if (f.x >= p.x0 && f.x <= p.x1 && py <= p.y && f.y >= p.y) { f.y = p.y; f.vy = 0; f.grounded = true; }
     }
   }
@@ -250,12 +251,13 @@ const overlap = (a: { x: number; y: number; w: number; h: number }, b: typeof a)
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 function respawn(f: Fighter, i: number) {
-  const sp = STAGE.spawns[i];
+  const sp = ST.spawns[i];
   Object.assign(f, { x: sp.x, y: sp.y - 150, vx: 0, vy: 0, damage: 0, invuln: RESPAWN_INVULN, airJumps: 2, recoveryUsed: false, airDodged: false, move: null, hitlag: 0 });
   setState(f, 'air');
 }
 
 export function step(s: GameState, inputs: number[]) {
+  ST = STAGES[s.stage];
   s.events.length = 0;
   s.frame++;
   if (s.winner >= 0) return;
@@ -297,7 +299,7 @@ export function step(s: GameState, inputs: number[]) {
     s.events.push({ kind: 'hit', who: j, x: (a.x + b.x) / 2, y: b.y - HURT_H / 2, power: kb });
   }
 
-  const bz = STAGE.blast;
+  const bz = ST.blast;
   fs.forEach((f, i) => {
     const inBounds = f.x > bz.x0 && f.x < bz.x1 && f.y > bz.y0 && f.y < bz.y1;
     if (f.state === 'dead' || (inBounds && f.damage < MAX_HP)) return;

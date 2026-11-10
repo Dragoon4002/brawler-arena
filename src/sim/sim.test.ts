@@ -1,6 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newGame, step, hash, IN, STAGE, MAX_HP, type GameState } from './sim.ts';
+import { newGame, step, hash, IN, STAGES, MAX_HP, type GameState } from './sim.ts';
+import { STAGE_IDS } from '../stages.ts';
+
+const STAGE = { main: STAGES.ember.solids[0], blast: STAGES.ember.blast };
 
 const run = (s: GameState, n: number, inputs: () => number[]) => { for (let i = 0; i < n; i++) step(s, inputs()); };
 
@@ -15,9 +18,9 @@ function faceOff(gap = 60) {
   return s;
 }
 
-test('deterministic: same input script -> same hash', () => {
+for (const id of STAGE_IDS) test(`deterministic on ${id}: same input script -> same hash`, () => {
   const play = () => {
-    const s = newGame();
+    const s = newGame(undefined, id);
     let seed = 42;
     const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) & 255;
     for (let f = 0; f < 3000; f++) step(s, [rnd(), rnd()]);
@@ -96,4 +99,22 @@ test('health depleted -> stock lost', () => {
   step(s, [IN.LIGHT, 0]);
   run(s, 12, () => [0, 0]);
   assert.equal(s.fighters[1].stocks, 2);
+});
+
+for (const id of STAGE_IDS) test(`${id}: both fighters land from spawn within 120 frames`, () => {
+  const s = newGame(undefined, id);
+  const landed = [false, false];
+  for (let f = 0; f < 120; f++) { step(s, [0, 0]); s.fighters.forEach((x, i) => { if (x.grounded) landed[i] = true; }); }
+  assert.deepEqual(landed, [true, true]);
+  assert.equal(s.fighters[0].x, 1600 - s.fighters[1].x, 'mirror-symmetric spawns');
+});
+
+for (const id of STAGE_IDS) test(`${id}: layout is mirror-symmetric around x=800`, () => {
+  const st = STAGES[id];
+  const key = (r: { x0: number; x1: number; y: number }) => `${r.x0},${r.x1},${r.y}`;
+  const mirror = (r: { x0: number; x1: number; y: number }) => key({ x0: 1600 - r.x1, x1: 1600 - r.x0, y: r.y });
+  for (const list of [st.solids, st.soft] as { x0: number; x1: number; y: number }[][]) {
+    const keys = new Set(list.map(key));
+    for (const r of list) assert.ok(keys.has(mirror(r)), `${key(r)} has no mirror`);
+  }
 });
