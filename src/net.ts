@@ -52,7 +52,8 @@ export class Netplay {
         this.ws.send(JSON.stringify({ t: 'hash', f: this.frame, h }));
         this.check(this.frame);
       }
-      if (!this.remote.has(this.frame)) return;
+      // Second step only when the peer's sim is ahead of ours (its input `delay` frames out already arrived).
+      if (!this.remote.has(this.frame + this.delay)) return;
     }
   }
 }

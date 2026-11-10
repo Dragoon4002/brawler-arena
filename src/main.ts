@@ -39,7 +39,8 @@ function online(first: object) {
   sock.onclose = () => { if (mode === 'online') { banner = 'Connection closed'; } };
   sock.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.t === 'room') status.textContent = `Room ${m.code} — share this code, waiting for opponent…`;
+    if (m.t === 'ping') sock.send('{"t":"pong"}');
+    else if (m.t === 'room') status.textContent = `Room ${m.code} — share this code, waiting for opponent…`;
     else if (m.t === 'error') status.textContent = m.msg;
     else if (m.t === 'start') {
       net = new Netplay(sock, m.seat, m.delay);

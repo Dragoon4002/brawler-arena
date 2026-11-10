@@ -35,18 +35,20 @@ const newCode = () => {
   return c;
 };
 
-// Median of 3 pings, ms. Falls back to 300 if the client doesn't answer.
+// Median of 3 app-level pings, ms. (Protocol-level ws pings get answered by hosting proxies, so they read ~0.)
+// Falls back to 300 if the client doesn't answer.
+const pongs = new WeakMap<WebSocket, () => void>();
 const rtt = (ws: WebSocket) => new Promise<number>((done) => {
   const samples: number[] = [];
   let t = 0;
-  const go = () => { t = performance.now(); ws.ping(); };
-  const onPong = () => {
+  const go = () => { t = performance.now(); send(ws, { t: 'ping' }); };
+  pongs.set(ws, () => {
     samples.push(performance.now() - t);
     if (samples.length < 3) return go();
-    ws.off('pong', onPong); done(samples.sort((a, b) => a - b)[1]);
-  };
-  ws.on('pong', onPong); go();
-  setTimeout(() => { ws.off('pong', onPong); done(300); }, 2000);
+    pongs.delete(ws); done(samples.sort((a, b) => a - b)[1]);
+  });
+  go();
+  setTimeout(() => { pongs.delete(ws); done(300); }, 3000);
 });
 
 wss.on('connection', (ws) => {
@@ -67,6 +69,8 @@ wss.on('connection', (ws) => {
         const delay = Math.min(15, Math.max(3, Math.ceil((a + b) / 2 / (1000 / 60)) + 2));
         r.forEach((c, seat) => send(c, { t: 'start', seat, delay }));
       });
+    } else if (msg.t === 'pong') {
+      pongs.get(ws)?.();
     } else if (msg.t && RELAYED.has(msg.t)) {
       const other = rooms.get(room)?.find((c) => c !== ws);
       if (other?.readyState === other?.OPEN) other!.send(raw.toString());
