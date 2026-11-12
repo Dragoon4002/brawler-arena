@@ -142,6 +142,7 @@ wss.on('connection', (ws) => {
       if (r.matchId !== null) { // staked/bettable: guest must have joined on-chain first
         const mv = await view<{ status: string; guest: string | null }>('get_match', { match_id: r.matchId });
         if (mv && mv.status !== 'live') return send(ws, { t: 'error', msg: 'Join the match on-chain first (stake not paid yet)' });
+        if (mv && mv.guest !== str(m.account, 64)) return send(ws, { t: 'error', msg: 'Another account paid for this seat' });
         // ponytail: guest identity is the claimed account; verify with a NEP-413 signature before mainnet
       }
       if (r.seats.length !== 1 || r.status !== 'waiting') return send(ws, { t: 'error', msg: 'Room already full' });

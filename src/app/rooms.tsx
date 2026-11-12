@@ -192,7 +192,7 @@ export function Watch({ code }: { code: string }) {
 
   return (
     <div className="arena">
-      <canvas ref={canvas} />
+      <canvas ref={canvas} aria-label="Fight arena" />
       {status && <div className="arena-overlay"><div className="slab" role="status"><p>{status}</p><a className="btn ghost" href="#/lobby"><span>Back to lobby</span></a></div></div>}
       <a className="chip watch-back" href="#/lobby">Lobby</a>
       {spec && (
@@ -204,7 +204,7 @@ export function Watch({ code }: { code: string }) {
                 <span style={{ width: `${share(0)}%` }} />
               </div>
               <div className="row" style={{ justifyContent: 'space-between' }}>
-                <span>{fmt(pool[0])} NEAR</span><span>{fmt(pool[1])} NEAR</span>
+                <span>{players[0]?.name}: {fmt(pool[0])} NEAR</span><span>{players[1]?.name}: {fmt(pool[1])} NEAR</span>
               </div>
               {canBet && (
                 <>
@@ -236,17 +236,21 @@ export function Watch({ code }: { code: string }) {
 /* ---------- Account: claimable winnings ---------- */
 export function Claims() {
   const arena = useArena();
-  const [rows, setRows] = useState<{ m: MatchView; amt: string }[] | null>(null);
+  const [rows, setRows] = useState<{ m: MatchView; amt: string; act: 'claim' | 'cancel' | 'expire' }[] | null>(null);
   const [msg, setMsg] = useState('');
   const load = async () => {
     if (!arena.ready || !arena.account) return setRows([]);
     try {
       const list = await arena.listMatches(0, 50);
       const out = [];
+      const me = arena.account, stale = (ms: number) => Date.now() - ms > 2 * 3600_000;
       for (const m of list) {
-        if (m.status !== 'settled' && m.status !== 'refund') continue;
-        const amt = await arena.claimable(m.id, arena.account);
-        if (BigInt(amt) > 0n) out.push({ m, amt });
+        if (m.status === 'open' && m.host === me) out.push({ m, amt: m.stake, act: 'cancel' as const });
+        else if (m.status === 'live' && stale(m.started_ms) && (m.host === me || m.guest === me || await arena.getBet(m.id, me))) out.push({ m, amt: '0', act: 'expire' as const });
+        else if (m.status === 'settled' || m.status === 'refund') {
+          const amt = await arena.claimable(m.id, me);
+          if (BigInt(amt) > 0n) out.push({ m, amt, act: 'claim' as const });
+        }
       }
       setRows(out);
     } catch (e) { setMsg(errText(e)); setRows([]); }
@@ -255,13 +259,16 @@ export function Claims() {
   if (!arena.account) return null;
   return (
     <section className="slab">
-      <h2>Winnings to claim</h2>
+      <h2>Winnings and stakes</h2>
       {rows === null ? <p className="sub">Checking the arena contract…</p> : rows.length === 0 ? <p className="sub">Nothing to claim right now.</p> : (
         <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0', display: 'grid', gap: 8 }}>
-          {rows.map(({ m, amt }) => (
+          {rows.map(({ m, amt, act }) => (
             <li key={m.id} className="row" style={{ justifyContent: 'space-between' }}>
-              <span>Match #{m.id}{m.status === 'refund' ? ' (refund)' : ''}: {fmt(amt)} NEAR</span>
-              <button className="btn" onClick={async () => { try { await arena.claim(m.id); load(); } catch (e) { setMsg(errText(e)); } }}><span>Claim</span></button>
+              <span>Match #{m.id}: {act === 'expire' ? 'no result after 2 h, release for refund' : act === 'cancel' ? `unjoined room, ${fmt(amt)} NEAR stake` : `${fmt(amt)} NEAR${m.status === 'refund' ? ' refund' : ''}`}</span>
+              <button className="btn" onClick={async () => {
+                try { await (act === 'cancel' ? arena.cancelMatch(m.id) : act === 'expire' ? arena.expire(m.id) : arena.claim(m.id)); load(); }
+                catch (e) { setMsg(errText(e)); }
+              }}><span>{act === 'cancel' ? 'Cancel and refund' : act === 'expire' ? 'Release' : 'Claim'}</span></button>
             </li>
           ))}
         </ul>

@@ -25,8 +25,17 @@ const queues = new Map<number, Promise<unknown>>();
 function call(matchId: number, methodName: string, args: object) {
   if (!account) return;
   const prev = queues.get(matchId) ?? Promise.resolve();
-  const next = prev.then(() => account.callFunction({ contractId: CONTRACT_ID, methodName, args, gas: 30_000_000_000_000n }))
-    .catch((e) => console.warn('referee', methodName, matchId, (e as Error).message));
+  const once = () => account.callFunction({ contractId: CONTRACT_ID, methodName, args, gas: 30_000_000_000_000n });
+  const retry = async () => {
+    for (let i = 0; ; i++) {
+      try { return await once(); }
+      catch (e) {
+        if (i >= 4) return console.warn('referee gave up', methodName, matchId, (e as Error).message); // 2 h expiry refunds
+        await new Promise((r) => setTimeout(r, 1500 * 2 ** i));
+      }
+    }
+  };
+  const next = prev.then(retry);
   queues.set(matchId, next);
 }
 

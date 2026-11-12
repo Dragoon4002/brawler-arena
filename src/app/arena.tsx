@@ -26,6 +26,7 @@ export function Arena() {
   const [room, setRoom] = useState<{ code: string; matchId: number | null; bettable: boolean; seat: number } | null>(null);
   const [over, setOver] = useState<{ winner: number | null; reason: string; seat: number } | null>(null);
   const [claimMsg, setClaimMsg] = useState('');
+  const [settled, setSettled] = useState(false);
   const [muted, setMuted] = useState(getAudio().muted);
   const s = setup;
 
@@ -59,6 +60,14 @@ export function Arena() {
     }
     location.hash = '#/play';
   };
+  useEffect(() => { // wait for the referee's on-chain result before offering the claim
+    if (!over || room?.matchId == null) return;
+    const t = setInterval(async () => {
+      const m = await arena.getMatch(room.matchId!).catch(() => null);
+      if (m && (m.status === 'settled' || m.status === 'refund')) { setSettled(true); clearInterval(t); }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [over, room?.matchId]);
   const claim = async () => {
     if (room?.matchId == null) return;
     setClaimMsg('Claiming…');
@@ -69,7 +78,7 @@ export function Arena() {
   const hostOpts = s?.kind === 'host' ? s.opts : null;
   return (
     <div className="arena">
-      <canvas ref={canvas} />
+      <canvas ref={canvas} aria-label="Fight arena" />
       <button type="button" className="chip sound-toggle" aria-pressed={muted} onClick={() => setMuted(toggleMute().muted)}>
         {muted ? 'Sound off (M)' : 'Sound on (M)'}
       </button>
@@ -108,8 +117,8 @@ export function Arena() {
             <p>{over.winner === null ? `No result (${over.reason}). Stakes and bets are refunded.` : over.reason === 'ko' ? 'Three knockouts.' : `Won by ${over.reason}.`}</p>
             {room?.matchId != null && (over.winner === over.seat || over.winner === null) && (
               <>
-                <p className="note">The referee posts the result on-chain, then you can claim.</p>
-                <button className="btn big" onClick={claim}><span>{over.winner === null ? 'Claim refund' : 'Claim winnings'}</span></button>
+                {!settled && <p className="note">Posting the result on-chain…</p>}
+                <button className="btn big" disabled={!settled} onClick={claim}><span>{over.winner === null ? 'Claim refund' : 'Claim winnings'}</span></button>
                 {claimMsg && <p className="note">{claimMsg}</p>}
               </>
             )}

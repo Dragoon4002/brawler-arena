@@ -55,7 +55,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
       else if (net && !banner) net.tick(soloInput, advance, () => hash(state));
       else if (spectate) spectate(advance);
     }
-    const b = banner || (net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
+    const b = banner || (seat !== -1 && state.winner >= 0 ? `${players[state.winner].name} wins` : net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
     renderer.draw(state, b, link);
     raf = requestAnimationFrame(frame);
   }

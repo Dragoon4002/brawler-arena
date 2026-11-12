@@ -154,7 +154,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       ctx.font = '12px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
       ctx.fillText(info, W / 2, H - 12);
     }
-    if (s.winner >= 0) banner = `${NAMES[s.winner]} WINS — both press JUMP for rematch`;
+    if (s.winner >= 0 && !banner) banner = `${NAMES[s.winner]} WINS — both press JUMP for rematch`; // local hot-seat only; online passes its own
     if (banner) {
       ctx.font = 'bold 28px system-ui'; ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, H / 2 - 40, W, 70);
