@@ -1,15 +1,17 @@
-// Full-screen fight. The Play screen stores the setup here, then routes to #/fight.
+// Full-screen fight. The Play/Lobby screens store the setup here, then route to #/fight.
 import { useEffect, useRef, useState } from 'react';
-import { startLocal, startOnline, type Player } from '../game/session.ts';
+import { startLocal, startOnline, type HostOpts, type Player } from '../game/session.ts';
 import { recordResult } from '../store.ts';
 import type { Monster } from '../genes.ts';
-import type { StageId } from '../stages.ts';
+import { STAGES, type StageId } from '../stages.ts';
 import { getAudio, toggleMute } from '../audio.ts';
+import { fmt, useArena } from '../near.ts';
+import { Portrait } from './ui.tsx';
 
 export type FightSetup =
   | { kind: 'local'; mons: [Monster, Monster]; stage: StageId }
-  | { kind: 'host'; mon: Monster; stage: StageId }
-  | { kind: 'join'; mon: Monster; code: string; stage: StageId };
+  | { kind: 'host'; mon: Monster; stage: StageId; opts: HostOpts }
+  | { kind: 'join'; mon: Monster; code: string; stage: StageId; account: string };
 
 let setup: FightSetup | null = null;
 export const prepareFight = (s: FightSetup) => { setup = s; location.hash = '#/fight'; };
@@ -18,13 +20,18 @@ const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna });
 
 export function Arena() {
   const canvas = useRef<HTMLCanvasElement>(null);
+  const arena = useArena();
   const [status, setStatus] = useState('');
   const [live, setLive] = useState(false);
+  const [room, setRoom] = useState<{ code: string; matchId: number | null; bettable: boolean; seat: number } | null>(null);
+  const [over, setOver] = useState<{ winner: number | null; reason: string; seat: number } | null>(null);
+  const [claimMsg, setClaimMsg] = useState('');
   const [muted, setMuted] = useState(getAudio().muted);
+  const s = setup;
 
   useEffect(() => {
-    const s = setup;
     if (!s) { location.hash = '#/play'; return; }
+    let seat = -1;
     const back = (e: KeyboardEvent) => {
       if (e.code === 'Escape') location.hash = '#/play';
       if (e.code === 'KeyM') setMuted(toggleMute().muted);
@@ -32,30 +39,84 @@ export function Arena() {
     addEventListener('keydown', back);
     const hooks = {
       status: setStatus,
+      room: (r: { code: string; matchId: number | null; bettable: boolean; seat: number }) => { seat = r.seat; setRoom(r); },
       started: () => setLive(true),
-      result: (winner: number, kos: number[], seat: number) => {
+      over: (winner: number | null, reason: string) => setTimeout(() => setOver({ winner, reason, seat }), reason === 'ko' ? 1800 : 0),
+      result: (winner: number, kos: number[], st: number) => {
         if (s.kind === 'local') s.mons.forEach((m, i) => recordResult(m.id, winner === i, kos[i], s.mons[1 - i].name, 'local'));
-        else recordResult(s.mon.id, winner === seat, kos[seat], 'online rival', 'online');
+        else recordResult(s.mon.id, winner === st, kos[st], 'online rival', 'online');
       },
     };
     const game = s.kind === 'local'
       ? startLocal(canvas.current!, [asPlayer(s.mons[0]), asPlayer(s.mons[1])], s.stage, hooks)
-      : startOnline(canvas.current!, s.kind === 'host' ? { t: 'host' } : { t: 'join', code: s.code }, asPlayer(s.mon), s.stage, hooks);
+      : startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : { t: 'join', code: s.code, account: s.account }, asPlayer(s.mon), s.stage, hooks);
     return () => { removeEventListener('keydown', back); game.stop(); };
   }, []);
 
-  const code = status.match(/Room ([A-Z]{4})/)?.[1];
+  const cancel = async () => {
+    if (room?.matchId != null && s?.kind === 'host') {
+      try { await arena.cancelMatch(room.matchId); } catch { /* user closed wallet; stake can still be reclaimed later */ }
+    }
+    location.hash = '#/play';
+  };
+  const claim = async () => {
+    if (room?.matchId == null) return;
+    setClaimMsg('Claiming…');
+    try { await arena.claim(room.matchId); setClaimMsg('Sent to your wallet.'); }
+    catch (e) { setClaimMsg((e as Error).message.slice(0, 120)); }
+  };
+
+  const hostOpts = s?.kind === 'host' ? s.opts : null;
   return (
     <div className="arena">
       <canvas ref={canvas} />
       <button type="button" className="chip sound-toggle" aria-pressed={muted} onClick={() => setMuted(toggleMute().muted)}>
         {muted ? 'Sound off (M)' : 'Sound on (M)'}
       </button>
-      {!live && (
+
+      {!live && s && s.kind !== 'local' && (
         <div className="arena-overlay">
-          <div className="slab" role="status">
-            {code ? <><p className="sub">Share this room code</p><div className="code">{code}</div><p>Waiting for an opponent to join.</p></> : <p>{status || 'Loading…'}</p>}
-            <a className="btn ghost" href="#/play"><span>Back</span></a>
+          <div className="slab waiting" role="status">
+            {room ? (
+              <>
+                <h2>Waiting room</h2>
+                <div className="versus">
+                  <div><Portrait dna={s.mon.dna} size={150} /><b>{s.mon.name}</b></div>
+                  <span className="vs">vs</span>
+                  <div className="ghost-slot" aria-label="Opponent not joined yet"><span>?</span><b>Waiting…</b></div>
+                </div>
+                <p className="sub">Room code</p>
+                <div className="code">{room.code}</div>
+                <div className="row" style={{ justifyContent: 'center' }}>
+                  <span className="chip">{hostOpts?.pub ? 'Public' : 'Private'}</span>
+                  {room.bettable && <span className="chip gold">Open for bets</span>}
+                  {hostOpts && hostOpts.stake !== '0' && <span className="chip">Stake {fmt(hostOpts.stake)} NEAR</span>}
+                  <span className="chip">{STAGES[s.stage].name}</span>
+                </div>
+                <p className="note">{hostOpts?.pub ? 'Listed in the lobby. ' : 'Share the code with your opponent. '}The fight starts when they join.</p>
+              </>
+            ) : <p>{status || 'Loading…'}</p>}
+            <button className="btn ghost" onClick={cancel}><span>{room?.matchId != null && s.kind === 'host' ? 'Cancel and refund' : 'Back'}</span></button>
+          </div>
+        </div>
+      )}
+
+      {over && (
+        <div className="arena-overlay">
+          <div className="slab waiting" role="status">
+            <h2>{over.winner === null ? 'Match void' : over.winner === over.seat ? 'Victory' : 'Defeat'}</h2>
+            <p>{over.winner === null ? `No result (${over.reason}). Stakes and bets are refunded.` : over.reason === 'ko' ? 'Three knockouts.' : `Won by ${over.reason}.`}</p>
+            {room?.matchId != null && (over.winner === over.seat || over.winner === null) && (
+              <>
+                <p className="note">The referee posts the result on-chain, then you can claim.</p>
+                <button className="btn big" onClick={claim}><span>{over.winner === null ? 'Claim refund' : 'Claim winnings'}</span></button>
+                {claimMsg && <p className="note">{claimMsg}</p>}
+              </>
+            )}
+            <div className="row" style={{ justifyContent: 'center' }}>
+              <a className="btn alt" href="#/lobby"><span>Lobby</span></a>
+              <a className="btn ghost" href="#/play"><span>Play again</span></a>
+            </div>
           </div>
         </div>
       )}

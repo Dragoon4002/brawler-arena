@@ -3,6 +3,7 @@ import { NearProvider, useNearWallet } from 'near-connect-hooks';
 import { Logo } from './ui.tsx';
 import { Title, Play, Collection, Detail, Breed, Account } from './screens.tsx';
 import { Arena } from './arena.tsx';
+import { Lobby, Watch } from './rooms.tsx';
 
 export const NETWORK = 'testnet' as const;
 
@@ -16,7 +17,7 @@ function useHash() {
   return h.slice(1).split('/').filter(Boolean); // '#/monster/abc' -> ['monster','abc']
 }
 
-const NAV = [['play', 'Play'], ['collection', 'Collection'], ['breed', 'Breed'], ['account', 'Account']] as const;
+const NAV = [['play', 'Play'], ['lobby', 'Lobby'], ['collection', 'Collection'], ['breed', 'Breed'], ['account', 'Account']] as const;
 
 function Bar({ here }: { here: string }) {
   const { signedAccountId } = useNearWallet();
@@ -34,8 +35,10 @@ function Bar({ here }: { here: string }) {
 function Routes() {
   const [page = '', arg] = useHash();
   if (page === 'fight') return <Arena />;
+  if (page === 'watch' && arg) return <Watch code={arg} />;
   if (page === '') return <Title />;
   const body = page === 'play' ? <Play />
+    : page === 'lobby' ? <Lobby />
     : page === 'collection' ? <Collection />
     : page === 'monster' && arg ? <Detail id={arg} />
     : page === 'breed' ? <Breed />

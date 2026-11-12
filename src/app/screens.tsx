@@ -6,6 +6,7 @@ import { breedPair, children, history, monster, monsters } from '../store.ts';
 import { Logo, MonsterCard, Portrait, StageThumb, Stats } from './ui.tsx';
 import { STAGES, STAGE_IDS, type StageId } from '../stages.ts';
 import { prepareFight } from './arena.tsx';
+import { Claims, OnlineStart } from './rooms.tsx';
 import { getAudio, setAudio } from '../audio.ts';
 
 const DEMO_NOTE = 'Demo collection stored in this browser. Monsters move on-chain to NEAR in the next build.';
@@ -64,7 +65,6 @@ export function Play() {
   const [mode, setMode] = useState<'local' | 'online'>('online');
   const [p1, setP1] = useState(list[0].id);
   const [p2, setP2] = useState(list[1]?.id ?? list[0].id);
-  const [code, setCode] = useState('');
   const [stage, setStage] = useState<StageId>('ember');
   const get = (id: string) => list.find((m) => m.id === id)!;
   return (
@@ -89,18 +89,11 @@ export function Play() {
           ))}
         </div>
       </section>
-      <section className="slab row" aria-label="Start">
-        {mode === 'local' ? (
+      {mode === 'local' ? (
+        <section className="slab row" aria-label="Start">
           <button className="btn big" onClick={() => prepareFight({ kind: 'local', mons: [get(p1), get(p2)], stage })}><span>Start fight</span></button>
-        ) : (
-          <>
-            <button className="btn big" onClick={() => prepareFight({ kind: 'host', mon: get(p1), stage })}><span>Host a room</span></button>
-            <span className="note">or join a friend</span>
-            <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="Room code" maxLength={4} aria-label="Room code" style={{ width: 160 }} />
-            <button className="btn alt" disabled={code.length !== 4} onClick={() => prepareFight({ kind: 'join', mon: get(p1), code, stage })}><span>Join</span></button>
-          </>
-        )}
-      </section>
+        </section>
+      ) : <OnlineStart mon={get(p1)} stage={stage} />}
       <p className="note">Controls: move with WASD, Space to jump, Z light, X heavy, C dodge. Player 2 uses arrows and Num0 to Num3. Gamepads work too.</p>
     </>
   );
@@ -175,7 +168,7 @@ export function Detail({ id }: { id: string }) {
             {kids.length > 0 && <><p className="sub">Offspring</p><div className="row" style={{ marginTop: 10 }}>{kids.map((k) => <a key={k.id} className="chip" href={`#/monster/${k.id}`}>{k.name}</a>)}</div></>}
           </section>
           <div className="row">
-            <button className="btn" onClick={() => prepareFight({ kind: 'host', mon: m, stage: 'ember' })}><span>Fight online</span></button>
+            <a className="btn" href="#/play"><span>Fight</span></a>
             <a className="btn alt" href="#/breed"><span>Breed</span></a>
           </div>
         </div>
@@ -262,6 +255,7 @@ export function Account() {
           </ul>
         </section>
       </div>
+      <Claims />
       <SoundSettings />
     </>
   );
