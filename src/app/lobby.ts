@@ -5,7 +5,7 @@ import type { Dna } from '../genes.ts';
 import type { StageId } from '../stages.ts';
 
 export interface LobbyRoom {
-  code: string; status: 'waiting' | 'live' | 'done'; stage: StageId; bettable: boolean; matchId: number | null;
+  code: string; pub: boolean; status: 'waiting' | 'live' | 'done'; stage: StageId; bettable: boolean; matchId: number | null;
   stake: string; winner: number | null; watchers: number; players: { name: string; dna: Dna; account: string }[];
 }
 

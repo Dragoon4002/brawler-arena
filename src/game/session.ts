@@ -16,7 +16,7 @@ export interface Hooks {
   over?: (winner: number | null, reason: string) => void; // server referee verdict (online / spectate)
   room?: (info: { code: string; matchId: number | null; bettable: boolean; seat: number }) => void;
 }
-export interface HostOpts { pub: boolean; bettable: boolean; matchId: number | null; stake: string; account: string }
+export interface HostOpts { pub: boolean; view: boolean; bettable: boolean; matchId: number | null; stake: string; account: string }
 
 const params = new URLSearchParams(location.search);
 const FORCE_RELAY = params.has('relay'); // ?relay -> skip P2P (debug fallback path)

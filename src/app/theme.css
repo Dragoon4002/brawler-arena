@@ -175,3 +175,6 @@ input[type='range'], input[type='checkbox'] { accent-color: var(--ember); border
 .pool-bar { height: 16px; border: 2px solid var(--ink); border-radius: 99px; background: var(--teal); overflow: hidden; }
 .pool-bar > span { display: block; height: 100%; background: var(--ember); }
 .watch-back { position: fixed; left: 16px; bottom: 16px; text-decoration: none; }
+.bet-dialog { width: min(520px, 100% - 32px); color: var(--cream); padding: 24px; }
+.bet-dialog::backdrop { background: var(--scrim); }
+.dialog-pick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }

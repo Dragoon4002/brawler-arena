@@ -20,7 +20,7 @@ const FORFEIT_MS = 30_000;
 
 interface Seat { ws: WebSocket | null; name: string; dna: Dna; account: string; seen: number; tape: number[] }
 interface Room {
-  code: string; pub: boolean; bettable: boolean; matchId: number | null; stake: string; stage: StageId;
+  code: string; pub: boolean; view: boolean; bettable: boolean; matchId: number | null; stake: string; stage: StageId; // view: private room open to spectators
   seats: Seat[]; spectators: Set<WebSocket>; status: 'waiting' | 'live' | 'done'; winner: number | null;
   ref: Referee | null; frames: number[][]; created: number;
 }
@@ -68,7 +68,7 @@ const rtt = (ws: WebSocket) => new Promise<number>((done) => {
 
 const str = (v: unknown, n: number) => String(v ?? '').slice(0, n);
 const lobbyRow = (r: Room) => ({
-  code: r.code, status: r.status, stage: r.stage, bettable: r.bettable, matchId: r.matchId, stake: r.stake, winner: r.winner,
+  code: r.code, pub: r.pub, status: r.status, stage: r.stage, bettable: r.bettable, matchId: r.matchId, stake: r.stake, winner: r.winner,
   players: r.seats.map((s) => ({ name: s.name, dna: s.dna, account: s.account })), watchers: r.spectators.size,
 });
 let lobbyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -76,7 +76,7 @@ function pushLobby() { // throttled: at most one broadcast per 500 ms
   if (lobbyTimer) return;
   lobbyTimer = setTimeout(() => {
     lobbyTimer = null;
-    const list = [...rooms.values()].filter((r) => r.pub && r.status !== 'done').map(lobbyRow);
+    const list = [...rooms.values()].filter((r) => (r.pub || r.view) && r.status !== 'done').map(lobbyRow);
     for (const ws of lobbySubs) send(ws, { t: 'lobby', rooms: list });
   }, 500);
 }
@@ -128,7 +128,7 @@ wss.on('connection', (ws) => {
     if (m.t === 'host' && !room) {
       const code = newCode();
       room = {
-        code, pub: !!m.pub, bettable: !!m.bettable, matchId: Number.isInteger(m.matchId) ? m.matchId : null,
+        code, pub: !!m.pub, view: !!m.pub || !!m.view, bettable: !!m.bettable, matchId: Number.isInteger(m.matchId) ? m.matchId : null,
         stake: /^\d{1,40}$/.test(m.stake ?? '') ? m.stake : '0', stage: STAGE_IDS.includes(m.stage) ? m.stage : 'ember',
         seats: [{ ws, name: str(m.name, 24) || 'Host', dna: sanitize(m.dna), account: str(m.account, 64), seen: Date.now(), tape: [] }],
         spectators: new Set(), status: 'waiting', winner: null, ref: null, frames: [], created: Date.now(),
@@ -163,13 +163,14 @@ wss.on('connection', (ws) => {
     } else if (m.t === 'watch' && !room) {
       const r = rooms.get(str(m.code, 8).toUpperCase());
       if (!r) return send(ws, { t: 'error', msg: 'Room not found' });
+      if (!r.view) return send(ws, { t: 'error', msg: 'This private room is closed to spectators' });
       room = r; r.spectators.add(ws);
       send(ws, { t: 'spec', code: r.code, stage: r.stage, status: r.status, winner: r.winner, matchId: r.matchId, bettable: r.bettable,
         players: r.seats.map((s) => ({ name: s.name, dna: s.dna, account: s.account })), frames: r.frames });
       pushLobby();
     } else if (m.t === 'lobby') {
       lobbySubs.add(ws);
-      send(ws, { t: 'lobby', rooms: [...rooms.values()].filter((r) => r.pub && r.status !== 'done').map(lobbyRow) });
+      send(ws, { t: 'lobby', rooms: [...rooms.values()].filter((r) => (r.pub || r.view) && r.status !== 'done').map(lobbyRow) });
     } else if (m.t === 'tape' && room && seat >= 0 && Number.isInteger(m.f0) && Array.isArray(m.ins)) {
       const tape = room.seats[seat].tape;
       if (m.f0 !== tape.length) return; // batches arrive in order on one socket; ignore dupes

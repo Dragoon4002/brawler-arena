@@ -33,6 +33,7 @@ export function OnlineStart({ mon, stage }: { mon: Monster; stage: StageId }) {
   const arena = useArena();
   const [pub, setPub] = useState(true);
   const [bettable, setBettable] = useState(false);
+  const [view, setView] = useState(true);
   const [stake, setStake] = useState('0');
   const [code, setCode] = useState('');
   const [msg, setMsg] = useState('');
@@ -50,7 +51,7 @@ export function OnlineStart({ mon, stage }: { mon: Monster; stage: StageId }) {
         setMsg('Confirm in your wallet…');
         matchId = await arena.createMatch(bettable, stakeY);
       }
-      prepareFight({ kind: 'host', mon, stage, opts: { pub, bettable, matchId, stake: stakeY, account: arena.account ?? '' } });
+      prepareFight({ kind: 'host', mon, stage, opts: { pub, view: pub || view, bettable, matchId, stake: stakeY, account: arena.account ?? '' } });
     } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
   };
   const join = async () => {
@@ -66,6 +67,7 @@ export function OnlineStart({ mon, stage }: { mon: Monster; stage: StageId }) {
           <button type="button" role="radio" aria-checked={pub} className={`chip ${pub ? 'gold' : ''}`} onClick={() => setPub(true)}>Public, listed in lobby</button>
           <button type="button" role="radio" aria-checked={!pub} className={`chip ${!pub ? 'gold' : ''}`} onClick={() => setPub(false)}>Private, code only</button>
         </div>
+        {!pub && <label className="toggle"><input type="checkbox" checked={view} onChange={(e) => setView(e.target.checked)} /> Let anyone watch (listed in lobby as watch-only)</label>}
         <label className="toggle"><input type="checkbox" checked={bettable} onChange={(e) => setBettable(e.target.checked)} /> Let spectators bet on this fight</label>
         <label className="row">Your stake
           <input type="number" min="0" step="0.01" value={stake} onChange={(e) => setStake(e.target.value)} aria-label="Stake in NEAR" style={{ width: 130 }} /> NEAR
@@ -96,13 +98,14 @@ function RoomCard({ r, onJoin }: { r: LobbyRoom; onJoin: () => void }) {
       </div>
       <div className="row">
         <span className={`chip ${r.status === 'live' ? 'gold' : ''}`}>{r.status === 'live' ? 'Live' : 'Waiting'}</span>
+        {!r.pub && <span className="chip">Private, watch only</span>}
         <span className="chip">{STAGES[r.stage].name}</span>
         {r.stake !== '0' && <span className="chip">Stake {fmt(r.stake)} NEAR</span>}
         {r.bettable && <span className="chip">Bets open</span>}
         {r.watchers > 0 && <span className="chip">{r.watchers} watching</span>}
       </div>
       <div className="row">
-        {r.status === 'waiting' && <button className="btn" onClick={onJoin}><span>Join fight</span></button>}
+        {r.status === 'waiting' && r.pub && <button className="btn" onClick={onJoin}><span>Join fight</span></button>}
         <a className="btn alt" href={`#/watch/${r.code}`}><span>{r.bettable ? 'Watch and bet' : 'Watch'}</span></a>
       </div>
     </article>
@@ -120,7 +123,7 @@ export function Lobby() {
   return (
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div><h1>Lobby</h1><p className="sub">Public rooms. Join an open seat with {mon.name}, or watch a live fight and back a side.</p></div>
+        <div><h1>Lobby</h1><p className="sub">Join an open seat with {mon.name}, or watch any fight for free and back a side.</p></div>
         <a className="btn" href="#/play"><span>Create a room</span></a>
       </div>
       {msg && <p className="note" role="status">{msg}</p>}
@@ -149,6 +152,8 @@ export function Watch({ code }: { code: string }) {
   const [side, setSide] = useState(0);
   const [amount, setAmount] = useState('0.1');
   const [msg, setMsg] = useState('');
+  const dlg = useRef<HTMLDialogElement>(null);
+  const asked = useRef(false);
 
   useEffect(() => {
     const game = startSpectate(canvas.current!, code, { status: setStatus, info: setSpec, started: () => setStatus(''), over: (w, r) => setOver({ winner: w, reason: r }) });
@@ -179,6 +184,10 @@ export function Watch({ code }: { code: string }) {
   const total = pool[0] + pool[1];
   const share = (i: number) => (total ? Number((pool[i] * 1000n) / total) / 10 : 50);
 
+  useEffect(() => { // pop the bet dialog once, as soon as betting is possible
+    if (canBet && !asked.current) { asked.current = true; dlg.current?.showModal(); }
+  }, [canBet]);
+
   const place = async () => {
     setMsg('');
     if (!arena.account) { await arena.signIn(); return; }
@@ -195,6 +204,28 @@ export function Watch({ code }: { code: string }) {
       <canvas ref={canvas} aria-label="Fight arena" />
       {status && <div className="arena-overlay"><div className="slab" role="status"><p>{status}</p><a className="btn ghost" href="#/lobby"><span>Back to lobby</span></a></div></div>}
       <a className="chip watch-back" href="#/lobby">Lobby</a>
+      <dialog ref={dlg} className="slab bet-dialog" aria-label="Place a bet">
+        <form method="dialog" style={{ display: 'grid', gap: 14 }} onSubmit={(e) => { e.preventDefault(); place().then(() => dlg.current?.close()); }}>
+          <h2>Back a fighter</h2>
+          <p className="sub">Watching is free. Bet on who wins; winners split the other side's pool.</p>
+          <div className="dialog-pick" role="radiogroup" aria-label="Fighter">
+            {[0, 1].map((i) => (
+              <button key={i} type="button" role="radio" aria-checked={side === i} className="tile" aria-pressed={side === i} onClick={() => setSide(i)}>
+                {spec && <Portrait dna={spec.players[i]?.dna ?? spec.players[0].dna} size={110} flip={i === 1} />}
+                <b>{players[i]?.name ?? '?'}</b>
+                <span className="tile-meta">{fmt(pool[i])} NEAR backed</span>
+              </button>
+            ))}
+          </div>
+          <label className="row">Amount <input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 130 }} aria-label="Bet in NEAR" /> NEAR</label>
+          <p className="note">Bets placed now count at {betWeightPct(match?.kos ?? 0)}% weight ({match?.kos ?? 0} KOs so far). Fee 0.1%.</p>
+          <div className="row">
+            <button type="submit" className="btn big" disabled={!canBet}><span>{arena.account ? 'Place bet' : 'Connect wallet'}</span></button>
+            <button type="button" className="btn ghost" onClick={() => dlg.current?.close()}><span>Just watch</span></button>
+          </div>
+          {msg && <p className="note" role="status">{msg}</p>}
+        </form>
+      </dialog>
       {spec && (
         <aside className="slab bet-panel" aria-label="Betting">
           <h3>{players[0]?.name ?? '?'} vs {players[1]?.name ?? '?'}</h3>
@@ -206,18 +237,7 @@ export function Watch({ code }: { code: string }) {
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <span>{players[0]?.name}: {fmt(pool[0])} NEAR</span><span>{players[1]?.name}: {fmt(pool[1])} NEAR</span>
               </div>
-              {canBet && (
-                <>
-                  <div className="row" role="radiogroup" aria-label="Back a fighter">
-                    {[0, 1].map((i) => (
-                      <button key={i} type="button" role="radio" aria-checked={side === i} className={`chip ${side === i ? 'gold' : ''}`} onClick={() => setSide(i)}>{players[i]?.name ?? (i ? 'Guest' : 'Host')}</button>
-                    ))}
-                  </div>
-                  <label className="row">Amount <input type="number" min="0.01" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 110 }} aria-label="Bet in NEAR" /> NEAR</label>
-                  <p className="note">Bets placed now count at {betWeightPct(match!.kos)}% weight ({match!.kos} KOs so far). Fee 0.1%.</p>
-                  <button className="btn" onClick={place}><span>Place bet</span></button>
-                </>
-              )}
+              {canBet && <button className="btn" onClick={() => dlg.current?.showModal()}><span>Place a bet</span></button>}
               {bet && <p>Your bet: {fmt(bet.amount)} NEAR on {players[bet.side]?.name}{bet.claimed ? ', claimed' : ''}</p>}
               {bet && !bet.claimed && (match?.status === 'settled' || match?.status === 'refund') && (
                 <button className="btn big" onClick={claim}><span>{match.status === 'refund' ? 'Claim refund' : 'Claim winnings'}</span></button>
