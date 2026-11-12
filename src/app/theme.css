@@ -178,3 +178,4 @@ input[type='range'], input[type='checkbox'] { accent-color: var(--ember); border
 .bet-dialog { width: min(520px, 100% - 32px); color: var(--cream); padding: 24px; }
 .bet-dialog::backdrop { background: var(--scrim); }
 .dialog-pick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.demo-ribbon { display: block; text-align: center; padding: 8px 16px; background: var(--gold); color: var(--ink); font-weight: 800; text-decoration: none; }

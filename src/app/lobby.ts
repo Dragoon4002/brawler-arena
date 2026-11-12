@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { SERVER } from '../game/session.ts';
 import type { Dna } from '../genes.ts';
 import type { StageId } from '../stages.ts';
+import { DEMO, DEMO_ROOMS } from '../demo.ts';
 
 export interface LobbyRoom {
   code: string; pub: boolean; status: 'waiting' | 'live' | 'done'; stage: StageId; bettable: boolean; matchId: number | null;
@@ -10,9 +11,10 @@ export interface LobbyRoom {
 }
 
 export function useLobby() {
-  const [rooms, setRooms] = useState<LobbyRoom[] | null>(null);
+  const [rooms, setRooms] = useState<LobbyRoom[] | null>(DEMO ? (DEMO_ROOMS as unknown as LobbyRoom[]) : null);
   const [err, setErr] = useState('');
   useEffect(() => {
+    if (DEMO) return;
     let ws: WebSocket, dead = false, tries = 0;
     const open = () => {
       ws = new WebSocket(SERVER);
@@ -27,6 +29,7 @@ export function useLobby() {
 }
 
 export function peekRoom(code: string) {
+  if (DEMO) return Promise.resolve((DEMO_ROOMS.find((r) => r.code === code) ?? DEMO_ROOMS[2]) as unknown as LobbyRoom);
   return new Promise<LobbyRoom | null>((done, fail) => {
     const ws = new WebSocket(SERVER);
     const t = setTimeout(() => { ws.close(); fail(new Error('Server did not answer')); }, 60_000);

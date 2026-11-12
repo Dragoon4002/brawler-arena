@@ -1,5 +1,4 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { useNearWallet } from 'near-connect-hooks';
 import { yoctoToNear } from 'near-api-js';
 import { archetype, STAT_KEYS, type Dna, type Monster } from '../genes.ts';
 import { breedPair, children, history, monster, monsters } from '../store.ts';
@@ -7,6 +6,7 @@ import { Logo, MonsterCard, Portrait, StageThumb, Stats } from './ui.tsx';
 import { STAGES, STAGE_IDS, type StageId } from '../stages.ts';
 import { prepareFight } from './arena.tsx';
 import { Claims, OnlineStart } from './rooms.tsx';
+import { useWallet } from '../near.ts';
 import { getAudio, setAudio } from '../audio.ts';
 
 const DEMO_NOTE = 'Demo collection stored in this browser. Monsters move on-chain to NEAR in the next build.';
@@ -215,7 +215,7 @@ export function Breed() {
 
 /* ---------- Account ---------- */
 export function Account() {
-  const { signedAccountId, signIn, signOut, getBalance, loading, network } = useNearWallet();
+  const { signedAccountId, signIn, signOut, getBalance, loading, network } = useWallet();
   const [bal, setBal] = useState<string>('');
   useEffect(() => {
     if (!signedAccountId) return setBal('');

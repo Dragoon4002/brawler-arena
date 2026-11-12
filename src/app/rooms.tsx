@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { Monster } from '../genes.ts';
 import { STAGES, type StageId } from '../stages.ts';
 import { betWeightPct, fmt, toYocto, useArena, type BetView, type MatchView } from '../near.ts';
-import { startSpectate } from '../game/session.ts';
+import { startBotFight, startSpectate } from '../game/session.ts';
+import { DEMO, DEMO_ROOMS } from '../demo.ts';
 import { monsters } from '../store.ts';
 import { peekRoom, useLobby, type LobbyRoom } from './lobby.ts';
 import { prepareFight } from './arena.tsx';
@@ -156,7 +157,10 @@ export function Watch({ code }: { code: string }) {
   const asked = useRef(false);
 
   useEffect(() => {
-    const game = startSpectate(canvas.current!, code, { status: setStatus, info: setSpec, started: () => setStatus(''), over: (w, r) => setOver({ winner: w, reason: r }) });
+    const hooks = { status: setStatus, info: setSpec, started: () => setStatus(''), over: (w: number | null, r: string) => setOver({ winner: w, reason: r }) };
+    const demoRoom = DEMO && (DEMO_ROOMS.find((r) => r.code === code) ?? DEMO_ROOMS[0]);
+    if (demoRoom) setSpec({ ...demoRoom, status: 'live' });
+    const game = demoRoom ? startBotFight(canvas.current!, demoRoom.players.map((p) => ({ ...p })), demoRoom.stage, hooks) : startSpectate(canvas.current!, code, hooks);
     return () => game.stop();
   }, [code]);
 

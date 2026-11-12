@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
-import { NearProvider, useNearWallet } from 'near-connect-hooks';
+import { NearProvider } from 'near-connect-hooks';
+import { useWallet } from '../near.ts';
+import { DEMO } from '../demo.ts';
+import { DemoIndex } from './demo.tsx';
 import { Logo } from './ui.tsx';
 import { Title, Play, Collection, Detail, Breed, Account } from './screens.tsx';
 import { Arena } from './arena.tsx';
@@ -20,7 +23,7 @@ function useHash() {
 const NAV = [['play', 'Play'], ['lobby', 'Lobby'], ['collection', 'Collection'], ['breed', 'Breed'], ['account', 'Account']] as const;
 
 function Bar({ here }: { here: string }) {
-  const { signedAccountId } = useNearWallet();
+  const { signedAccountId } = useWallet();
   return (
     <header className="wrap bar">
       <a href="#/" aria-label="Home"><Logo className="logo" /></a>
@@ -34,10 +37,11 @@ function Bar({ here }: { here: string }) {
 
 function Routes() {
   const [page = '', arg] = useHash();
-  if (page === 'fight') return <Arena />;
-  if (page === 'watch' && arg) return <Watch code={arg} />;
+  if (page === 'fight') return <Arena key={arg} demo={DEMO ? arg : undefined} />;
+  if (page === 'watch' && arg) return <Watch key={arg} code={arg} />;
   if (page === '') return <Title />;
-  const body = page === 'play' ? <Play />
+  const body = page === 'demo' ? <DemoIndex />
+    : page === 'play' ? <Play />
     : page === 'lobby' ? <Lobby />
     : page === 'collection' ? <Collection />
     : page === 'monster' && arg ? <Detail id={arg} />
@@ -46,6 +50,7 @@ function Routes() {
     : <Title />;
   return (
     <>
+      {DEMO && <a className="demo-ribbon" href="/">Demo mode with fake data. Click to exit</a>}
       <Bar here={page === 'monster' ? 'collection' : page} />
       <main className="wrap page">{body}</main>
     </>

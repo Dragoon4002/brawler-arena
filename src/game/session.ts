@@ -7,6 +7,7 @@ import { Netplay, linkPeer } from '../net.ts';
 import { lookOf, sanitize, statsOf, type Dna } from '../genes.ts';
 import { STAGE_IDS, type StageId } from '../stages.ts';
 import { music, playEvents } from '../audio.ts';
+import { bot } from '../demo.ts';
 
 export interface Player { name: string; dna: Dna }
 export interface Hooks {
@@ -29,7 +30,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
   let overFrames = 0, reported = false, raf = 0;
   let net: Netplay | null = null;
   let banner = '', link = '';
-  let spectate: ((advance: (inputs: number[]) => void) => void) | null = null;
+  let spectate: ((advance: (inputs: number[]) => void, s: GameState) => void) | null = null;
   renderer.setPlayers(players.map((p, i) => (seat < 0 ? p.name : i === seat ? `${p.name} (you)` : p.name)), players.map((p) => lookOf(p.dna)));
 
   // Shared by local + online so rematch is deterministic too.
@@ -53,7 +54,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
       acc -= DT;
       if (seat === -1) advance(localInputs()); // -1 local hot-seat, -2 spectator
       else if (net && !banner) net.tick(soloInput, advance, () => hash(state));
-      else if (spectate) spectate(advance);
+      else if (spectate) spectate(advance, state);
     }
     const b = banner || (seat !== -1 && state.winner >= 0 ? `${players[state.winner].name} wins` : net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
     renderer.draw(state, b, link);
@@ -65,7 +66,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
 
   return {
     attach(n: Netplay, label: string) { net = n; link = label; },
-    feed(fn: (advance: (inputs: number[]) => void) => void) { spectate = fn; },
+    feed(fn: (advance: (inputs: number[]) => void, s: GameState) => void) { spectate = fn; },
     setBanner(t: string) { banner = t; },
     stop() { cancelAnimationFrame(raf); renderer.destroy(); music(null); },
   };
@@ -182,4 +183,12 @@ export function startSpectate(canvas: HTMLCanvasElement, code: string, hooks: Ho
     else if (m.t === 'over') { hooks.over?.(m.winner, m.reason); if (m.reason !== 'ko') game?.setBanner(m.winner === null ? 'Match void, bets refunded' : `Winner by ${m.reason}`); }
   };
   return { stop() { sock.close(); game?.stop(); } };
+}
+
+// Demo: two scripted bots fight on their own (no input, no network).
+export function startBotFight(canvas: HTMLCanvasElement, players: Player[], stage: StageId, hooks: Hooks = {}) {
+  const game = loop(canvas, players, -2, stage, hooks);
+  game.feed((advance, s) => advance([bot(s, 0), bot(s, 1)]));
+  hooks.started?.(players, -2);
+  return game;
 }

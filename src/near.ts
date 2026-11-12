@@ -1,6 +1,7 @@
 // Arena contract client (testnet). Thin wrapper over near-connect-hooks.
 import { useNearWallet } from 'near-connect-hooks';
 import { nearToYocto, yoctoToNear } from 'near-api-js';
+import { DEMO, DEMO_ACCOUNT, demoArena } from './demo.ts';
 
 export const CONTRACT_ID: string = import.meta.env.VITE_CONTRACT_ID ?? 'brawler-arena-ed5da3.testnet'; // testnet deploy
 const GAS = '30000000000000';
@@ -23,6 +24,7 @@ export const betWeightPct = (kos: number) => Math.max(10, 100 - 30 * kos);
 
 export function useArena() {
   const w = useNearWallet();
+  if (DEMO) return demoArena;
   const call = (method: string, args: Record<string, unknown>, deposit = '0') =>
     w.callFunction({ contractId: CONTRACT_ID, method, args, gas: GAS, deposit });
   const view = <T,>(method: string, args: Record<string, unknown> = {}) =>
@@ -42,4 +44,11 @@ export function useArena() {
     claimable: (id: number, account: string) => view<string>('claimable', { match_id: id, account_id: account }),
     listMatches: (from = 0, limit = 50) => view<MatchView[]>('list_matches', { from, limit }),
   };
+}
+
+// Wallet state for screens; demo mode pretends a testnet account is connected.
+export function useWallet() {
+  const w = useNearWallet();
+  if (!DEMO) return w;
+  return { ...w, loading: false, signedAccountId: DEMO_ACCOUNT, network: 'testnet', getBalance: async () => 12_345n * 10n ** 21n, signIn: async () => {}, signOut: async () => alert('Demo: wallet disconnected') };
 }

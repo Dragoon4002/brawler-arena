@@ -1,6 +1,7 @@
 // Full-screen fight. The Play/Lobby screens store the setup here, then route to #/fight.
 import { useEffect, useRef, useState } from 'react';
-import { startLocal, startOnline, type HostOpts, type Player } from '../game/session.ts';
+import { startBotFight, startLocal, startOnline, type HostOpts, type Player } from '../game/session.ts';
+import { monsters } from '../store.ts';
 import { recordResult } from '../store.ts';
 import type { Monster } from '../genes.ts';
 import { STAGES, type StageId } from '../stages.ts';
@@ -18,7 +19,10 @@ export const prepareFight = (s: FightSetup) => { setup = s; location.hash = '#/f
 
 const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna });
 
-export function Arena() {
+// Demo states for #/fight/<state>?demo : waiting | fight | victory | defeat | void
+const demoSetup = (): FightSetup => ({ kind: 'host', mon: monsters()[0], stage: 'ember', opts: { pub: true, view: true, bettable: true, matchId: 99, stake: '500000000000000000000000', account: '' } });
+
+export function Arena({ demo }: { demo?: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const arena = useArena();
   const [status, setStatus] = useState('');
@@ -28,10 +32,18 @@ export function Arena() {
   const [claimMsg, setClaimMsg] = useState('');
   const [settled, setSettled] = useState(false);
   const [muted, setMuted] = useState(getAudio().muted);
-  const s = setup;
+  const s = demo ? demoSetup() : setup;
 
   useEffect(() => {
     if (!s) { location.hash = '#/play'; return; }
+    if (demo && s.kind === 'host') {
+      setRoom({ code: 'DEMO', matchId: 99, bettable: true, seat: 0 });
+      if (demo === 'waiting') return;
+      setLive(true); setSettled(true);
+      if (demo !== 'fight') setOver({ winner: demo === 'void' ? null : demo === 'victory' ? 0 : 1, reason: demo === 'void' ? 'both left' : 'ko', seat: 0 });
+      const g = startBotFight(canvas.current!, [asPlayer(s.mon), asPlayer(monsters()[1] ?? s.mon)], s.stage);
+      return () => g.stop();
+    }
     let seat = -1;
     const back = (e: KeyboardEvent) => {
       if (e.code === 'Escape') location.hash = '#/play';
