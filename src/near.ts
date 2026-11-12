@@ -2,7 +2,7 @@
 import { useNearWallet } from 'near-connect-hooks';
 import { nearToYocto, yoctoToNear } from 'near-api-js';
 
-export const CONTRACT_ID: string = import.meta.env.VITE_CONTRACT_ID ?? '';
+export const CONTRACT_ID: string = import.meta.env.VITE_CONTRACT_ID ?? 'brawler-arena-ed5da3.testnet'; // testnet deploy
 const GAS = '30000000000000';
 
 export interface MatchView {
