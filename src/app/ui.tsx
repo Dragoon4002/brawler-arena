@@ -88,13 +88,13 @@ export function ArenaBackdrop({ id, className }: { id: StageId; className?: stri
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current!, ctx = c.getContext('2d')!;
-    let raf = 0, t = 0;
+    let raf = 0;
     const paint = () => {
       const dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
       if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
       const s = Math.max(w / 1280, h / 720);
       ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (w - 1280 * s) / 2, dpr * (h - 720 * s) / 2);
-      drawStageThumb(ctx, id, 1280, 720, t++);
+      drawStageThumb(ctx, id, 1280, 720, performance.now() / 1000); // seconds, same clock as the fight renderer
       if (!reduceMotion()) raf = requestAnimationFrame(paint);
     };
     paint();

@@ -8,19 +8,27 @@ import { prepareFight } from './arena.tsx';
 import { Claims, OnlineStart } from './rooms.tsx';
 import { useWallet } from '../near.ts';
 import { getAudio, setAudio } from '../audio.ts';
+import { DEMO } from '../demo.ts';
 
 const DEMO_NOTE = 'Demo collection stored in this browser. Monsters move on-chain to NEAR in the next build.';
 
 /* ---------- Title ---------- */
-function HubBtn({ href, label, icon, badge }: { href: string; label: string; icon: string; badge?: number }) {
+// Side button; when its page is open it shows as active with a close (back to title) beside it.
+function HubBtn({ href, label, icon, badge, active }: { href: string; label: string; icon: string; badge?: number; active?: boolean }) {
   return (
-    <a className="hub-btn" href={href}>
-      <Ico n={icon} className="hub-btn-ico" />
-      <span>{label}</span>
-      {badge ? <b className="hub-badge">{badge}</b> : null}
-    </a>
+    <div className="hub-slot">
+      <a className="hub-btn" href={href} aria-current={active ? 'page' : undefined}>
+        <Ico n={icon} className="hub-btn-ico" />
+        <span>{label}</span>
+        {badge ? <b className="hub-badge">{badge}</b> : null}
+      </a>
+      {active && <a className="hub-close" href="#/" aria-label={`Close ${label}`}><Ico n="icon-close" /></a>}
+    </div>
   );
 }
+
+// Which side a page's panel opens from (matches its button).
+const PANEL_FROM: Record<string, 'left' | 'right' | 'bottom'> = { collection: 'left', breed: 'left', account: 'left', lobby: 'right', play: 'bottom' };
 
 // Native modal popup; closes on Esc, backdrop click or the X.
 function HubDialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -34,7 +42,8 @@ function HubDialog({ title, onClose, children }: { title: string; onClose: () =>
   );
 }
 
-export function Title() {
+// Title hub. Menu pages (lobby, collection, …) open inside it as a panel that grows from their button.
+export function Title({ page, children }: { page?: string; children?: React.ReactNode }) {
   const list = useMemo(monsters, []);
   const { signedAccountId } = useWallet();
   const [i, setI] = useState(0);
@@ -44,7 +53,7 @@ export function Title() {
   const wins = list.reduce((s, x) => s + x.record.w, 0), kos = list.reduce((s, x) => s + x.record.ko, 0);
   const step = (d: number) => setI((i + d + list.length) % list.length);
   return (
-    <div className="hub">
+    <div className={`hub ${children ? 'open' : ''}`}>
       <ArenaBackdrop id={stage} className="hub-bg" />
       <header className="hub-top">
         <a href="#/" aria-label="Home"><Logo className="hub-logo" /></a>
@@ -52,16 +61,17 @@ export function Title() {
           <span className="hub-count" title="Total wins"><Ico n="trophy" /><i>Wins</i>{wins}</span>
           <span className="hub-count" title="Total knockouts"><Ico n="ko" /><i>KOs</i>{kos}</span>
           <a className="hub-count wallet" href="#/account"><Ico n="icon-wallet" />{signedAccountId || 'Connect wallet'}</a>
+          {DEMO && <a className="hub-count demo" href="/">Demo mode · exit</a>}
         </div>
       </header>
 
       <nav className="hub-side left" aria-label="Monsters">
-        <HubBtn href="#/collection" label="Monsters" icon="icon-monster" badge={list.length} />
-        <HubBtn href="#/breed" label="Breed" icon="icon-breed" />
-        <HubBtn href="#/account" label="Account" icon="icon-wallet" />
+        <HubBtn href="#/collection" label="Monsters" icon="icon-monster" badge={list.length} active={page === 'collection'} />
+        <HubBtn href="#/breed" label="Breed" icon="icon-breed" active={page === 'breed'} />
+        <HubBtn href="#/account" label="Account" icon="icon-wallet" active={page === 'account'} />
       </nav>
 
-      <section className="hub-hero" aria-label="Your monster">
+      <section className="hub-hero" aria-label="Your monster" inert={!!children}>
         <div className="hub-tags">
           <span className="hub-tag gen"><Ico n="dna" />Gen {m.gen}</span>
           <span className="hub-tag rec"><Ico n="trophy" />{m.record.w}W · {m.record.l}L</span>
@@ -78,10 +88,17 @@ export function Title() {
       </section>
 
       <nav className="hub-side right" aria-label="Online">
-        <HubBtn href="#/lobby" label="Lobby" icon="icon-lobby" />
+        <HubBtn href="#/lobby" label="Lobby" icon="icon-lobby" active={page === 'lobby'} />
       </nav>
 
-      <footer className="hub-bottom">
+      {children && (
+        <main key={page} className={`hub-panel from-${PANEL_FROM[page ?? ''] ?? 'bottom'}`}>
+          {!PANEL_FROM[page ?? ''] || page === 'play' ? <a className="hub-close panel-x" href="#/" aria-label="Back to title"><Ico n="icon-close" /></a> : null}
+          <div className="page">{children}</div>
+        </main>
+      )}
+
+      <footer className="hub-bottom" inert={!!children}>
         {/* ponytail: arena pick here only changes the backdrop; Play still has its own picker */}
         <button type="button" className="hub-event" onClick={() => setPop('map')}>
           <StageThumb id={stage} className="hub-event-thumb" />
