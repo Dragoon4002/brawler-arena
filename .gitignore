@@ -2,3 +2,8 @@ node_modules
 dist
 .vercel
 /.claude/
+
+# art sources + sliced UI images (hosted externally, see VITE_ASSET_URL)
+/assets/
+/public/ui/
+.env*

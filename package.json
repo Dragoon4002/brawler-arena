@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "server": "node --experimental-strip-types --no-warnings server/relay.ts",
-    "test": "node --experimental-strip-types --no-warnings --test src/sim/sim.test.ts src/net.test.ts src/genes.test.ts",
+    "test": "node --experimental-strip-types --no-warnings --test src/sim/sim.test.ts src/net.test.ts src/genes.test.ts src/market.test.ts",
     "typecheck": "tsc --noEmit",
     "start": "node --experimental-strip-types --no-warnings server/relay.ts"
   },

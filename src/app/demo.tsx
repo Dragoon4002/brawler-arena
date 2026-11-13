@@ -12,7 +12,8 @@ const SCREENS: [string, string, string][] = [
   ['Victory', '#/fight/victory', 'Result with claim'],
   ['Defeat', '#/fight/defeat', 'Result for the loser'],
   ['Match void', '#/fight/void', 'Refund result'],
-  ['Watch and bet', '#/watch/LIVE', 'Spectator view with the bet popup'],
+  ['Watch and bet', '#/watch/LIVE', 'Live market over the fight: bots trade, you go Long/Short, the result settles it'],
+  ['Market simulation', '#/sim', 'Whole market run with the contract math: ledger, payouts, house books'],
   ['Watch, private room', '#/watch/GROV', 'Watch-only private fight'],
 ];
 

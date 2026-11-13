@@ -3,7 +3,8 @@ import { NearProvider } from 'near-connect-hooks';
 import { useWallet } from '../near.ts';
 import { DEMO } from '../demo.ts';
 import { DemoIndex } from './demo.tsx';
-import { Logo } from './ui.tsx';
+import { MarketSim } from './sim.tsx';
+import { Ico, Logo } from './ui.tsx';
 import { Title, Play, Collection, Detail, Breed, Account } from './screens.tsx';
 import { Arena } from './arena.tsx';
 import { Lobby, Watch } from './rooms.tsx';
@@ -20,7 +21,7 @@ function useHash() {
   return h.slice(1).split('/').filter(Boolean); // '#/monster/abc' -> ['monster','abc']
 }
 
-const NAV = [['play', 'Play'], ['lobby', 'Lobby'], ['collection', 'Collection'], ['breed', 'Breed'], ['account', 'Account']] as const;
+const NAV = [['play', 'Play', 'icon-play'], ['lobby', 'Lobby', 'icon-lobby'], ['collection', 'Collection', 'icon-monster'], ['breed', 'Breed', 'icon-breed'], ['account', 'Account', 'icon-wallet']] as const;
 
 function Bar({ here }: { here: string }) {
   const { signedAccountId } = useWallet();
@@ -28,9 +29,9 @@ function Bar({ here }: { here: string }) {
     <header className="wrap bar">
       <a href="#/" aria-label="Home"><Logo className="logo" /></a>
       <nav aria-label="Main">
-        {NAV.map(([k, label]) => <a key={k} className="navlink" href={`#/${k}`} aria-current={here === k ? 'page' : undefined}>{label}</a>)}
+        {NAV.map(([k, label, icon]) => <a key={k} className="navlink row-ico" href={`#/${k}`} aria-current={here === k ? 'page' : undefined}><Ico n={icon} />{label}</a>)}
       </nav>
-      <a className="wallet-chip" href="#/account">{signedAccountId || 'Connect wallet'}</a>
+      <a className="wallet-chip row-ico" href="#/account"><Ico n="icon-wallet" />{signedAccountId || 'Connect wallet'}</a>
     </header>
   );
 }
@@ -41,6 +42,7 @@ function Routes() {
   if (page === 'watch' && arg) return <Watch key={arg} code={arg} />;
   if (page === '') return <Title />;
   const body = page === 'demo' ? <DemoIndex />
+    : page === 'sim' ? <MarketSim />
     : page === 'play' ? <Play />
     : page === 'lobby' ? <Lobby />
     : page === 'collection' ? <Collection />

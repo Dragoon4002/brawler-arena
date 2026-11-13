@@ -7,20 +7,24 @@ import type { StageId } from '../stages.ts';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// Working-title wordmark (name TBD). Inline SVG so it uses the loaded display font.
+// UI art lives in Vercel Blob (store brawler-arena-ui), not in the repo. Override with VITE_ASSET_URL=/ui to use a local public/ui copy.
+const ASSET_URL = import.meta.env.VITE_ASSET_URL ?? 'https://oimajowqffhgowbd.public.blob.vercel-storage.com/ui';
+const ASSET_V = 2; // bump after re-uploading art (Blob files are cached for a year)
+export const asset = (name: string) => `${ASSET_URL}/${name}.webp?v=${ASSET_V}`;
+// CSS can't build url() from a variable, so expose the images theme.css uses as --img-<name>.
+for (const n of ['btn-orange', 'btn-gold', 'btn-teal', 'btn-dark', 'btn-red']) document.documentElement.style.setProperty(`--img-${n}`, `url("${asset(n)}")`);
+
 export function Logo({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 520 150" role="img" aria-label="Brawler Arena">
-      <g fontFamily="var(--font-display)" textAnchor="middle" strokeLinejoin="round" paintOrder="stroke">
-        {[0, 34, 68].map((dx) => (
-          <path key={dx} d={`M${40 + dx} 132 Q${58 + dx} 70 ${96 + dx} 16 Q${80 + dx} 78 ${62 + dx} 134 Z`} fill="var(--ember)" stroke="var(--ink)" strokeWidth="7" />
-        ))}
-        <text x="330" y="78" fontSize="74" fill="var(--cream)" stroke="var(--ink)" strokeWidth="12">Brawler</text>
-        <text x="330" y="138" fontSize="58" fill="var(--gold)" stroke="var(--ink)" strokeWidth="11">Arena</text>
-      </g>
-    </svg>
-  );
+  return <img className={className} src={asset('logo')} alt="Brawler Arena" draggable={false} />;
 }
+
+// Decorative sheet icon (sized by CSS, 1.3em by default). Text next to it carries the meaning.
+export function Ico({ n, className = 'ico' }: { n: string; className?: string }) {
+  return <img className={className} src={asset(n)} alt="" aria-hidden="true" draggable={false} />;
+}
+
+export const TYPE_ICON = { Bruiser: 'type-bruiser', Duelist: 'type-duelist', Bulwark: 'type-bulwark', Skirmisher: 'type-skirmisher' } as Record<string, string>;
+export const STAGE_ICON = { ember: 'arena-ember', grove: 'arena-grove', docks: 'arena-docks' } as Record<StageId, string>;
 
 // Canvas portrait drawn from DNA with the same rig the arena uses.
 export function Portrait({ dna, size = 200, pose, flip = false, className = 'portrait' }: { dna: Dna; size?: number; pose?: Pose; flip?: boolean; className?: string }) {
@@ -54,7 +58,7 @@ export function Stats({ dna }: { dna: Dna }) {
     <div className="stats">
       {STAT_KEYS.map((k) => (
         <div className="stat" key={k} style={{ ['--c' as string]: `var(--stat-${k})` }}>
-          <span>{STAT_LABEL[k]}</span>
+          <span className="row-ico"><Ico n={`stat-${k}`} />{STAT_LABEL[k]}</span>
           <span className="pips" role="meter" aria-label={STAT_LABEL[k]} aria-valuemin={3} aria-valuemax={9} aria-valuenow={dna[k]}>
             {Array.from({ length: 9 }, (_, i) => <span key={i} className={`pip ${i < dna[k] ? 'on' : ''}`} />)}
           </span>
@@ -70,13 +74,35 @@ export function MonsterCard({ m, onClick, selected, href }: { m: Monster; onClic
     <>
       <Portrait dna={m.dna} size={200} />
       <div className="tile-head"><h3>{m.name}</h3><span className="chip">Gen {m.gen}</span></div>
-      <span className="tile-meta">{archetype(m.dna)}, {m.record.w} wins, {m.record.l} losses</span>
+      <span className="tile-meta row-ico"><Ico n={TYPE_ICON[archetype(m.dna)]} />{archetype(m.dna)}, {m.record.w} wins, {m.record.l} losses</span>
       <Stats dna={m.dna} />
     </>
   );
   return href
     ? <a className="tile" href={href}>{body}</a>
     : <button type="button" className="tile" aria-pressed={selected} onClick={onClick}>{body}</button>;
+}
+
+// Full-bleed animated arena (cover-fit), used as the title backdrop.
+export function ArenaBackdrop({ id, className }: { id: StageId; className?: string }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = ref.current!, ctx = c.getContext('2d')!;
+    let raf = 0, t = 0;
+    const paint = () => {
+      const dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+      if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+      const s = Math.max(w / 1280, h / 720);
+      ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (w - 1280 * s) / 2, dpr * (h - 720 * s) / 2);
+      drawStageThumb(ctx, id, 1280, 720, t++);
+      if (!reduceMotion()) raf = requestAnimationFrame(paint);
+    };
+    paint();
+    const onResize = () => { if (reduceMotion()) paint(); };
+    addEventListener('resize', onResize);
+    return () => { cancelAnimationFrame(raf); removeEventListener('resize', onResize); };
+  }, [id]);
+  return <canvas ref={ref} className={className} aria-hidden="true" />;
 }
 
 // Static arena preview (painted once by the stage renderer).

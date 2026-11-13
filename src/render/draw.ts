@@ -25,12 +25,15 @@ export function createRenderer(canvas: HTMLCanvasElement) {
 
   function resize() {
     const dpr = devicePixelRatio || 1;
-    const s = Math.min(innerWidth / W, innerHeight / H);
+    const box = canvas.parentElement; // fit the container (full screen in a fight, a column when watching)
+    const s = Math.min((box?.clientWidth || innerWidth) / W, (box?.clientHeight || innerHeight) / H);
     canvas.style.width = `${W * s}px`; canvas.style.height = `${H * s}px`;
     canvas.width = W * s * dpr; canvas.height = H * s * dpr;
     ctx.setTransform(s * dpr, 0, 0, s * dpr, 0, 0);
   }
-  addEventListener('resize', resize); resize();
+  const fit = new ResizeObserver(resize);
+  if (canvas.parentElement) fit.observe(canvas.parentElement);
+  resize();
 
   const burst = (x: number, y: number, n: number, speed: number, color: string, kind: Particle['kind'], size = 4, life = 22) => {
     for (let i = 0; i < n; i++) {
@@ -179,6 +182,6 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   return {
     draw, onEvents,
     setPlayers: (names: string[], looks?: Look[]) => { NAMES.splice(0, 2, ...names); if (looks) LOOKS.splice(0, 2, ...looks); },
-    destroy: () => { removeEventListener('keydown', onKey); removeEventListener('resize', resize); },
+    destroy: () => { removeEventListener('keydown', onKey); fit.disconnect(); },
   };
 }

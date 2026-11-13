@@ -7,7 +7,7 @@ import type { Monster } from '../genes.ts';
 import { STAGES, type StageId } from '../stages.ts';
 import { getAudio, toggleMute } from '../audio.ts';
 import { fmt, useArena } from '../near.ts';
-import { Portrait } from './ui.tsx';
+import { asset, Ico, Portrait, STAGE_ICON } from './ui.tsx';
 
 export type FightSetup =
   | { kind: 'local'; mons: [Monster, Monster]; stage: StageId }
@@ -91,8 +91,8 @@ export function Arena({ demo }: { demo?: string }) {
   return (
     <div className="arena">
       <canvas ref={canvas} aria-label="Fight arena" />
-      <button type="button" className="chip sound-toggle" aria-pressed={muted} onClick={() => setMuted(toggleMute().muted)}>
-        {muted ? 'Sound off (M)' : 'Sound on (M)'}
+      <button type="button" className="chip sound-toggle row-ico" aria-pressed={muted} onClick={() => setMuted(toggleMute().muted)}>
+        <Ico n={muted ? 'icon-sound-off' : 'icon-sound-on'} />{muted ? 'Sound off (M)' : 'Sound on (M)'}
       </button>
 
       {!live && s && s.kind !== 'local' && (
@@ -100,7 +100,7 @@ export function Arena({ demo }: { demo?: string }) {
           <div className="slab waiting" role="status">
             {room ? (
               <>
-                <h2>Waiting room</h2>
+                <img className="title-img" src={asset('title-ready')} alt="Waiting room" />
                 <div className="versus">
                   <div><Portrait dna={s.mon.dna} size={150} /><b>{s.mon.name}</b></div>
                   <span className="vs">vs</span>
@@ -109,15 +109,15 @@ export function Arena({ demo }: { demo?: string }) {
                 <p className="sub">Room code</p>
                 <div className="code">{room.code}</div>
                 <div className="row" style={{ justifyContent: 'center' }}>
-                  <span className="chip">{hostOpts?.pub ? 'Public' : 'Private'}</span>
-                  {room.bettable && <span className="chip gold">Open for bets</span>}
-                  {hostOpts && hostOpts.stake !== '0' && <span className="chip">Stake {fmt(hostOpts.stake)} NEAR</span>}
-                  <span className="chip">{STAGES[s.stage].name}</span>
+                  <span className="chip row-ico"><Ico n={hostOpts?.pub ? 'icon-room-public' : 'icon-room-private'} />{hostOpts?.pub ? 'Public' : 'Private'}</span>
+                  {room.bettable && <span className="chip gold row-ico"><Ico n="icon-bet" />Open for bets</span>}
+                  {hostOpts && hostOpts.stake !== '0' && <span className="chip row-ico"><Ico n="coin" />Stake {fmt(hostOpts.stake)} NEAR</span>}
+                  <span className="chip row-ico"><Ico n={STAGE_ICON[s.stage]} />{STAGES[s.stage].name}</span>
                 </div>
                 <p className="note">{hostOpts?.pub ? 'Listed in the lobby. ' : 'Share the code with your opponent. '}The fight starts when they join.</p>
               </>
             ) : <p>{status || 'Loading…'}</p>}
-            <button className="btn ghost" onClick={cancel}><span>{room?.matchId != null && s.kind === 'host' ? 'Cancel and refund' : 'Back'}</span></button>
+            <button className="btn ghost" onClick={cancel}><span><Ico n="icon-back" />{room?.matchId != null && s.kind === 'host' ? 'Cancel and refund' : 'Back'}</span></button>
           </div>
         </div>
       )}
@@ -125,18 +125,18 @@ export function Arena({ demo }: { demo?: string }) {
       {over && (
         <div className="arena-overlay">
           <div className="slab waiting" role="status">
-            <h2>{over.winner === null ? 'Match void' : over.winner === over.seat ? 'Victory' : 'Defeat'}</h2>
+            <img className="title-img" src={asset(over.winner === null ? 'title-void' : over.winner === over.seat ? 'title-victory' : 'title-defeat')} alt={over.winner === null ? 'Match void' : over.winner === over.seat ? 'Victory' : 'Defeat'} />
             <p>{over.winner === null ? `No result (${over.reason}). Stakes and bets are refunded.` : over.reason === 'ko' ? 'Three knockouts.' : `Won by ${over.reason}.`}</p>
             {room?.matchId != null && (over.winner === over.seat || over.winner === null) && (
               <>
                 {!settled && <p className="note">Posting the result on-chain…</p>}
-                <button className="btn big" disabled={!settled} onClick={claim}><span>{over.winner === null ? 'Claim refund' : 'Claim winnings'}</span></button>
+                <button className="btn big" disabled={!settled} onClick={claim}><span><Ico n="icon-claim" />{over.winner === null ? 'Claim refund' : 'Claim winnings'}</span></button>
                 {claimMsg && <p className="note">{claimMsg}</p>}
               </>
             )}
             <div className="row" style={{ justifyContent: 'center' }}>
-              <a className="btn alt" href="#/lobby"><span>Lobby</span></a>
-              <a className="btn ghost" href="#/play"><span>Play again</span></a>
+              <a className="btn alt" href="#/lobby"><span><Ico n="icon-lobby" />Lobby</span></a>
+              <a className="btn ghost" href="#/play"><span><Ico n="icon-refresh" />Play again</span></a>
             </div>
           </div>
         </div>
