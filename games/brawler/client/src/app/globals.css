@@ -158,10 +158,10 @@ button.hub-count, .link { cursor: pointer; }
   animation: panel-open 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 .hub-panel > .page { padding: 20px 24px 40px; }
-.hub-panel::-webkit-scrollbar { width: 10px; }
-.hub-panel::-webkit-scrollbar-track { background: transparent; margin: 14px 0; }
-.hub-panel::-webkit-scrollbar-thumb { background: var(--panel-2); border: 2px solid transparent; border-radius: 99px; background-clip: padding-box; }
-.hub-panel::-webkit-scrollbar-thumb:hover { background-color: var(--muted); }
+.hub-panel::-webkit-scrollbar, .hub-dialog::-webkit-scrollbar { width: 10px; }
+.hub-panel::-webkit-scrollbar-track, .hub-dialog::-webkit-scrollbar-track { background: transparent; margin: 14px 0; }
+.hub-panel::-webkit-scrollbar-thumb, .hub-dialog::-webkit-scrollbar-thumb { background: var(--panel-2); border: 2px solid transparent; border-radius: 99px; background-clip: padding-box; }
+.hub-panel::-webkit-scrollbar-thumb:hover, .hub-dialog::-webkit-scrollbar-thumb:hover { background-color: var(--muted); }
 .hub-panel.from-left { --clip-from: inset(0 100% 0 0 round 18px); }
 .hub-panel.from-right { --clip-from: inset(0 0 0 100% round 18px); }
 .hub-panel.from-bottom { --clip-from: inset(100% 0 0 0 round 18px); }
@@ -170,7 +170,7 @@ button.hub-count, .link { cursor: pointer; }
 .hub-panel > .page > :first-child { padding-right: 56px; }
 .hub-count.demo { background: var(--gold); color: var(--ink); border-color: var(--ink); }
 
-.hub-dialog { width: min(760px, 100% - 32px); max-height: calc(100dvh - 32px); padding: 20px; color: var(--cream); background: var(--grain), var(--panel); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 0 8px 0 var(--ink), inset 0 3px 0 var(--bevel-hi); }
+.hub-dialog { width: min(760px, 100% - 32px); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; padding: 20px; color: var(--cream); background: var(--grain), var(--panel); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 0 8px 0 var(--ink), inset 0 3px 0 var(--bevel-hi); }
 .hub-dialog[open] { display: grid; gap: 16px; animation: hatch 0.25s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
 .hub-dialog::backdrop { background: var(--scrim); }
 .hub-dialog > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -590,7 +590,10 @@ a.lb-who:hover b { color: var(--gold); text-decoration: underline; }
 .anychain[open] { display: grid; gap: 12px; }
 .anychain summary { cursor: pointer; font-family: var(--font-display); font-size: 20px; }
 .anychain summary small { color: var(--muted); font-size: 14px; margin-left: 6px; }
-.anychain-warn { padding: 10px 12px; border: 2px solid var(--gold); border-radius: 10px; color: var(--cream); }
+.anychain-warn { margin: 0; padding: 10px 12px; border: 2px solid var(--gold); border-radius: 10px; color: var(--cream); font-size: 15px; }
+.anychain-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; align-items: end; }
+.anychain-form select { width: 100%; min-width: 0; }
+.anychain .funds-kv, .anychain .note { margin: 0; }
 
 .hub-practice { --bh: 64px; font-size: 28px; }
 .practice-hint { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); font-size: 12px; opacity: 0.85; pointer-events: none; white-space: nowrap; }

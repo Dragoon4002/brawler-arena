@@ -85,9 +85,9 @@ function AnyChain() {
   return (
     <details className="anychain" onToggle={(e) => e.currentTarget.open && !tokens && load()}>
       <summary>Add funds from any chain <small>NEAR Intents</small></summary>
-      <p className="note anychain-warn">Mainnet route (NEAR Intents has no testnet). This game runs on testnet: quotes are live, funding is disabled here.</p>
+      <p className="note anychain-warn">Swap any token into NEAR. Quotes are live from mainnet; funding stays off while the game runs on testnet.</p>
       {tokens && (
-        <>
+        <div className="anychain-form">
           <label className="funds-amount">
             <span>From</span>
             <select value={asset} onChange={(e) => { setAsset(e.target.value); reset(); }} disabled={busy} aria-label="Source token">
@@ -98,23 +98,26 @@ function AnyChain() {
             <span>Amount</span>
             <span className="stake-input"><input type="number" min="0" step="any" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => { setAmount(e.target.value); reset(); }} disabled={busy} aria-label={`Amount in ${token?.symbol ?? 'source token'}`} /><b>{token?.symbol}</b></span>
           </label>
-          <p className="note">To: NEAR on NEAR mainnet</p>
-          <button type="button" className="btn" disabled={busy || !token} onClick={getQuote}><span><Ico n="coin" />Get quote</span></button>
-        </>
+        </div>
       )}
       {quote && token && (
         <>
           <dl className="kv funds-kv">
             <dt>You send</dt><dd>{quote.amountInFormatted} {token.symbol} ({chain(token.blockchain)}) ≈ {usd(Number(quote.amountInUsd))}</dd>
-            <dt>You receive</dt><dd>~{Number(quote.amountOutFormatted).toFixed(4)} NEAR ≈ {usd(Number(quote.amountOutUsd))}</dd>
+            <dt>You receive</dt><dd>~{Number(quote.amountOutFormatted).toFixed(4)} NEAR on NEAR ≈ {usd(Number(quote.amountOutUsd))}</dd>
             <dt>Fees</dt><dd>≈ {usd(Number(quote.amountInUsd) - Number(quote.amountOutUsd))} incl. spread, 1% max slippage</dd>
             <dt>ETA</dt><dd>{eta(quote.timeEstimate)} after deposit confirms</dd>
             <dt>Deposit to</dt><dd>address generated on confirm</dd>
           </dl>
-          <button type="button" className="btn ghost" disabled title="Mainnet only; this game runs on testnet"><span>Confirm (mainnet only)</span></button>
         </>
       )}
       {msg && <p className="note" role="status">{msg}</p>}
+      {tokens && (
+        <div className="funds-actions">
+          <button type="button" className="btn" disabled={busy || !token} onClick={getQuote}><span><Ico n="coin" />Get quote</span></button>
+          <button type="button" className="btn ghost" disabled title="Mainnet only; this game runs on testnet"><span>Confirm (mainnet)</span></button>
+        </div>
+      )}
     </details>
   );
 }
