@@ -32,6 +32,7 @@ export function Portrait({ dna, size = 200, pose, flip = false, className = 'por
     const c = ref.current!, ctx = c.getContext('2d')!;
     const dpr = devicePixelRatio || 1;
     c.width = size * dpr; c.height = size * dpr;
+    ctx.scale(dpr, dpr);
     const look = lookOf(dna);
     let raf = 0, t = 0;
     const paint = () => {
@@ -84,33 +85,55 @@ export function MonsterCard({ m, onClick, selected, href, extra, disabled }: { m
     : <button type="button" className="tile" aria-pressed={selected} disabled={disabled} onClick={onClick}>{body}</button>;
 }
 
-// Title-screen key art: 4 painted layers (public/title, split by sprites/title/layers.py) shifted for parallax.
-// Follows the pointer, drifts slowly when idle; static under reduced motion. Bleed (inset -40px) hides shifted edges.
-const TITLE_LAYERS = [['0-sky', 0], ['1-far', 8], ['2-mid', 18], ['3-front', 30]] as const;
+// Title-screen key art: layers loaded as-is from assets/Title Screen (public/title is a symlink to it),
+// back -> front with a parallax depth each. Each image keeps its own aspect, cover-fit into the stage.
+// Follows the pointer, drifts when idle, static under reduced motion.
+// n: file in public/title, d: parallax depth (px), z: zoom about the frame centre (1 = fills the frame; 0 = off)
+const TITLE = [
+  { n: '5', d: 0, z: 1 }, // sky
+  { n: '4', d: 6, z: 1.5 }, // far
+  { n: '3', d: 12, z: 1.01 }, // clouds
+  { n: '2', d: 16, z: 1.1 }, // sides
+  { n: '1', d: 34, z: 0.8 }, // warriors
+] as const;
+const STAGE_W = 1980, STAGE_H = 1280;
 export function TitleArt({ className }: { className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    if (reduceMotion()) return;
-    const imgs = [...ref.current!.querySelectorAll('img')];
+    const c = ref.current!, ctx = c.getContext('2d')!;
+    // Each layer draws as soon as its own image has loaded (one slow/broken file never blanks the rest); z: 0 = not loaded.
+    const imgs = TITLE.map((l) => { if (!l.z) return null; const i = new Image(); i.src = `/title/${l.n}.png`; return i; });
     const aim = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
-    let raf = 0, last = 0;
-    const onMove = (e: PointerEvent) => { aim.x = (e.clientX / innerWidth) * 2 - 1; aim.y = (e.clientY / innerHeight) * 2 - 1; last = performance.now(); };
+    let raf = 0, last = -1e9;
+    const draw = () => {
+      const dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+      if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height);
+      const k = Math.max(w / STAGE_W, h / STAGE_H) * 0.905;
+      ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * (w - STAGE_W * k) / 2, dpr * (h - STAGE_H * k) / 2);
+      imgs.forEach((im, i) => {
+        if (!im?.complete || !im.naturalWidth) return;
+        const { d, z } = TITLE[i], f = Math.max(STAGE_W / im.naturalWidth, STAGE_H / im.naturalHeight) * z; // keep aspect, cover the stage
+        const w2 = im.naturalWidth * f, h2 = im.naturalHeight * f;
+        ctx.drawImage(im, (STAGE_W - w2) / 2 - cur.x * d, (STAGE_H - h2) / 2 - cur.y * d * 0.5, w2, h2);
+      });
+    };
+    const still = reduceMotion();
+    imgs.forEach((im) => im?.addEventListener('load', () => still && draw()));
+    if (still) addEventListener('resize', draw);
     const frame = (t: number) => {
       const idle = t - last > 3000; // no pointer lately: slow figure-eight drift
       const tx = idle ? Math.sin(t / 3200) * 0.6 : aim.x, ty = idle ? Math.sin(t / 1600) * 0.4 : aim.y;
       cur.x += (tx - cur.x) * 0.06; cur.y += (ty - cur.y) * 0.06;
-      imgs.forEach((im, i) => { const k = TITLE_LAYERS[i][1]; im.style.transform = `translate(${-cur.x * k}px, ${-cur.y * k * 0.5}px)`; });
+      draw();
       raf = requestAnimationFrame(frame);
     };
+    if (!still) raf = requestAnimationFrame(frame);
+    const onMove = (e: PointerEvent) => { aim.x = (e.clientX / innerWidth) * 2 - 1; aim.y = (e.clientY / innerHeight) * 2 - 1; last = performance.now(); };
     addEventListener('pointermove', onMove);
-    raf = requestAnimationFrame(frame);
-    return () => { cancelAnimationFrame(raf); removeEventListener('pointermove', onMove); };
+    return () => { cancelAnimationFrame(raf); removeEventListener('pointermove', onMove); removeEventListener('resize', draw); };
   }, []);
-  return (
-    <div ref={ref} className={`title-art ${className ?? ''}`} aria-hidden="true">
-      {TITLE_LAYERS.map(([n]) => <img key={n} src={`/title/${n}.png`} alt="" draggable={false} />)}
-    </div>
-  );
+  return <canvas ref={ref} className={`title-art ${className ?? ''}`} aria-hidden="true" />;
 }
 
 export function ArenaBackdrop({ id, className }: { id: StageId; className?: string }) {
