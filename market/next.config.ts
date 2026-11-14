@@ -1,7 +1,9 @@
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
 
 export default {
-  output: 'export',
-  transpilePackages: ['@xyz/platform'], // ships raw .ts
-  agentRules: false, // don't generate AGENTS.md on dev
+  output: "standalone",
+  reactCompiler: true,
+  devIndicators: false,
+  agentRules: false,
+  turbopack: { rules: { "*.css": { loaders: ["@tailwindcss/turbopack"], as: "*.css" } } },
 } satisfies NextConfig;

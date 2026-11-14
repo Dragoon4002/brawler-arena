@@ -63,7 +63,7 @@ Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DE
 | `crates/near-svc/` | Rust NEAR RPC, NEP-413 verify, referee tx queue |
 | `packages/platform/` | shared TS wallet + balance hooks |
 | `agents/` | bot service |
-| `market/` | game hub |
+| `market/` | skill + monster marketplace (Next.js + Tailwind, bun) |
 | `infra/` | Terraform, Ansible, Docker, Caddy |
 
 ## Run
@@ -74,12 +74,12 @@ cargo test --workspace                         # rust sim + server
 make dev                                       # backend in docker, ws :8787 (BRAWLER_PORT)
 cargo run -p brawler-server                    # same, no docker
 npm run dev -w @xyz/brawler                    # http://localhost:3000
-npm run dev -w @xyz/market
+cd market && bun install && bun dev           # market, http://localhost:3000 (?demo for mock data)
 ```
 
 - Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY`. No CONTRACT_ID = free rooms only.
 - Room lobby: a staked guest who leaves before the host presses Start frees the seat; referee `unjoin` refunds their stake and reopens the match (rejected once bets exist).
-- Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (default: same origin), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_BRAWLER_URL`.
+- Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (default: same origin), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_ASSETS_ID`, `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_BRAWLER_URL`, `NEXT_PUBLIC_DEMO=1`.
 - Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
 - New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?)` on platform.
 

@@ -6,7 +6,6 @@
     "node": ">=22.6"
   },
   "workspaces": [
-    "market",
     "games/*/client",
     "packages/*"
   ],
