@@ -38,7 +38,7 @@ function Toaster() {
   );
 }
 
-const NAV = [["/", "Market"], ["/search", "Browse"], ["/create", "Create"], ["/me", "My stuff"]] as const;
+const NAV = [["/", "Market"], ["/search", "Browse"], ["/create", "Create"], ["/me", "My stuff"], ["/economy", "Economy"]] as const;
 export function Shell({ children }: { children: ReactNode }) {
   const a = useAssets();
   const path = usePathname();
@@ -118,7 +118,7 @@ export function Sparkline({ data, className, color, fill = true }: { data: numbe
 }
 export const prices = (h: Point[] | undefined) => (h ?? []).map(([, p]) => Number(BigInt(p) / 10n ** 18n) / 1e6);
 
-const KIND_COLOR: Record<Kind, string> = {
+export const KIND_COLOR: Record<Kind, string> = {
   Power: "#ff7a59", Agility: "#ffd166", Durability: "#6fa8ff", Speed: "#5be0a6",
   AirJump: "#8ad8ff", Lifesteal: "#ff5d6c", QuickDodge: "#b59cff", SecondWind: "#ff9ec7",
 };
