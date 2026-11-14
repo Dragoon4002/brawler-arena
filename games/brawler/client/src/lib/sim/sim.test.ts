@@ -40,6 +40,22 @@ test('jab lands, damages, hitstuns', () => {
   assert.ok(b.state === 'hitstun' || b.hitlag > 0);
 });
 
+test('block: front hits chip, back hits land in full', () => {
+  const hitWith = (blockerFacing: 1 | -1) => {
+    const s = faceOff();
+    s.fighters[1].facing = blockerFacing;
+    run(s, 2, () => [0, IN.BLOCK]);
+    assert.equal(s.fighters[1].state, 'block');
+    step(s, [IN.HEAVY | IN.RIGHT, IN.BLOCK]);
+    run(s, 30, () => [0, IN.BLOCK]);
+    return s.fighters[1];
+  };
+  const front = hitWith(-1), back = hitWith(1);
+  assert.ok(front.damage > 0 && back.damage >= 4 * front.damage, `front=${front.damage} back=${back.damage}`);
+  assert.equal(front.state, 'block');
+  assert.notEqual(back.state, 'block');
+});
+
 test('knockback grows with damage', () => {
   const launch = (pct: number) => {
     const s = faceOff(80);

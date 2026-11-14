@@ -17,6 +17,7 @@ pub mod input {
     pub const LIGHT: i32 = 32;
     pub const HEAVY: i32 = 64;
     pub const DODGE: i32 = 128;
+    pub const BLOCK: i32 = 256;
 }
 use input::*;
 const ACTIONS: i32 = JUMP | LIGHT | HEAVY | DODGE;
@@ -46,6 +47,7 @@ pub enum St {
     Attack,
     Hitstun,
     Dead,
+    Block,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -109,6 +111,9 @@ const JUMP_V: f64 = 16.5;
 const SHORT_HOP_V: f64 = 11.;
 const AIR_JUMP_V: f64 = 14.5;
 const JUMPSQUAT: f64 = 3.;
+/// Blocked hit: damage / 5, knockback x 0.25, horizontal only.
+const BLOCK_CHIP: f64 = 5.;
+const BLOCK_PUSH: f64 = 0.25;
 const BUFFER: f64 = 6.;
 const RESPAWN: f64 = 90.;
 const RESPAWN_INVULN: f64 = 120.;
@@ -318,6 +323,13 @@ fn on_soft(st: &StageDef, f: &Fighter) -> bool {
 
 fn control(st: &StageDef, f: &mut Fighter, inp: i32, pressed: i32, act: i32) {
     let dx = dir_x(inp);
+    if f.grounded && inp & BLOCK != 0 {
+        f.vx = approach(f.vx, 0., FRICTION);
+        if f.state != St::Block {
+            set_state(f, St::Block);
+        }
+        return;
+    }
     if act & DODGE != 0 && f.dodge_cd <= 0. && (f.grounded || !f.air_dodged) {
         f.buf_t = 0.;
         start_dodge(f, inp);
@@ -588,7 +600,7 @@ fn update(st: &StageDef, f: &mut Fighter, inp: i32, pressed: i32, i: usize) {
                 set_state(f, St::Land);
             }
         }
-    } else if !f.grounded && (f.state == St::Idle || f.state == St::Run) {
+    } else if !f.grounded && matches!(f.state, St::Idle | St::Run | St::Block) {
         set_state(f, St::Air);
     }
 }
@@ -678,14 +690,26 @@ pub fn step(s: &mut GameState, inputs: [i32; 2]) {
             (a.x, a.facing, a.m.dmg)
         };
         let dmg = js_round(m.dmg * a_dmg);
+        let lag = 3. + (dmg / 4.).floor();
+        let a = &mut s.fighters[i];
+        a.hitlag = lag;
+        a.move_hit = true;
         let b = &mut s.fighters[j];
-        b.damage += dmg;
-        let kb = (m.base + b.damage * m.growth) * b.m.kb_taken;
+        b.hitlag = lag;
         let sx = if m.away {
             if b.x >= a_x { 1. } else { -1. }
         } else {
             a_facing
         };
+        // only blocks hits from the front
+        if b.state == St::Block && (a_x - b.x) * b.facing >= 0. {
+            b.damage += (dmg / BLOCK_CHIP).floor();
+            let kb = (m.base + b.damage * m.growth) * b.m.kb_taken;
+            b.vx = sx * kb * BLOCK_PUSH;
+            continue;
+        }
+        b.damage += dmg;
+        let kb = (m.base + b.damage * m.growth) * b.m.kb_taken;
         b.vx = sx * m.ax * kb;
         b.vy = m.ay * kb;
         if b.vy > 0. && b.grounded {
@@ -698,11 +722,6 @@ pub fn step(s: &mut GameState, inputs: [i32; 2]) {
         b.recovery_used = false;
         b.hitstun = (kb * 0.9).floor() + 8.;
         set_state(b, St::Hitstun);
-        let lag = 3. + (dmg / 4.).floor();
-        b.hitlag = lag;
-        let a = &mut s.fighters[i];
-        a.hitlag = lag;
-        a.move_hit = true;
     }
 
     let bz = &st.blast;

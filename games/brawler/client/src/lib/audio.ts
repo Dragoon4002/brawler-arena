@@ -111,7 +111,7 @@ function play(kind: keyof typeof SFX, param = 0) {
 
 // Called once per sim step. Swings/dodges are detected from state (t === 0 on the start frame).
 const seenWinner = new WeakSet<GameState>();
-// seat: local player's seat online (-1 = local hot-seat). Win jingle only for the winner's side.
+// seat: our seat (<0 = spectator). Win jingle only for the winner's side.
 export function playEvents(s: GameState, seat = -1) {
   for (const e of s.events) {
     if (e.kind === 'hit') play('hit', e.power);

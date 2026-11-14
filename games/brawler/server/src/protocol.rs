@@ -40,8 +40,8 @@ pub fn stage_of(v: &Value) -> StageId {
         .unwrap_or(StageId::Ember)
 }
 
-/// JS `Number(v) & 0xffff`.
-pub fn u16_of(v: &Value) -> i32 {
+/// One tape frame `host << 16 | guest` (JS `Number(v) >>> 0`).
+pub fn tape_of(v: &Value) -> i32 {
     let f = match v {
         Value::Number(n) => n.as_f64().unwrap_or(0.),
         Value::Bool(b) => *b as u8 as f64,
@@ -49,7 +49,7 @@ pub fn u16_of(v: &Value) -> i32 {
         _ => 0.,
     };
     if f.is_finite() {
-        (f.trunc().rem_euclid(4294967296.) as u64 & 0xffff) as i32
+        f.trunc().rem_euclid(4294967296.) as u32 as i32
     } else {
         0
     }

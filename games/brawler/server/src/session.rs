@@ -1,5 +1,5 @@
 use crate::protocol::{
-    int_id, lobby_msg, room_row, spec_msg, stage_of, stake_ok, str_of, truthy, u16_of,
+    int_id, lobby_msg, room_row, spec_msg, stage_of, stake_ok, str_of, tape_of, truthy,
 };
 use crate::room::{RoomRef, Seat, Status};
 use crate::{App, GAME, game};
@@ -392,7 +392,7 @@ impl Session {
         if f0 != tape.len() as u64 {
             return; // batches arrive in order on one socket; drop dupes
         }
-        tape.extend(ins.iter().take(TAPE_BATCH).map(u16_of));
+        tape.extend(ins.iter().take(TAPE_BATCH).map(tape_of));
         game::replay(&self.app, r, &mut st.lobby);
     }
 

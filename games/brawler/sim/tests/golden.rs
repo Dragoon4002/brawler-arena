@@ -14,6 +14,7 @@ fn fields(f: &Fighter) -> [f64; 31] {
         St::Attack,
         St::Hitstun,
         St::Dead,
+        St::Block,
     ]
     .iter()
     .position(|s| *s == f.state)
@@ -87,7 +88,7 @@ fn bit_exact_vs_ts() {
         let hashes = r["hashes"].as_array().unwrap();
         for (f, (t, h)) in r["tape"].as_array().unwrap().iter().zip(hashes).enumerate() {
             let t = t.as_i64().unwrap() as i32;
-            step(&mut s, [t >> 8, t & 255]);
+            step(&mut s, [t >> 16, t & 0xffff]);
             assert_eq!(
                 fnv(&s) as u64,
                 h.as_u64().unwrap(),

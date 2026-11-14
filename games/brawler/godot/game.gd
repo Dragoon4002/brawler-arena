@@ -6,9 +6,9 @@ const W := 1280.0
 const H := 720.0
 const INK := Color("#1b1426")
 
-# P1: WASD + Space/Z/X/C. P2: arrows + Numpad 0/1/2/3 (or Shift , . /). Gamepads: A jump, X light, B heavy, bumpers dodge.
+# P1: WASD + Space/Z/X/C, Q block. P2: arrows + Numpad 0/1/2/3 (or Shift , . /). Gamepads: A jump, X light, B heavy, bumpers dodge.
 const KEYS := [
-	{KEY_A: Sim.LEFT, KEY_D: Sim.RIGHT, KEY_W: Sim.UP, KEY_S: Sim.DOWN, KEY_SPACE: Sim.JUMP, KEY_Z: Sim.LIGHT, KEY_X: Sim.HEAVY, KEY_C: Sim.DODGE},
+	{KEY_A: Sim.LEFT, KEY_D: Sim.RIGHT, KEY_W: Sim.UP, KEY_S: Sim.DOWN, KEY_SPACE: Sim.JUMP, KEY_Z: Sim.LIGHT, KEY_X: Sim.HEAVY, KEY_C: Sim.DODGE, KEY_Q: Sim.BLOCK},
 	{KEY_LEFT: Sim.LEFT, KEY_RIGHT: Sim.RIGHT, KEY_UP: Sim.UP, KEY_DOWN: Sim.DOWN, KEY_KP_0: Sim.JUMP, KEY_KP_1: Sim.LIGHT, KEY_KP_2: Sim.HEAVY, KEY_KP_3: Sim.DODGE,
 		KEY_SHIFT: Sim.JUMP, KEY_COMMA: Sim.LIGHT, KEY_PERIOD: Sim.HEAVY, KEY_SLASH: Sim.DODGE},
 ]

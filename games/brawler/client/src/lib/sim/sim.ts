@@ -4,14 +4,14 @@ import { MOVES, type MoveDef, type MoveId } from './moves.ts';
 import { STAGES, type StageDef, type StageId } from '../stages.ts';
 export { STAGES, type StageId };
 
-export const IN = { LEFT: 1, RIGHT: 2, UP: 4, DOWN: 8, JUMP: 16, LIGHT: 32, HEAVY: 64, DODGE: 128 } as const;
+export const IN = { LEFT: 1, RIGHT: 2, UP: 4, DOWN: 8, JUMP: 16, LIGHT: 32, HEAVY: 64, DODGE: 128, BLOCK: 256 } as const;
 const ACTIONS = IN.JUMP | IN.LIGHT | IN.HEAVY | IN.DODGE;
 
 // Monster stats, 3..9 each, sum 22. This is the hook for NFT genes.
 export interface Stats { str: number; dex: number; def: number; spd: number }
 export const DEFAULT_STATS: Stats = { str: 6, dex: 5, def: 5, spd: 6 };
 
-export type St = 'idle' | 'run' | 'jumpsquat' | 'air' | 'land' | 'dodge' | 'attack' | 'hitstun' | 'dead';
+export type St = 'idle' | 'run' | 'jumpsquat' | 'air' | 'land' | 'dodge' | 'attack' | 'hitstun' | 'dead' | 'block';
 
 export interface Fighter {
   x: number; y: number; vx: number; vy: number;
@@ -37,6 +37,7 @@ export const HURT_W = 50, HURT_H = 90;
 const G = 0.85, HIT_G = 0.55, MAX_FALL = 13, FAST_FALL = 19;
 const GROUND_ACC = 1.2, FRICTION = 0.8, AIR_ACC = 0.6;
 const JUMP_V = 16.5, SHORT_HOP_V = 11, AIR_JUMP_V = 14.5, JUMPSQUAT = 3;
+const BLOCK_CHIP = 5, BLOCK_PUSH = 0.25; // blocked hit: damage / 5, knockback x 0.25, horizontal only
 const BUFFER = 6, RESPAWN = 90, RESPAWN_INVULN = 120, STOCKS = 3;
 export const MAX_HP = 200; // damage >= MAX_HP also costs a stock (besides ring-outs)
 
@@ -117,6 +118,11 @@ function startDodge(f: Fighter, inp: number) {
 // Idle / run / air: full control.
 function control(f: Fighter, inp: number, pressed: number, act: number) {
   const dx = dirX(inp);
+  if (f.grounded && inp & IN.BLOCK) {
+    f.vx = approach(f.vx, 0, FRICTION);
+    if (f.state !== 'block') setState(f, 'block');
+    return;
+  }
   if (act & IN.DODGE && f.dodgeCd <= 0 && (f.grounded || !f.airDodged)) { f.bufT = 0; startDodge(f, inp); return; }
   if (act & (IN.LIGHT | IN.HEAVY)) {
     const id = pickMove(f, inp, !!(act & IN.HEAVY));
@@ -236,7 +242,7 @@ function update(f: Fighter, inp: number, pressed: number, s: GameState, i: numbe
     s.events.push({ kind: 'land', who: i, x: f.x, y: f.y, power: f.vy });
     if (f.state === 'air') setState(f, 'idle');
     else if (f.state === 'attack' && MOVES[f.move!].air && !MOVES[f.move!].untilLand) { f.move = null; f.landLag = 6; setState(f, 'land'); }
-  } else if (!f.grounded && (f.state === 'idle' || f.state === 'run')) setState(f, 'air');
+  } else if (!f.grounded && (f.state === 'idle' || f.state === 'run' || f.state === 'block')) setState(f, 'air');
 }
 
 export function hitboxOf(f: Fighter) {
@@ -285,17 +291,24 @@ export function step(s: GameState, inputs: number[]) {
   for (const [i, j, id] of hits) {
     const a = fs[i], b = fs[j], m: MoveDef = MOVES[id];
     const dmg = Math.round(m.dmg * a.mod.dmg);
+    const sx = m.away ? (b.x >= a.x ? 1 : -1) : a.facing;
+    const lag = 3 + Math.floor(dmg / 4);
+    a.hitlag = lag; b.hitlag = lag; a.moveHit = true;
+    if (b.state === 'block' && (a.x - b.x) * b.facing >= 0) { // only blocks hits from the front
+      b.damage += Math.floor(dmg / BLOCK_CHIP);
+      const kb = (m.base + b.damage * m.growth) * b.mod.kbTaken;
+      b.vx = sx * kb * BLOCK_PUSH;
+      s.events.push({ kind: 'hit', who: j, x: (a.x + b.x) / 2, y: b.y - HURT_H / 2, power: kb * BLOCK_PUSH });
+      continue;
+    }
     b.damage += dmg;
     const kb = (m.base + b.damage * m.growth) * b.mod.kbTaken;
-    const sx = m.away ? (b.x >= a.x ? 1 : -1) : a.facing;
     b.vx = sx * m.ax * kb; b.vy = m.ay * kb;
     if (b.vy > 0 && b.grounded) b.vy = -b.vy * 0.6; // spike into floor bounces
     b.grounded = false; b.facing = -sx as 1 | -1;
     b.move = null; b.fastFall = false; b.recoveryUsed = false; // getting hit restores recovery
     b.hitstun = Math.floor(kb * 0.9) + 8;
     setState(b, 'hitstun');
-    const lag = 3 + Math.floor(dmg / 4);
-    a.hitlag = lag; b.hitlag = lag; a.moveHit = true;
     s.events.push({ kind: 'hit', who: j, x: (a.x + b.x) / 2, y: b.y - HURT_H / 2, power: kb });
   }
 

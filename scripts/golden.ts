@@ -5,7 +5,7 @@ import { MOVES } from '../games/brawler/client/src/lib/sim/moves.ts';
 import { randomDna, sanitize, statsOf } from '../games/brawler/client/src/lib/genes.ts';
 import { STAGE_IDS } from '../games/brawler/client/src/lib/stages.ts';
 
-const STATES = ['idle', 'run', 'jumpsquat', 'air', 'land', 'dodge', 'attack', 'hitstun', 'dead'];
+const STATES = ['idle', 'run', 'jumpsquat', 'air', 'land', 'dodge', 'attack', 'hitstun', 'dead', 'block'];
 const MOVE_IDS = Object.keys(MOVES);
 
 // Same field order as rust golden test.
@@ -32,13 +32,15 @@ function botTape(s: GameState, me: number, rnd: () => number) {
   const r = rnd();
   if (Math.abs(dx) < 110 && r < 90) b |= r < 40 ? IN.HEAVY : IN.LIGHT;
   if (r > 200) b |= rnd() & 255;
+  if (o.state === 'attack' && Math.abs(dx) < 150 && r % 4 !== 0) b = IN.BLOCK | (r % 5 ? 0 : b); // block, sometimes facing away
   if (o.y < f.y - 60 && r % 7 === 0) b |= IN.JUMP;
   if (r % 13 === 0) b |= IN.UP | (r % 2 ? IN.DOWN : 0);
   if (f.x < 420 || f.x > 1180) b = (b & ~(IN.LEFT | IN.RIGHT)) | (f.x < 800 ? IN.RIGHT : IN.LEFT) | (r % 9 === 0 ? IN.JUMP | IN.HEAVY : 0);
-  return b & 255;
+  return b & 511;
 }
 
 const runs = [];
+const blocks = { front: 0, back: 0 };
 for (let n = 0; n < 9; n++) {
   const stage = STAGE_IDS[n % STAGE_IDS.length];
   const dna = [randomDna(n * 2 + 1), randomDna(n * 2 + 2)];
@@ -48,8 +50,13 @@ for (let n = 0; n < 9; n++) {
   const tape: number[] = [], hashes: number[] = [];
   while (s.winner < 0 && tape.length < 12000) {
     const ins = [botTape(s, 0, rnd), botTape(s, 1, rnd)];
-    tape.push(ins[0] << 8 | ins[1]);
+    tape.push(ins[0] << 16 | ins[1]);
+    const before = s.fighters.map((f) => [f.state, f.damage] as const);
     step(s, ins);
+    s.fighters.forEach((f, i) => {
+      if (before[i][0] !== 'block' || !(ins[i] & IN.BLOCK) || f.damage === before[i][1]) return; // held block, still hit
+      if (f.state === 'block') blocks.front++; else blocks.back++;
+    });
     hashes.push(fnv(s));
   }
   runs.push({ stage, dna, tape, hashes, winner: s.winner, stocks: s.fighters.map((f) => f.stocks) });
@@ -59,4 +66,6 @@ const weird = [null, {}, { str: 99, dex: -4, def: '7', spd: null, hue: 400.4, si
 const sanitizeCases = weird.map((x) => ({ in: x, out: sanitize(x) }));
 const out = new URL('../games/brawler/sim/testdata/golden.json', import.meta.url);
 writeFileSync(out, JSON.stringify({ runs, sanitize: sanitizeCases }));
+if (!blocks.front || !blocks.back) throw new Error(`golden tapes must hit blocks from front and back: ${JSON.stringify(blocks)}`);
+console.log(`blocked hits: ${blocks.front} front, ${blocks.back} back`);
 console.log(runs.map((r) => `${r.stage} ${r.tape.length}f winner ${r.winner} stocks ${r.stocks}`).join('\n'));

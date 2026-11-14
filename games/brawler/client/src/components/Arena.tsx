@@ -3,12 +3,11 @@ import type { Monster } from '@/lib/genes.ts';
 import { STAGES, type StageId } from '@/lib/stages.ts';
 import { getAudio, toggleMute } from '@/lib/audio.ts';
 import { fmt, useArena, useSignMatch } from '@/lib/near.ts';
-import { startBotFight, startLocal, startOnline, type HostOpts, type Player } from '@/lib/session.ts';
+import { startBotFight, startOnline, type HostOpts, type Player } from '@/lib/session.ts';
 import { monsters, recordResult } from '@/lib/store.ts';
 import { asset, Ico, Portrait, STAGE_ICON } from '@/components/ui.tsx';
 
 export type FightSetup =
-  | { kind: 'local'; mons: [Monster, Monster]; stage: StageId }
   | { kind: 'host'; mon: Monster; stage: StageId; opts: HostOpts }
   | { kind: 'join'; mon: Monster; code: string; stage: StageId; account: string; matchId: number | null }
   | { kind: 'match'; mon: Monster; stage: StageId; matchId: number; account: string }; // on-chain (tournament) match via relay `match` msg
@@ -55,14 +54,9 @@ export function Arena({ demo }: { demo?: string }) {
       room: (r: { code: string; matchId: number | null; bettable: boolean; seat: number }) => { seat = r.seat; setRoom(r); },
       started: () => setLive(true),
       over: (winner: number | null, reason: string) => setTimeout(() => setOver({ winner, reason, seat }), reason === 'ko' ? 1800 : 0),
-      result: (winner: number, kos: number[], st: number) => {
-        if (s.kind === 'local') s.mons.forEach((m, i) => recordResult(m.id, winner === i, kos[i], s.mons[1 - i].name, 'local'));
-        else recordResult(s.mon.id, winner === st, kos[st], 'online rival', 'online');
-      },
+      result: (winner: number, kos: number[], st: number) => recordResult(s.mon.id, winner === st, kos[st], 'online rival', 'online'),
     };
-    const game = s.kind === 'local'
-      ? startLocal(canvas.current!, [asPlayer(s.mons[0]), asPlayer(s.mons[1])], s.stage, hooks)
-      : startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : s.kind === 'match' ? { t: 'match', matchId: s.matchId, account: s.account } : { t: 'join', code: s.code, account: s.account, matchId: s.matchId }, asPlayer(s.mon), s.stage, hooks, sign);
+    const game = startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : s.kind === 'match' ? { t: 'match', matchId: s.matchId, account: s.account } : { t: 'join', code: s.code, account: s.account, matchId: s.matchId }, asPlayer(s.mon), s.stage, hooks, sign);
     return () => { removeEventListener('keydown', back); game.stop(); };
   }, []);
 
@@ -95,7 +89,7 @@ export function Arena({ demo }: { demo?: string }) {
         <Ico n={muted ? 'icon-sound-off' : 'icon-sound-on'} />{muted ? 'Sound off (M)' : 'Sound on (M)'}
       </button>
 
-      {!live && !over && s && s.kind !== 'local' && (
+      {!live && !over && s && (
         <div className="arena-overlay">
           <div className="slab waiting" role="status">
             {room ? (

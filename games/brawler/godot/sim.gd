@@ -12,6 +12,7 @@ const JUMP := 16
 const LIGHT := 32
 const HEAVY := 64
 const DODGE := 128
+const BLOCK := 256
 const ACTIONS := JUMP | LIGHT | HEAVY | DODGE
 
 const HURT_W := 50.0
@@ -27,6 +28,9 @@ const JUMP_V := 16.5
 const SHORT_HOP_V := 11.0
 const AIR_JUMP_V := 14.5
 const JUMPSQUAT := 3
+# Blocked hit: damage / 5, knockback x 0.25, horizontal only.
+const BLOCK_CHIP := 5
+const BLOCK_PUSH := 0.25
 const BUFFER := 6
 const RESPAWN := 90
 const RESPAWN_INVULN := 120
@@ -140,6 +144,11 @@ func _start_dodge(f: Dictionary, inp: int) -> void:
 
 func _control(f: Dictionary, inp: int, pressed: int, act: int) -> void:
 	var dx := dir_x(inp)
+	if f.grounded and inp & BLOCK:
+		f.vx = _approach(f.vx, 0.0, FRICTION)
+		if f.state != "block":
+			_set_state(f, "block")
+		return
 	if act & DODGE and f.dodgeCd <= 0 and (f.grounded or not f.airDodged):
 		f.bufT = 0
 		_start_dodge(f, inp)
@@ -310,7 +319,7 @@ func _update(f: Dictionary, inp: int, pressed: int, s: Dictionary, i: int) -> vo
 			f.move = null
 			f.landLag = 6
 			_set_state(f, "land")
-	elif not f.grounded and (f.state == "idle" or f.state == "run"):
+	elif not f.grounded and (f.state == "idle" or f.state == "run" or f.state == "block"):
 		_set_state(f, "air")
 
 func hitbox_of(f: Dictionary):
@@ -378,9 +387,19 @@ func step(s: Dictionary, inputs: Array) -> void:
 		var b: Dictionary = fs[h[1]]
 		var m: Dictionary = MOVES[h[2]]
 		var dmg := roundi(m.dmg * a.mod.dmg)
+		var sx: int = (1 if b.x >= a.x else -1) if m.get("away", false) else a.facing
+		var lag := 3 + floori(dmg / 4.0)
+		a.hitlag = lag
+		b.hitlag = lag
+		a.moveHit = true
+		if b.state == "block" and (a.x - b.x) * b.facing >= 0: # only blocks hits from the front
+			b.damage += floori(dmg / float(BLOCK_CHIP))
+			var bkb: float = (m.base + b.damage * m.growth) * b.mod.kbTaken
+			b.vx = sx * bkb * BLOCK_PUSH
+			s.events.append({"kind": "hit", "who": h[1], "x": (a.x + b.x) / 2.0, "y": b.y - HURT_H / 2.0, "power": bkb * BLOCK_PUSH})
+			continue
 		b.damage += dmg
 		var kb: float = (m.base + b.damage * m.growth) * b.mod.kbTaken
-		var sx: int = (1 if b.x >= a.x else -1) if m.get("away", false) else a.facing
 		b.vx = sx * m.ax * kb
 		b.vy = m.ay * kb
 		if b.vy > 0 and b.grounded:
@@ -392,10 +411,6 @@ func step(s: Dictionary, inputs: Array) -> void:
 		b.recoveryUsed = false
 		b.hitstun = floori(kb * 0.9) + 8
 		_set_state(b, "hitstun")
-		var lag := 3 + floori(dmg / 4.0)
-		a.hitlag = lag
-		b.hitlag = lag
-		a.moveHit = true
 		s.events.append({"kind": "hit", "who": h[1], "x": (a.x + b.x) / 2.0, "y": b.y - HURT_H / 2.0, "power": kb})
 
 	var bz: Dictionary = ST.blast

@@ -16,7 +16,7 @@ test('lockstep survives packet loss, peers stay in sync', () => {
   });
   for (now = 0; now < 3000; now++) {
     for (let i = wire.length - 1; i >= 0; i--) if (wire[i].at <= now) { peers[wire[i].to].net.onMessage(wire[i].m as any); wire.splice(i, 1); }
-    for (const p of peers) p.net.tick(() => Math.floor(rnd() * 256), (inp) => step(p.s, inp), () => hash(p.s));
+    for (const p of peers) p.net.tick(() => Math.floor(rnd() * 512), (inp) => step(p.s, inp), () => hash(p.s));
   }
   const [a, b] = peers;
   assert.ok(a.net.frame > 1500 && b.net.frame > 1500, `frames ${a.net.frame} ${b.net.frame}`);

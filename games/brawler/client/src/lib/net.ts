@@ -30,7 +30,7 @@ export class Netplay {
 
   onMessage(m: { t: string; f: number; b?: unknown; a?: number; h?: number; fr?: number; v?: number }) {
     if (m.t === 'in' && Array.isArray(m.b) && Number.isInteger(m.f)) {
-      m.b.slice(0, 64).forEach((b, i) => { if (m.f + i >= this.frame) this.remote.set(m.f + i, Number(b) & 255); });
+      m.b.slice(0, 64).forEach((b, i) => { if (m.f + i >= this.frame) this.remote.set(m.f + i, Number(b) & 511); });
       if (Number.isInteger(m.a) && m.a! > this.peerNeed) this.peerNeed = m.a!;
       if (Number.isInteger(m.fr) && m.fr! > this.peerFrame) this.peerFrame = m.fr!;
       if (Number.isFinite(m.v)) this.peerAdv = m.v!;

@@ -1,29 +1,31 @@
 import { IN } from './sim/sim.ts';
 
-// P1: WASD + Space/Z/X/C. P2: arrows + Numpad 0/1/2/3 (or , . / RightShift). Gamepads: A jump, X light, B heavy, bumpers dodge.
-const KEYS: Record<string, number>[] = [
-  { KeyA: IN.LEFT, KeyD: IN.RIGHT, KeyW: IN.UP, KeyS: IN.DOWN, Space: IN.JUMP, KeyZ: IN.LIGHT, KeyX: IN.HEAVY, KeyC: IN.DODGE },
-  { ArrowLeft: IN.LEFT, ArrowRight: IN.RIGHT, ArrowUp: IN.UP, ArrowDown: IN.DOWN,
-    Numpad0: IN.JUMP, Numpad1: IN.LIGHT, Numpad2: IN.HEAVY, Numpad3: IN.DODGE,
-    ShiftRight: IN.JUMP, Comma: IN.LIGHT, Period: IN.HEAVY, Slash: IN.DODGE },
-];
+// WASD/arrows move, Space/W/Up jump, right click (or Z) light, left click (or X) heavy, Q block, C dodge.
+// Gamepad: A jump, X light, B/Y heavy, bumpers/triggers dodge.
+const KEYS: Record<string, number> = {
+  KeyA: IN.LEFT, KeyD: IN.RIGHT, KeyW: IN.UP | IN.JUMP, KeyS: IN.DOWN,
+  ArrowLeft: IN.LEFT, ArrowRight: IN.RIGHT, ArrowUp: IN.UP | IN.JUMP, ArrowDown: IN.DOWN,
+  Space: IN.JUMP, KeyZ: IN.LIGHT, KeyX: IN.HEAVY, KeyC: IN.DODGE, KeyQ: IN.BLOCK,
+  Mouse0: IN.HEAVY, Mouse2: IN.LIGHT,
+};
 const held = new Set<string>();
-const tapped = new Set<string>(); // keys pressed+released between two 60 Hz polls still count once
-const ALL = new Set(KEYS.flatMap((k) => Object.keys(k)));
+const tapped = new Set<string>(); // pressed+released between two 60 Hz polls still counts once
+const press = (code: string) => { held.add(code); tapped.add(code); };
 addEventListener('keydown', (e) => {
-  if (ALL.has(e.code) && !(e.target instanceof HTMLInputElement)) { held.add(e.code); tapped.add(e.code); e.preventDefault(); }
+  if (e.code in KEYS && !(e.target instanceof HTMLInputElement)) { press(e.code); e.preventDefault(); }
 });
 addEventListener('keyup', (e) => held.delete(e.code));
+// Only clicks on the fight canvas (or its letterbox) count, so UI buttons keep working.
+const onArena = (e: Event) => e.target instanceof Element && e.target.matches('canvas, .arena');
+addEventListener('mousedown', (e) => {
+  if (onArena(e) && `Mouse${e.button}` in KEYS) { press(`Mouse${e.button}`); e.preventDefault(); }
+});
+addEventListener('mouseup', (e) => held.delete(`Mouse${e.button}`));
+addEventListener('contextmenu', (e) => { if (onArena(e)) e.preventDefault(); });
 addEventListener('blur', () => held.clear());
 
-function keys(i: number) {
-  let b = 0;
-  for (const [code, bit] of Object.entries(KEYS[i])) if (held.has(code) || tapped.has(code)) b |= bit;
-  return b;
-}
-
-function pad(i: number) {
-  const g = navigator.getGamepads?.()[i];
+function pad() {
+  const g = navigator.getGamepads?.()[0];
   if (!g) return 0;
   const btn = (n: number) => !!g.buttons[n]?.pressed;
   const ax = g.axes[0] ?? 0, ay = g.axes[1] ?? 0;
@@ -39,7 +41,9 @@ function pad(i: number) {
   return b;
 }
 
-// Local versus: P1 = keyboard set 1 (+ 2nd pad), P2 = keyboard set 2 (+ 1st pad).
-export const localInputs = () => { const r = [keys(0) | pad(1), keys(1) | pad(0)]; tapped.clear(); return r; };
-// Online: one player, any binding.
-export const soloInput = () => { const r = keys(0) | keys(1) | pad(0); tapped.clear(); return r; };
+export function readInput() {
+  let b = pad();
+  for (const [code, bit] of Object.entries(KEYS)) if (held.has(code) || tapped.has(code)) b |= bit;
+  tapped.clear();
+  return b;
+}

@@ -28,6 +28,7 @@ const POSES = {
   fall: P({ t: 0.05, fu: 1.4, fl: 0.4, bu: -1.0, bl: 0.5, ft: 0.3, fs: -0.2, bt: -0.1, bs: -0.3, tail: 0.6 }),
   tuck: P({ y: 6, t: 0.6, h: 0.3, fu: 0.8, fl: 1.9, bu: 0.6, bl: 1.9, ft: 1.4, fs: -2.3, bt: 1.0, bs: -2.3, tail: 1.0, blink: 1 }),
   hurt: P({ t: -0.5, h: -0.45, fu: -1.2, fl: 0.5, bu: -1.6, bl: 0.3, ft: 0.5, fs: -0.2, bt: -0.4, bs: -0.3, tail: 1.1, jaw: 0.5, blink: 1 }),
+  guard: P({ y: 5, t: -0.2, h: 0.15, fu: 1.1, fl: 2.3, bu: 0.9, bl: 2.3, ft: 0.45, fs: -0.7, bt: -0.35, bs: -0.5 }),
   tumble: P({ t: -0.9, h: -0.6, fu: -2.4, fl: 0.4, bu: 2.4, bl: 0.4, ft: 1.0, fs: -0.6, bt: -0.8, bs: -0.6, tail: 1.4, jaw: 0.6, blink: 1 }),
 };
 
@@ -70,6 +71,7 @@ export function poseFor(f: Fighter, now: number): Pose {
     }
     case 'jumpsquat': case 'land': return POSES.squat;
     case 'air': return lerpPose(POSES.rise, POSES.fall, ease((f.vy + 8) / 16));
+    case 'block': return POSES.guard;
     case 'dodge': return { ...POSES.tuck, r: f.grounded ? 0 : f.t * 0.45 * f.facing };
     case 'hitstun': {
       const big = Math.hypot(f.vx, f.vy) > 10;

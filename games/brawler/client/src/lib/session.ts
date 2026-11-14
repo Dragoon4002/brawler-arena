@@ -1,6 +1,6 @@
-import { newGame, step, hash, IN, type GameState } from './sim/sim.ts';
+import { newGame, step, hash, type GameState } from './sim/sim.ts';
 import { createRenderer } from './render/draw.ts';
-import { localInputs, soloInput } from './input.ts';
+import { readInput } from './input.ts';
 import { Netplay, linkPeer } from './net.ts';
 import { lookOf, sanitize, statsOf, type Dna } from './genes.ts';
 import { STAGE_IDS, type StageId } from './stages.ts';
@@ -25,24 +25,20 @@ export const SERVER = params.get('server') ?? process.env.NEXT_PUBLIC_SERVER_URL
 
 function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage: StageId, hooks: Hooks, tap?: (inputs: number[]) => void) {
   const renderer = createRenderer(canvas);
-  let state: GameState = newGame(players.map((p) => statsOf(p.dna)), stage);
-  let overFrames = 0, reported = false, raf = 0;
+  const state: GameState = newGame(players.map((p) => statsOf(p.dna)), stage);
+  let raf = 0;
   let net: Netplay | null = null;
   let banner = '', link = '';
   let spectate: ((advance: (inputs: number[]) => void, s: GameState) => void) | null = null;
   renderer.setPlayers(players.map((p, i) => (seat < 0 ? p.name : i === seat ? `${p.name} (you)` : p.name)), players.map((p) => lookOf(p.dna)));
 
-  // Shared by local + online so rematch is deterministic too.
   function advance(inputs: number[]) {
-    if (seat === -1 && state.winner >= 0 && ++overFrames > 90 && inputs.every((b) => b & IN.JUMP)) { // rematch: local only
-      state = newGame(players.map((p) => statsOf(p.dna)), stage); overFrames = 0; reported = false;
-    }
-    if (state.winner >= 0 && seat !== -1) return; // online/spectated match is over; server verdict decides
+    if (state.winner >= 0) return; // match is over; server verdict decides
     tap?.(inputs);
     step(state, inputs);
     renderer.onEvents(state.events);
     playEvents(state, seat);
-    if (state.winner >= 0 && !reported) { reported = true; hooks.result?.(state.winner, state.fighters.map((_, i) => 3 - state.fighters[1 - i].stocks), seat); }
+    if (state.winner >= 0) hooks.result?.(state.winner, state.fighters.map((_, i) => 3 - state.fighters[1 - i].stocks), seat);
   }
 
   const DT = 1000 / 60;
@@ -51,11 +47,10 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
     acc = Math.min(acc + now - last, 250); last = now;
     while (acc >= DT) {
       acc -= DT;
-      if (seat === -1) advance(localInputs()); // -1 local hot-seat, -2 spectator
-      else if (net && !banner) net.tick(soloInput, advance, () => hash(state));
+      if (net && !banner) net.tick(readInput, advance, () => hash(state));
       else if (spectate) spectate(advance, state);
     }
-    const b = banner || (seat !== -1 && state.winner >= 0 ? `${players[state.winner].name} wins` : net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
+    const b = banner || (state.winner >= 0 ? `${players[state.winner].name} wins` : net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
     renderer.draw(state, b, link);
     raf = requestAnimationFrame(frame);
   }
@@ -69,11 +64,6 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
     setBanner(t: string) { banner = t; },
     stop() { cancelAnimationFrame(raf); renderer.destroy(); music(null); },
   };
-}
-
-export function startLocal(canvas: HTMLCanvasElement, players: [Player, Player], stage: StageId, hooks: Hooks = {}) {
-  hooks.started?.(players, -1);
-  return loop(canvas, players, -1, stage, hooks);
 }
 
 // Free-tier hosts sleep when idle and refuse the first connections while waking (~30-60 s), so retry for ~75 s.
@@ -103,10 +93,10 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
     const maybeStart = () => {
       if (!theirs || !ready || game) return;
       const players = chain ?? (seat === 0 ? [me, theirs] : [theirs, me]);
-      // Mirror confirmed inputs to the server referee (packed host<<8|guest, 6-frame batches) + 1 s heartbeat.
+      // Mirror confirmed inputs to the server referee (packed host<<16|guest, 6-frame batches) + 1 s heartbeat.
       let batch: number[] = [], f0 = 0;
       const tap = (ins: number[]) => {
-        batch.push((ins[0] << 8) | ins[1]);
+        batch.push((ins[0] << 16) | ins[1]);
         if (batch.length >= 6) { sock.send(JSON.stringify({ t: 'tape', f0, ins: batch })); f0 += batch.length; batch = []; }
       };
       hb = setInterval(() => sock.readyState === WebSocket.OPEN && sock.send('{"t":"hb"}'), 1000);

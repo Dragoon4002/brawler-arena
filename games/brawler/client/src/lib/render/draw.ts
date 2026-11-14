@@ -87,6 +87,14 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       drawMonster(ctx, p, LOOKS[i], f.hitlag > 0 && f.state === 'hitstun');
       ctx.restore();
 
+      if (f.state === 'block') { // shield arc on the guarded (front) side
+        ctx.save();
+        ctx.globalAlpha = 0.5 + 0.15 * Math.sin(s.frame / 4); ctx.strokeStyle = '#9ad8ff'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+        ctx.beginPath();
+        const a0 = f.facing === 1 ? -1.1 : Math.PI - 1.1;
+        ctx.arc(f.x, f.y - HURT_H / 2, 58, a0, a0 + 2.2);
+        ctx.stroke(); ctx.restore();
+      }
       const hb = hitboxOf(f);
       if (hb) { // strike swoosh
         ctx.save();
@@ -157,7 +165,6 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       ctx.font = '12px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
       ctx.fillText(info, W / 2, H - 12);
     }
-    if (s.winner >= 0 && !banner) banner = `${NAMES[s.winner]} WINS — both press JUMP for rematch`; // local hot-seat only; online passes its own
     if (banner) {
       ctx.font = 'bold 28px system-ui'; ctx.textAlign = 'center';
       ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, H / 2 - 40, W, 70);

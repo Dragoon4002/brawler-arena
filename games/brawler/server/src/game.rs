@@ -124,7 +124,7 @@ pub fn replay(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby) {
             end = Some((None, "tape mismatch"));
             break;
         }
-        let ins = [a[f] >> 8, a[f] & 255];
+        let ins = [(a[f] >> 16) & 0xffff, a[f] & 0xffff];
         r.frames.push(ins);
         if rf.step(ins) >= 0 {
             end = Some((Some(rf.state.winner), "ko"));
