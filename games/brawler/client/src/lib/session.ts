@@ -45,8 +45,7 @@ export interface HostOpts { pub: boolean; view: boolean; bettable: boolean; matc
 const params = new URLSearchParams(location.search);
 const FORCE_RELAY = params.has('relay'); // ?relay -> skip P2P (debug fallback path)
 const WS = location.protocol === 'https:' ? 'wss' : 'ws';
-export const SERVER = params.get('server') ?? process.env.NEXT_PUBLIC_SERVER_URL ??
-  (process.env.NODE_ENV === 'development' ? `${WS}://${location.hostname}:8787` : 'wss://52-64-167-184.sslip.io');
+export const SERVER = params.get('server') ?? process.env.NEXT_PUBLIC_SERVER_URL ?? `${WS}://${location.hostname}:8787`;
 
 function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage: StageId, hooks: Hooks, tap?: (inputs: number[], end: boolean) => void) {
   const renderer = createRenderer(canvas);

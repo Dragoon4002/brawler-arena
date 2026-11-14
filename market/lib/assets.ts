@@ -4,7 +4,7 @@ import { nearToYocto, yoctoToNear } from "near-api-js";
 import { demoApi } from "./demo";
 
 export const ASSETS_ID = process.env.NEXT_PUBLIC_ASSETS_ID || "v2.brawler-monsters-5c8e2b.testnet";
-export const BRAWLER_URL = process.env.NEXT_PUBLIC_BRAWLER_URL || "https://13-54-190-122.sslip.io";
+export const BRAWLER_URL = process.env.NEXT_PUBLIC_BRAWLER_URL || "http://localhost:3000";
 export const DEMO =
   process.env.NEXT_PUBLIC_DEMO === "1" ||
   (typeof window !== "undefined" &&

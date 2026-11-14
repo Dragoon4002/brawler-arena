@@ -8,7 +8,7 @@ import { pilot, template, type Level, type Moment, type View } from './brain.ts'
 import { merchants } from './merchant.ts';
 
 const env = process.env;
-const SERVER = env.SERVER_URL ?? 'wss://52-64-167-184.sslip.io';
+const SERVER = env.SERVER_URL ?? 'ws://localhost:8787';
 const on = (k: string) => env[k] !== '0';
 const LEVEL = (env.BOT_LEVEL ?? 'medium') as Level;
 const CASTER = env.COMMENTATOR_NAME ?? 'Bot Commentator';
