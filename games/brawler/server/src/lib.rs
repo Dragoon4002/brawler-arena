@@ -11,7 +11,15 @@
 //! On-chain seats need auth = {publicKey, signature}: NEP-413 of `brawler-arena:<matchId>`, recipient CONTRACT_ID,
 //!   nonce = hello nonce, FullAccess key of `account`. Skipped when CONTRACT_ID unset (local dev).
 //! On-chain match must have game == "brawler".
-//! `match`: 1st arrival gets {t:'room', code, seat}, 2nd starts it; seat = on-chain host 0 / guest 1.
+//! Room lobby (host/join): `host` -> {t:'room', code}; `join` -> {t:'room', code, seat:1}. Nothing starts until the host
+//!   sends {t:'begin'} (seat 0, waiting, both seats connected). While waiting: {t:'set', name?, dna?, stage?}
+//!   (stage host only). {t:'chat', text} from seats/spectators (<=200 chars, 1 per 500 ms) -> {t:'chat', from, seat, text, ts}
+//!   (seat -1 = spectator); last 50 kept, sent as {t:'chatlog', lines} on entering (host/join/match/watch).
+//!   {t:'roomstate', code, status, stage, stake, matchId, bettable, pub, view, seats:[{name,dna,account,connected}],
+//!   spectators} to everyone in the room on enter/set/leave/begin/finish/rematch.
+//!   Waiting + host leaves -> room closed, rest get {t:'left'}; guest leaves -> seat freed.
+//! `match`: 1st arrival gets {t:'room', code, seat}, 2nd too and the fight auto-begins (tournaments have no host to
+//!   press Start); seat = on-chain host 0 / guest 1. Either leaving while waiting closes the room.
 //!   Opponent absent NO_SHOW -> present seat wins, {t:'over', winner, reason:'no-show'}.
 //! {t:'rematch'} after `over` (free rooms, seats only): opponent gets {t:'rematch'}; once both asked the room
 //!   restarts (fresh `start`/`spec`). Opponent gone -> {t:'left'}; else rejected with `error`.

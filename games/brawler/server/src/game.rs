@@ -74,9 +74,8 @@ fn go_live(
         return None;
     }
     let seated = |i: usize| r.seats.get(i).and_then(|s| s.conn.clone());
+    // a leaver already got cleaned up by Session::close
     let (Some(host), Some(guest)) = (seated(0), seated(1)) else {
-        let mut r = st.rooms.remove(&at.code)?;
-        finish(app, &mut r, &mut st.lobby, None, "opponent left");
         return None;
     };
     r.referee = Some(Referee::new(
@@ -89,6 +88,7 @@ fn go_live(
     let now = Instant::now();
     r.seats.iter_mut().for_each(|s| s.seen = now);
     broadcast(r.spectators.values(), &spec_msg(r));
+    r.push_state();
     st.lobby.push(app);
     Some(([host, guest], start_msg(r)))
 }
@@ -157,6 +157,7 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
         r.players().chain(r.spectators.values()),
         &json!({ "t": "over", "winner": winner, "reason": reason }),
     );
+    r.push_state();
     lobby.push(app);
     let (app, at, round) = (app.clone(), r.handle(), r.round);
     tokio::spawn(async move {
