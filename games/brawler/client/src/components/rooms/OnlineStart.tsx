@@ -62,14 +62,17 @@ export function CreateRoom({ mon }: { mon: Monster }) {
           <span className="row-ico"><Ico n="coin-stack" />Stake</span>
           <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" value={stake} onChange={(e) => setStake(e.target.value)} aria-describedby="stake-help" /><b>NEAR</b></span>
         </label>
+        <div className="stake-presets" role="group" aria-label="Quick stake">
+          {['0', '0.5', '1', '5'].map((v) => <button key={v} type="button" className="chip" aria-pressed={stake === v} onClick={() => setStake(v)}>{v === '0' ? 'Free' : `${v} NEAR`}</button>)}
+        </div>
         <p id="stake-help" className="note">{st ? `Your opponent matches ${stake} NEAR. Winner takes both, minus 0.1%.` : '0 = friendly match, nothing on-chain.'}</p>
         <fieldset className="seg" aria-label="Visibility">
           <legend>Visibility</legend>
-          <label><input type="radio" name="vis" checked={pub} onChange={() => setPub(true)} /><span className="row-ico"><Ico n="icon-room-public" />Public</span></label>
-          <label><input type="radio" name="vis" checked={!pub} onChange={() => setPub(false)} /><span className="row-ico"><Ico n="icon-room-private" />Private</span></label>
+          <label><input type="radio" name="vis" checked={pub} onChange={() => setPub(true)} /><span className="row-ico"><Ico n="icon-room-public" />Public</span><small>Listed in the lobby</small></label>
+          <label><input type="radio" name="vis" checked={!pub} onChange={() => setPub(false)} /><span className="row-ico"><Ico n="icon-room-private" />Private</span><small>Join by code or link</small></label>
         </fieldset>
-        {!pub && <label className="toggle"><input type="checkbox" checked={view} onChange={(e) => setView(e.target.checked)} /> Let anyone watch</label>}
-        <label className="toggle"><input type="checkbox" checked={bettable} onChange={(e) => setBettable(e.target.checked)} /> Let spectators bet</label>
+        {!pub && <label className="toggle row"><input type="checkbox" checked={view} onChange={(e) => setView(e.target.checked)} /><span>Let anyone watch<small>Shown in the lobby as watch-only</small></span></label>}
+        <label className="toggle row"><input type="checkbox" checked={bettable} onChange={(e) => setBettable(e.target.checked)} /><span>Let spectators bet<small>Opens a prediction market on this fight</small></span></label>
       </div>
       <aside className="ticket" aria-label="Match summary">
         <h3>Match ticket</h3>
