@@ -1,16 +1,4 @@
 {{ domain }} {
-	@server {
-		header_regexp Connection (?i)upgrade
-		header_regexp Upgrade (?i)websocket
-	}
-	@api path /history/* /tape/*
-	reverse_proxy @server brawler-server:8787
-	reverse_proxy @api brawler-server:8787
 	encode zstd gzip
-	reverse_proxy brawler-client:3000
-}
-
-market.{{ domain }} {
-	encode zstd gzip
-	reverse_proxy market:3000
+	reverse_proxy brawler-server:8787
 }

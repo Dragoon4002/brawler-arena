@@ -1,12 +1,6 @@
-# prod override: caddy terminates TLS, brawler-server, client + market stay internal
+# prod override: caddy terminates TLS, brawler-server stays internal
 services:
   brawler-server:
-    ports: !reset []
-
-  brawler-client:
-    ports: !reset []
-
-  market:
     ports: !reset []
 
   caddy:
@@ -16,7 +10,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-    depends_on: [brawler-server, brawler-client, market]
+    depends_on: [brawler-server]
     restart: unless-stopped
 
 volumes:

@@ -13,18 +13,6 @@ services:
     volumes: [brawler_data:/data]
     restart: unless-stopped
 
-  brawler-client:
-    image: brawler-client
-    build: { context: .., dockerfile: infra/brawler-client.Dockerfile }
-    ports: ["${CLIENT_PORT:-3000}:3000"]
-    restart: unless-stopped
-
-  market:
-    image: brawler-market
-    build: { context: .., dockerfile: infra/market.Dockerfile }
-    ports: ["${MARKET_PORT:-3001}:3000"]
-    restart: unless-stopped
-
   # Bots that join a free room when its host presses "Call bot" (never bot vs bot) + commentator, free rooms only. Env: agents/README.md
   agents:
     image: brawler-agents

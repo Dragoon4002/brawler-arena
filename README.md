@@ -96,7 +96,7 @@ make deploy                           # docker + repo (repo_version, default mai
 ```
 
 - DNS must resolve to the EIP before `make deploy`, or Caddy can't get a cert.
-- The client is served from the same box (Caddy routes WebSocket, `/history`, `/tape` to the server, the rest to the client). `?server=wss://<domain>` overrides the server for a quick test.
+- The box only runs the server and bots; the client and market deploy to Vercel (env in `infra/README.md`). `?server=wss://<domain>` overrides the server for a quick test.
 - Redeploy: `make deploy ANSIBLE_ARGS="-e repo_version=<sha>"`. Remote state: add an `s3` backend in `versions.tf` (optional).
 
 ## Controls
