@@ -9,7 +9,7 @@ interface Hero { feet: V; hip: V; height: number; parts: Part[]; byName: Map<str
 
 const I = POSES.idle;
 const HEIGHT = 100; // game units for the full image height
-const heroes = new Map<string, Hero | null>();
+const heroes = new Map<string, Hero | false | null>(); // null: loading, false: failed
 
 // Hero per monster, derived from DNA so every client agrees with no extra data on the wire.
 // Five equal 72° hue bands, each centred on that hero's colour: red, green, teal, blue, purple.
@@ -19,7 +19,7 @@ export const heroOf = (dna: Dna): HeroId => HERO_IDS[Math.round(dna.hue / 72) % 
 // Only 5 art sets, picked by hue bucket: hue x5 spreads one bucket over the whole colour wheel so siblings look distinct.
 export const tintOf = (dna: Dna) => `hue-rotate(${(dna.hue * 5 + dna.accent) % 360}deg) saturate(${0.85 + dna.pattern * 0.2})`;
 
-// Starts loading on first call; null until every part image is ready (caller falls back to the vector rig).
+// Starts loading on first call; null until every part image is ready.
 export function hero(name: string): Hero | null {
   if (!heroes.has(name)) {
     heroes.set(name, null);
@@ -28,10 +28,11 @@ export function hero(name: string): Hero | null {
       await Promise.all(h.parts.map((p) => { p.img = new Image(); p.img.src = `${dir}${p.name}.png`; return p.img.decode(); }));
       h.byName = new Map(h.parts.map((p) => [p.name, p]));
       heroes.set(name, h);
-    }).catch((e) => console.warn('cutout hero', name, e));
+    }).catch((e) => { console.warn('cutout hero', name, e); heroes.set(name, false); });
   }
-  return heroes.get(name) ?? null;
+  return heroes.get(name) || null;
 }
+export const heroReady = (name: string) => (hero(name), heroes.get(name) !== null);
 
 // Canvas rotation for a part. Limbs: + pose angle = toward facing = counter-clockwise on canvas.
 // Arms hang off the torso but their pose angles are world angles, so undo the torso lean.
@@ -52,7 +53,7 @@ function place(ctx: CanvasRenderingContext2D, h: Hero, part: Part, p: Pose) {
   ctx.translate(x, y); ctx.rotate(rot(p, part.bone)); ctx.translate(-x, -y);
 }
 
-// Fighter-local space: origin at feet, facing right (same contract as drawMonster).
+// Fighter-local space: origin at feet, facing right.
 const tinted = new WeakMap<Hero, Map<string, CanvasImageSource[]>>();
 function partsIn(h: Hero, tint: string): CanvasImageSource[] {
   if (!tint) return h.parts.map((x) => x.img);

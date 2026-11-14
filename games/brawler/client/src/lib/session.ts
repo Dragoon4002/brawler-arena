@@ -82,6 +82,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
   const DT = 1000 / 60;
   let acc = 0, last = performance.now();
   function pump(now: number) {
+    if (!renderer.ready(stage)) { last = now; return; }
     acc = Math.min(acc + now - last, 250); last = now;
     while (acc >= DT) {
       acc -= DT;
