@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { yoctoToNear } from 'near-api-js';
 import { getAudio, setAudio } from '@/lib/audio.ts';
 import { fmt, useUnifiedBalance, useWallet } from '@/lib/near.ts';
-import { useMonsters } from '@/lib/nft.ts';
+import { MARKET_URL, useMonsters } from '@/lib/nft.ts';
+import { useLoad } from '@/hooks/async.ts';
 import { monsters } from '@/lib/store.ts';
 import { Ico } from '@/components/ui.tsx';
 import { Claims } from './Claims.tsx';
@@ -45,10 +46,30 @@ export function Account() {
         <Stats fights={fights} />
       </div>
       {funds && <FundsDialog onClose={() => setFunds(false)} />}
+      {signedAccountId && <SkillsTile me={signedAccountId} />}
       <Claims />
       <History fights={fights} loading={fl} />
       <SoundSettings />
     </>
+  );
+}
+
+function SkillsTile({ me }: { me: string }) {
+  const api = useMonsters();
+  const [d] = useLoad(() => Promise.all([api.skills(), api.mine()]), [me]);
+  if (!d) return null;
+  const [owned, mons] = d;
+  const tiles = [['Free', owned.reduce((n, s) => n + s.free, 0)], ['Equipped', mons.reduce((n, m) => n + (m.owner === me ? m.skillIds.length : 0), 0)]] as const;
+  return (
+    <section className="slab" style={{ display: 'grid', gap: 14 }} aria-label="Skills">
+      <h2 className="row-ico"><Ico n="/skills/Power.svg" />Skills</h2>
+      <div className="stat-tiles">{tiles.map(([label, v]) => <div key={label} className="stat-tile"><b>{v}</b><small>{label}</small></div>)}</div>
+      {owned.length > 0 && <span className="badges">{owned.map((s) => <span key={s.id} className="chip row-ico skill-chip"><Ico n={`/skills/${s.kind}.svg`} />{s.name} ×{s.free}</span>)}</span>}
+      <div className="row">
+        <a className="btn" href="/customize"><span><Ico n="/skills/Power.svg" />Customize</span></a>
+        <a className="btn alt" href={MARKET_URL} target="_blank" rel="noopener"><span><Ico n="coin-stack" />Get skills</span></a>
+      </div>
+    </section>
   );
 }
 

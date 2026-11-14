@@ -13,22 +13,13 @@ services:
     volumes: [brawler_data:/data]
     restart: unless-stopped
 
-  brawler-client:
-    image: brawler-client
-    build: { context: .., dockerfile: infra/brawler-client.Dockerfile }
-    ports: ["${CLIENT_PORT:-3000}:3000"]
-    restart: unless-stopped
-
-  # Bot fighters (exhibition + challenger) + commentator, free rooms only. Env: agents/README.md
+  # Bots that join a free room when its host presses "Call bot" (never bot vs bot) + commentator, free rooms only. Env: agents/README.md
   agents:
     image: brawler-agents
     build: { context: .., dockerfile: infra/agents.Dockerfile }
     environment:
       SERVER_URL: ${AGENTS_SERVER_URL:-ws://brawler-server:8787}
-      EXHIBITION: ${AGENTS_EXHIBITION:-1}
-      CHALLENGER: ${AGENTS_CHALLENGER:-1}
       COMMENTATOR: ${AGENTS_COMMENTATOR:-1}
-      JOIN_AFTER_S: ${AGENTS_JOIN_AFTER_S:-20}
       BOT_LEVEL: ${AGENTS_BOT_LEVEL:-medium}
     depends_on: [brawler-server]
     restart: unless-stopped

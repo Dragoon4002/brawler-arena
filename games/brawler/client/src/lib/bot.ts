@@ -17,3 +17,5 @@ export function bot(s: GameState, me: number) {
   }
   return b;
 }
+
+export const isBot = (account?: string) => !!account && /^bot-\d+\.brawler$/.test(account);

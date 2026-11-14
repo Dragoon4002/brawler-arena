@@ -2,7 +2,8 @@
 import { STAGES, HURT_H, MAX_HP, hitboxOf, type GameState, type SimEvent, type StageId } from '../sim/sim.ts';
 import { paintBackground, paintStage, paintFront } from './stage.ts';
 import { drawMonster, poseFor, type Look } from './rig.ts';
-import { drawHero, hero, heroOf } from './cutout.ts';
+import { drawHero, hero, heroOf, tintOf } from './cutout.ts';
+import { isBot } from '../bot.ts';
 import { drawSheet, sheet } from './sheet.ts';
 import { paintArtBackground, paintArtStage, paintArtFront } from './artstage.ts';
 import { lookOf, randomDna, type Dna } from '../genes.ts';
@@ -11,8 +12,8 @@ export const W = 1280, H = 720;
 
 // Per-match players (set from the chosen monsters). Defaults: two fixed demo monsters.
 const DNAS: Dna[] = [{ ...randomDna(7), hue: 172 }, { ...randomDna(8), hue: 24 }];
-const LOOKS: Look[] = DNAS.map(lookOf), HEROES: string[] = DNAS.map(heroOf);
-const NAMES = ['P1', 'P2'];
+const LOOKS: Look[] = DNAS.map(lookOf), HEROES: string[] = DNAS.map(heroOf), TINTS = DNAS.map(tintOf);
+const NAMES = ['P1', 'P2'], ACCOUNTS = ['', ''];
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; kind: 'spark' | 'dust' | 'ring' | 'beam' }
 
@@ -81,6 +82,25 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     cam.z += (z - cam.z) * 0.08;
   }
 
+  // Same colour on the fighter's tag and its HUD card: gold = you, else blue / red by seat.
+  const isYou = (i: number) => NAMES[i].endsWith(' (you)');
+  const colorOf = (i: number) => (isYou(i) ? '#ffd166' : ['#4fc3ff', '#ff6b6b'][i]);
+
+  // Floating label over each fighter, constant on-screen size whatever the camera zoom.
+  function nameTag(x: number, y: number, i: number) {
+    const acc = ACCOUNTS[i];
+    const text = isYou(i) ? 'You' : isBot(acc) ? `${NAMES[i]} · bot` : acc ? (acc.length > 22 ? acc.slice(0, 20) + '…' : acc) : NAMES[i];
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(1 / cam.z, 1 / cam.z);
+    ctx.font = "800 16px Nunito, system-ui"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + 22;
+    ctx.fillStyle = colorOf(i); ctx.strokeStyle = '#0c0816'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.roundRect(-w / 2, -14, w, 28, 14); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-7, 14); ctx.lineTo(7, 14); ctx.lineTo(0, 23); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#0c0816'; ctx.fillText(text, 0, 1);
+    ctx.restore();
+  }
+
   function fighters(s: GameState) {
     s.fighters.forEach((f, i) => {
       if (f.state === 'dead') return;
@@ -93,9 +113,10 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       const flash = f.hitlag > 0 && f.state === 'hitstun', name = PICK[i] ?? HEROES[i];
       const sh = name && SHEET ? sheet(name) : null, h = name && !SHEET ? hero(name) : null;
       if (sh) drawSheet(ctx, sh, f, s.frame, p.r, flash);
-      else if (h) drawHero(ctx, p, h, flash);
+      else if (h) drawHero(ctx, p, h, flash, TINTS[i]);
       else drawMonster(ctx, p, LOOKS[i], flash);
       ctx.restore();
+      nameTag(f.x, f.y - HURT_H - 30, i);
 
       if (f.state === 'block') { // shield arc on the guarded (front) side
         ctx.save();
@@ -151,25 +172,48 @@ export function createRenderer(canvas: HTMLCanvasElement) {
 
   function hud(s: GameState, banner: string, info: string) {
     s.fighters.forEach((f, i) => {
-      const x = i === 0 ? 40 : W - 280, bw = 224;
+      const cw = 400, ch = ACCOUNTS[i] ? 128 : 104, x = i === 0 ? 24 : W - 24 - cw, y = 18, R = i === 1;
       const hp = f.state === 'dead' ? 0 : Math.max(0, MAX_HP - f.damage), k = hp / MAX_HP;
       hpShown[i] = hp > hpShown[i] ? hp : hpShown[i] + (hp - hpShown[i]) * 0.06;
-      ctx.fillStyle = 'rgba(15,10,30,0.6)'; ctx.fillRect(x, 20, 240, 86);
-      ctx.fillStyle = LOOKS[i].body; ctx.fillRect(x, 20, 6, 86);
-      ctx.font = 'bold 16px system-ui'; ctx.fillStyle = '#fff'; ctx.textAlign = 'left';
-      ctx.fillText(NAMES[i], x + 16, 42);
-      for (let n = 0; n < f.stocks; n++) {
-        ctx.fillStyle = LOOKS[i].body; ctx.beginPath(); ctx.arc(x + 226 - n * 20, 36, 7, 0, Math.PI * 2); ctx.fill();
+      const col = colorOf(i), pad = 20, tx = R ? x + cw - pad : x + pad;
+      ctx.fillStyle = 'rgba(20,14,38,0.86)'; ctx.strokeStyle = col; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.roundRect(x, y, cw, ch, 18); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(R ? x + cw - 11 : x + 4, y + 12, 7, ch - 24, 3); ctx.fill();
+      ctx.textAlign = R ? 'right' : 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.font = "30px 'Lilita One', system-ui"; ctx.fillStyle = col;
+      ctx.fillText(NAMES[i], tx, y + 40, cw - 140);
+      let by = y + 58;
+      if (isBot(ACCOUNTS[i])) { // bots show a "bot" chip instead of their account
+        const px = R ? tx - 46 : tx;
+        ctx.fillStyle = '#5ce1e6'; ctx.beginPath(); ctx.roundRect(px, y + 50, 46, 22, 11); ctx.fill();
+        ctx.font = "800 15px Nunito, system-ui"; ctx.fillStyle = '#0c0816'; ctx.textAlign = 'center'; ctx.fillText('bot', px + 23, y + 66);
+        ctx.textAlign = R ? 'right' : 'left'; by = y + 80;
+      } else if (ACCOUNTS[i]) {
+        ctx.font = "700 18px Nunito, system-ui"; ctx.fillStyle = 'rgba(255,243,220,0.65)';
+        const a = ACCOUNTS[i].length > 30 ? ACCOUNTS[i].slice(0, 28) + '…' : ACCOUNTS[i];
+        ctx.fillText(a, tx, y + 66, cw - 2 * pad); by = y + 80;
       }
-      // health bar: green -> yellow -> red, white chip shows recent damage
-      ctx.fillStyle = '#2a2140'; ctx.fillRect(x + 10, 52, bw, 22);
-      ctx.fillStyle = '#fff'; ctx.fillRect(x + 10, 52, bw * hpShown[i] / MAX_HP, 22);
-      ctx.fillStyle = `hsl(${120 * k}, 75%, 50%)`; ctx.fillRect(x + 10, 52, bw * k, 22);
-      ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.strokeRect(x + 10, 52, bw, 22);
-      ctx.font = 'bold 14px system-ui'; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-      ctx.fillText(`${Math.ceil(hp)} / ${MAX_HP}`, x + 10 + bw / 2, 68);
-      ctx.textAlign = 'left'; ctx.font = '13px system-ui'; ctx.fillStyle = 'rgba(255,255,255,0.75)';
-      ctx.fillText(`knockback +${f.damage}%`, x + 16, 96);
+      for (let n = 0; n < 3; n++) { // stocks, filled = left
+        const cx = R ? x + pad + 12 + n * 30 : x + cw - pad - 12 - n * 30;
+        ctx.beginPath(); ctx.arc(cx, y + 29, 11, 0, Math.PI * 2);
+        ctx.fillStyle = n < f.stocks ? col : 'rgba(255,255,255,0.08)'; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = '#0c0816'; ctx.stroke();
+      }
+      const bx = x + pad, bw = cw - 2 * pad, bh = 30;
+      ctx.fillStyle = '#0c0816'; ctx.beginPath(); ctx.roundRect(bx - 3, by - 3, bw + 6, bh + 6, 11); ctx.fill();
+      ctx.save(); ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 9); ctx.clip();
+      ctx.fillStyle = '#2a2140'; ctx.fillRect(bx, by, bw, bh);
+      const fill = (w: number) => (R ? ctx.fillRect(bx + bw - w, by, w, bh) : ctx.fillRect(bx, by, w, bh));
+      ctx.fillStyle = 'rgba(255,255,255,0.75)'; fill(bw * hpShown[i] / MAX_HP);
+      ctx.fillStyle = `hsl(${120 * k}, 72%, 48%)`; fill(bw * k);
+      ctx.fillStyle = 'rgba(255,255,255,0.22)'; ctx.fillRect(bx, by, bw, bh * 0.4);
+      ctx.restore();
+      ctx.font = "22px 'Lilita One', system-ui"; ctx.lineWidth = 4; ctx.strokeStyle = '#0c0816'; ctx.fillStyle = '#fff';
+      ctx.textAlign = R ? 'right' : 'left';
+      const hx = R ? bx + bw - 10 : bx + 10, kx = R ? bx + 10 : bx + bw - 10, mid = by + bh / 2 + 7;
+      ctx.strokeText(`${Math.ceil(hp)}`, hx, mid); ctx.fillText(`${Math.ceil(hp)}`, hx, mid);
+      ctx.textAlign = R ? 'left' : 'right'; ctx.font = "800 16px Nunito, system-ui";
+      ctx.strokeText(`KB +${f.damage}%`, kx, mid - 1); ctx.fillText(`KB +${f.damage}%`, kx, mid - 1);
     });
     if (info) {
       ctx.font = '12px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.45)';
@@ -201,9 +245,10 @@ export function createRenderer(canvas: HTMLCanvasElement) {
 
   return {
     draw, onEvents,
-    setPlayers: (names: string[], dnas?: Dna[]) => {
+    setPlayers: (names: string[], dnas?: Dna[], accounts?: string[]) => {
       NAMES.splice(0, 2, ...names);
-      if (dnas) { LOOKS.splice(0, 2, ...dnas.map(lookOf)); HEROES.splice(0, 2, ...dnas.map(heroOf)); }
+      ACCOUNTS.splice(0, 2, ...(accounts ?? ['', '']));
+      if (dnas) { LOOKS.splice(0, 2, ...dnas.map(lookOf)); HEROES.splice(0, 2, ...dnas.map(heroOf)); TINTS.splice(0, 2, ...dnas.map(tintOf)); }
     },
     destroy: () => { removeEventListener('keydown', onKey); fit.disconnect(); },
   };

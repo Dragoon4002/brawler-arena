@@ -31,15 +31,6 @@ export function pilot(level: Level, rand = Math.random) {
   };
 }
 
-/* ---------- challenger ---------- */
-
-export const isBot = (account: string) => /^bot-.*\.brawler$/.test(account);
-
-// Lobby row a challenger may join: public free room, host alone (and human) for at least `after` ms.
-export const joinable = (row: any, waited: number, after: number) =>
-  row.pub === true && row.status === 'waiting' && row.matchId == null && !row.bettable && /^0+$/.test(row.stake ?? '0') &&
-  row.players?.length === 1 && !isBot(row.players[0].account ?? '') && waited >= after;
-
 /* ---------- commentator ---------- */
 
 export interface Moment { kind: 'start' | 'ko' | 'swing' | 'comeback' | 'over'; who: number; v: View; winner?: number | null }

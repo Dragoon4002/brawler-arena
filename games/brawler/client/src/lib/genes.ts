@@ -20,6 +20,7 @@ export interface Monster {
   born: number; // ms epoch
   record: { w: number; l: number; ko: number };
   dna: Dna;
+  skills?: Skill[]; // equipped (chain monsters)
 }
 
 export const STAT_KEYS = ['str', 'dex', 'def', 'spd'] as const;
@@ -109,6 +110,44 @@ export function sanitize(x: any): Dna {
 }
 
 export const statsOf = (d: Dna): Stats => ({ str: d.str, dex: d.dex, def: d.def, spd: d.spd });
+
+// Skills: first 4 kinds bump a stat (mag 1..2), the rest are effects (Stats.fx bit 1 << (index - 4)).
+export const SKILL_KINDS = ['Power', 'Agility', 'Durability', 'Speed', 'AirJump', 'Lifesteal', 'QuickDodge', 'SecondWind'] as const;
+export type SkillKind = (typeof SKILL_KINDS)[number];
+export interface Skill { kind: SkillKind; mag: number }
+export const SKILL_SLOTS = 3, SKILL_STAT_MAX = 2, SKILL_TOTAL_MAX = 3, SKILL_FX_MAX = 2, STAT_CAP = 11;
+
+// Trust boundary, mirrored in sim/src/genes.rs sanitize_skills: entries breaking a cap are dropped in order.
+export function sanitizeSkills(x: unknown): Skill[] {
+  const out: Skill[] = [], per = [0, 0, 0, 0];
+  let total = 0, fx = 0;
+  if (!Array.isArray(x)) return out;
+  for (const s of x) {
+    if (out.length >= SKILL_SLOTS) break;
+    const kind = (s as any)?.kind as SkillKind, i = SKILL_KINDS.indexOf(kind);
+    if (i < 0) continue;
+    if (i >= 4) {
+      if (fx >= SKILL_FX_MAX || out.some((o) => o.kind === kind)) continue;
+      fx++; out.push({ kind, mag: 1 }); continue;
+    }
+    const m = (s as any).mag, v = m !== null && typeof m === 'object' ? NaN : +m;
+    if (!Number.isFinite(v)) continue;
+    const mag = Math.max(1, Math.min(2, Math.round(v)));
+    if (per[i] + mag > SKILL_STAT_MAX || total + mag > SKILL_TOTAL_MAX) continue;
+    per[i] += mag; total += mag; out.push({ kind, mag });
+  }
+  return out;
+}
+
+export function applySkills(s: Stats, skills: Skill[]): Stats {
+  const r = { ...s, fx: s.fx ?? 0 };
+  for (const k of skills) {
+    const i = SKILL_KINDS.indexOf(k.kind);
+    if (i >= 4) r.fx |= 1 << (i - 4);
+    else if (i >= 0) r[STAT_KEYS[i]] = Math.min(STAT_CAP, r[STAT_KEYS[i]] + k.mag);
+  }
+  return r;
+}
 
 export interface Look {
   body: string; belly: string; dark: string; horn: string; eye: string; mark: string;

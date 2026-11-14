@@ -146,6 +146,7 @@ impl Session {
             "rematch" => self.rematch(),
             "set" => self.set(m),
             "begin" => self.begin(),
+            "callbot" => self.call_bot(),
             "chat" => {
                 self.chat(m);
                 Ok(())
@@ -295,6 +296,7 @@ impl Session {
             .filter(|r| r.seats.len() == 1 && r.status == Status::Waiting)
             .ok_or("Room already full")?;
         r.seats.push(self.seat(m, "Guest", account));
+        r.wants_bot = false;
         self.conn
             .send(&json!({ "t": "room", "code": at.code, "seat": 1 }));
         r.welcome(&self.conn);
@@ -444,7 +446,7 @@ impl Session {
             c.send(&json!({
                 "t": "resume", "code": r.code, "seat": 1 - i, "stage": r.stage.name(), "matchId": r.match_id,
                 "bettable": r.bettable, "frames": tape,
-                "players": r.seats.iter().map(|s| json!({ "name": s.name, "dna": s.dna })).collect::<Vec<_>>(),
+                "players": crate::protocol::players(r),
             }));
         }
     }
@@ -586,6 +588,24 @@ impl Session {
         }
         drop(st);
         tokio::spawn(game::begin(self.app.clone(), at.clone(), None));
+        Ok(())
+    }
+
+    fn call_bot(&self) -> Reply {
+        let at = self.room.as_ref().ok_or("Not in a room")?;
+        let mut st = self.app.lock();
+        let r = at.get_mut(&mut st.rooms).ok_or("Not in a room")?;
+        if r.seat_of(&self.conn) != Some(0) || r.status != Status::Waiting || r.seats.len() != 1 {
+            return Err("Only a host waiting alone can call a bot");
+        }
+        if r.match_id.is_some() {
+            return Err("Bots can't join on-chain rooms");
+        }
+        if !r.public && !r.view {
+            return Err("Make the room public or watchable to call a bot");
+        }
+        r.wants_bot = true;
+        st.lobby.push(&self.app);
         Ok(())
     }
 

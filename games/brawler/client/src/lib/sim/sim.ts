@@ -8,7 +8,9 @@ export const IN = { LEFT: 1, RIGHT: 2, UP: 4, DOWN: 8, JUMP: 16, LIGHT: 32, HEAV
 const ACTIONS = IN.JUMP | IN.LIGHT | IN.HEAVY | IN.DODGE;
 
 // Monster stats, 3..9 each, sum 22. This is the hook for NFT genes.
-export interface Stats { str: number; dex: number; def: number; spd: number }
+export interface Stats { str: number; dex: number; def: number; spd: number; fx?: number }
+// Effect skill bits (Stats.fx / Fighter.fx).
+export const FX = { AIR_JUMP: 1, LIFESTEAL: 2, QUICK_DODGE: 4, SECOND_WIND: 8 } as const;
 export const DEFAULT_STATS: Stats = { str: 6, dex: 5, def: 5, spd: 6 };
 
 export type St = 'idle' | 'run' | 'jumpsquat' | 'air' | 'land' | 'dodge' | 'attack' | 'hitstun' | 'dead' | 'block';
@@ -24,6 +26,7 @@ export interface Fighter {
   hitstun: number; hitlag: number; invuln: number; dodgeCd: number; landLag: number; dropT: number;
   prevIn: number; buf: number; bufT: number;
   mod: { dmg: number; kbTaken: number; startup: number; run: number };
+  fx: number; windUsed: boolean;
 }
 
 export interface SimEvent { kind: 'hit' | 'ko' | 'jump' | 'land'; who: number; x: number; y: number; power: number }
@@ -50,17 +53,21 @@ export function statMods(s: Stats) {
   };
 }
 
+const jumps = (fx: number) => (fx & FX.AIR_JUMP ? 3 : 2);
+const dodgeCd = (f: Fighter, n: number) => (f.fx & FX.QUICK_DODGE ? n - Math.floor(n / 3) : n);
+
 function newFighter(i: number, stats: Stats): Fighter {
-  const sp = ST.spawns[i];
+  const sp = ST.spawns[i], fx = stats.fx ?? 0;
   return {
     x: sp.x, y: sp.y, vx: 0, vy: 0, facing: i === 0 ? 1 : -1,
     state: 'air', t: 0, grounded: false,
-    airJumps: 2, recoveryUsed: false, airDodged: false, fastFall: false,
+    airJumps: jumps(fx), recoveryUsed: false, airDodged: false, fastFall: false,
     move: null, moveHit: false, combo: 0, comboT: 0,
     damage: 0, stocks: STOCKS,
     hitstun: 0, hitlag: 0, invuln: 0, dodgeCd: 0, landLag: 0, dropT: 0,
     prevIn: 0, buf: 0, bufT: 0,
     mod: statMods(stats),
+    fx, windUsed: false,
   };
 }
 
@@ -105,12 +112,12 @@ function startDodge(f: Fighter, inp: number) {
   const dx = dirX(inp);
   if (f.grounded) {
     f.vx = dx * 9; f.vy = 0;
-    f.invuln = 15; f.dodgeCd = 50;
+    f.invuln = 15; f.dodgeCd = dodgeCd(f, 50);
   } else {
     const dy = (inp & IN.DOWN ? 1 : 0) - (inp & IN.UP ? 1 : 0);
     const k = dx && dy ? 7.07 : 10; // 10 / sqrt(2) on diagonals
     f.vx = dx * k; f.vy = dy * k;
-    f.invuln = 17; f.dodgeCd = 60; f.airDodged = true; f.fastFall = false;
+    f.invuln = 17; f.dodgeCd = dodgeCd(f, 60); f.airDodged = true; f.fastFall = false;
   }
   setState(f, 'dodge');
 }
@@ -238,7 +245,7 @@ function update(f: Fighter, inp: number, pressed: number, s: GameState, i: numbe
 
   const landed = physics(f);
   if (landed) {
-    f.airJumps = 2; f.recoveryUsed = false; f.airDodged = false; f.fastFall = false;
+    f.airJumps = jumps(f.fx); f.recoveryUsed = false; f.airDodged = false; f.fastFall = false;
     s.events.push({ kind: 'land', who: i, x: f.x, y: f.y, power: f.vy });
     if (f.state === 'air') setState(f, 'idle');
     else if (f.state === 'attack' && MOVES[f.move!].air && !MOVES[f.move!].untilLand) { f.move = null; f.landLag = 6; setState(f, 'land'); }
@@ -258,7 +265,7 @@ const overlap = (a: { x: number; y: number; w: number; h: number }, b: typeof a)
 
 function respawn(f: Fighter, i: number) {
   const sp = ST.spawns[i];
-  Object.assign(f, { x: sp.x, y: sp.y - 150, vx: 0, vy: 0, damage: 0, invuln: RESPAWN_INVULN, airJumps: 2, recoveryUsed: false, airDodged: false, move: null, hitlag: 0 });
+  Object.assign(f, { x: sp.x, y: sp.y - 150, vx: 0, vy: 0, damage: 0, invuln: RESPAWN_INVULN, airJumps: jumps(f.fx), recoveryUsed: false, airDodged: false, move: null, hitlag: 0, windUsed: false });
   setState(f, 'air');
 }
 
@@ -302,6 +309,7 @@ export function step(s: GameState, inputs: number[]) {
       continue;
     }
     b.damage += dmg;
+    if (a.fx & FX.LIFESTEAL) a.damage = Math.max(0, a.damage - Math.floor(dmg / 5));
     const kb = (m.base + b.damage * m.growth) * b.mod.kbTaken;
     b.vx = sx * m.ax * kb; b.vy = m.ay * kb;
     if (b.vy > 0 && b.grounded) b.vy = -b.vy * 0.6; // spike into floor bounces
@@ -312,6 +320,9 @@ export function step(s: GameState, inputs: number[]) {
     s.events.push({ kind: 'hit', who: j, x: (a.x + b.x) / 2, y: b.y - HURT_H / 2, power: kb });
   }
 
+  for (const f of fs) {
+    if (f.fx & FX.SECOND_WIND && !f.windUsed && f.state !== 'dead' && f.damage >= MAX_HP - 50) { f.damage -= 30; f.windUsed = true; }
+  }
   const bz = ST.blast;
   fs.forEach((f, i) => {
     const inBounds = f.x > bz.x0 && f.x < bz.x1 && f.y > bz.y0 && f.y < bz.y1;

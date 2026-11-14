@@ -2,7 +2,10 @@ use crate::App;
 use crate::protocol::{lobby_msg, room_state};
 use crate::referee::Referee;
 use crate::session::{Conn, broadcast};
-use brawler_sim::{StageId, genes::Dna};
+use brawler_sim::{
+    StageId, Stats,
+    genes::{Dna, Skill, apply_skills, stats_of},
+};
 use rand::Rng;
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
@@ -17,6 +20,8 @@ pub struct Seat {
     pub conn: Option<Arc<Conn>>,
     pub name: String,
     pub dna: Dna,
+    /// Equipped skills, read from chain at `begin`. Off-chain seats stay empty (client claims never trusted).
+    pub skills: Vec<Skill>,
     pub account: String,
     pub seen: Instant,
     /// Confirmed inputs mirrored by this player, packed host<<16|guest.
@@ -29,10 +34,15 @@ impl Seat {
             conn: Some(conn),
             name,
             dna,
+            skills: vec![],
             account,
             seen: Instant::now(),
             tape: vec![],
         }
+    }
+
+    pub fn stats(&self) -> Stats {
+        apply_skills(stats_of(&self.dna), &self.skills)
     }
 }
 
@@ -77,6 +87,8 @@ pub struct Room {
     pub rematch: [bool; 2],
     /// Last CHAT_KEEP lines `{from, seat, text, ts}`.
     pub chat: VecDeque<Value>,
+    /// Host pressed "Call bot": the bot service joins rooms flagged in the lobby.
+    pub wants_bot: bool,
 }
 
 impl Room {
@@ -199,6 +211,7 @@ impl Shared {
             round: 0,
             rematch: [false; 2],
             chat: VecDeque::new(),
+            wants_bot: false,
         };
         configure(&mut r);
         let at = r.handle();

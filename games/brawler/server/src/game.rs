@@ -3,7 +3,7 @@ use crate::referee::Referee;
 use crate::room::{Lobby, Room, RoomRef, Status};
 use crate::session::{Conn, broadcast};
 use crate::{App, ChainMatch};
-use brawler_sim::genes::Dna;
+use brawler_sim::genes::{Dna, Skill};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -16,7 +16,7 @@ pub async fn begin(app: Arc<App>, at: RoomRef, chain_match: Option<ChainMatch>) 
     let Some(match_id) = at.get_mut(&mut app.lock().rooms).map(|r| r.match_id) else {
         return;
     };
-    let mut dna: [Option<Dna>; 2] = [None, None];
+    let mut dna: [Option<(Dna, Vec<Skill>)>; 2] = [None, None];
     let mut failed = false;
     if let Some(id) = match_id {
         let chain_match = match chain_match {
@@ -26,7 +26,7 @@ pub async fn begin(app: Arc<App>, at: RoomRef, chain_match: Option<ChainMatch>) 
         let tokens = chain_match.and_then(|m| m.monsters).unwrap_or_default();
         for (slot, token) in dna.iter_mut().zip(&tokens) {
             let Some(token) = token else { continue };
-            *slot = app.monster_dna(token).await;
+            *slot = app.monster_load(token).await;
             failed |= slot.is_none(); // never fall back to client DNA for a chain monster
         }
     }
@@ -50,7 +50,7 @@ fn go_live(
     app: &Arc<App>,
     at: &RoomRef,
     failed: bool,
-    dna: [Option<Dna>; 2],
+    dna: [Option<(Dna, Vec<Skill>)>; 2],
 ) -> Option<([Arc<Conn>; 2], Value)> {
     let mut st = app.lock();
     let st = &mut *st;
@@ -66,8 +66,9 @@ fn go_live(
         return None;
     }
     for (s, d) in r.seats.iter_mut().zip(dna) {
-        if let Some(d) = d {
+        if let Some((d, sk)) = d {
             s.dna = d;
+            s.skills = sk;
         }
     }
     if r.status != Status::Waiting {
@@ -81,7 +82,7 @@ fn go_live(
     r.referee = Some(Referee::new(
         app.near.clone(),
         r.match_id,
-        [r.seats[0].dna, r.seats[1].dna],
+        [r.seats[0].stats(), r.seats[1].stats()],
         r.stage,
     ));
     r.status = Status::Live;
@@ -167,7 +168,7 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
             &json!({
                 "key": key, "match_id": r.match_id, "stage": r.stage.name(), "stake": r.stake, "winner": winner,
                 "reason": reason, "tape_hash": tape_hash, "at": at, "frames": frames.collect::<Vec<_>>(),
-                "players": r.seats.iter().map(|s| json!({ "name": s.name, "account": s.account, "dna": s.dna })).collect::<Vec<_>>(),
+                "players": r.seats.iter().map(|s| json!({ "name": s.name, "account": s.account, "dna": s.dna, "skills": s.skills })).collect::<Vec<_>>(),
             }),
         );
         app.history.push(crate::history::Rec {
@@ -235,7 +236,7 @@ pub fn tick(app: &Arc<App>) {
             && now - r.created >= NO_SHOW
             && let Some(winner) = r.no_show
         {
-            let d = r.seats[0].dna;
+            let d = r.seats[0].stats();
             // fresh game: result() reports kos [0,0]
             r.referee = Some(Referee::new(app.near.clone(), r.match_id, [d, d], r.stage));
             finish(app, r, &mut st.lobby, Some(winner), "no-show");

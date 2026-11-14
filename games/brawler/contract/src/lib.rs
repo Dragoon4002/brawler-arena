@@ -7,7 +7,9 @@
 //! the contract balance.
 
 mod genes;
+mod skills;
 pub use genes::Dna;
+pub use skills::*;
 
 use near_contract_standards::non_fungible_token::core::NonFungibleTokenCore;
 use near_contract_standards::non_fungible_token::events::NftMint;
@@ -50,6 +52,15 @@ enum Key {
     SeasonWins,
     SeasonTokens(u32),
     Owed,
+    Creators,
+    Collections,
+    Skills,
+    Balances,
+    SkillListings,
+    Presales,
+    PresaleAllow,
+    PresaleBought,
+    Prices,
 }
 
 #[near(serializers = [borsh, json])]
@@ -90,6 +101,7 @@ pub struct Monster {
     rental: Option<Rental>, // may be expired; check `rented`
     locked_until_ms: u64,
     cooldown_until_ms: u64,
+    skills: Vec<u32>, // equipped skill ids, 1 unit each escrowed; travels with the monster
 }
 
 impl Monster {
@@ -118,6 +130,7 @@ pub struct MonsterView {
     pub rental: Option<Rental>,
     pub locked_until_ms: u64,
     pub cooldown_until_ms: u64,
+    pub skills: Vec<SkillRef>,
 }
 
 #[near(serializers = [borsh, json])]
@@ -173,7 +186,16 @@ pub struct Monsters {
     season_tokens: Vector<TokenId>,                // tokens with ≥1 win this season
     season_wins: LookupMap<(u32, TokenId), u32>,
     season_top: Vec<(TokenId, u32)>, // running top 3 of the current/last season
-    owed: LookupMap<AccountId, u128>, // failed payouts, pulled with `withdraw_owed`
+    owed: LookupMap<AccountId, u128>, // failed payouts + creator proceeds, pulled with `withdraw_owed`
+    creators: LookupSet<AccountId>,
+    collections: Vector<Collection>,
+    skills: Vector<SkillType>,
+    balances: LookupMap<(AccountId, u32), u32>, // free units
+    skill_listings: LookupMap<u32, Vec<SkillListing>>, // ponytail: whole vec rewritten per change; split per seller if a skill gets 1000s of listings
+    presales: Vector<Presale>,
+    presale_allow: LookupSet<(u32, AccountId)>,
+    presale_bought: LookupMap<(u32, AccountId), u32>,
+    prices: LookupMap<String, Vec<(u64, U128)>>,
 }
 
 fn now_ms() -> u64 {
@@ -210,12 +232,21 @@ impl Monsters {
             season_wins: LookupMap::new(Key::SeasonWins),
             season_top: vec![],
             owed: LookupMap::new(Key::Owed),
+            creators: LookupSet::new(Key::Creators),
+            collections: Vector::new(Key::Collections),
+            skills: Vector::new(Key::Skills),
+            balances: LookupMap::new(Key::Balances),
+            skill_listings: LookupMap::new(Key::SkillListings),
+            presales: Vector::new(Key::Presales),
+            presale_allow: LookupSet::new(Key::PresaleAllow),
+            presale_bought: LookupMap::new(Key::PresaleBought),
+            prices: LookupMap::new(Key::Prices),
         }
     }
 
     /* ---------- minting ---------- */
 
-    /// 3 random gen-0 monsters, once per account. Deposit covers storage; excess refunded.
+    /// 3 random gen-0 monsters + 3 random Common stat skill units, once per account. Deposit covers storage; excess refunded.
     #[payable]
     pub fn hatch_starters(&mut self) -> Vec<MonsterView> {
         let who = env::predecessor_account_id();
@@ -225,6 +256,7 @@ impl Monsters {
         let base = seed();
         let ids: Vec<TokenId> =
             (0..3).map(|i| base.wrapping_add(i)).map(|s| self.mint(&who, s, genes::random_dna(s), 0, None)).collect();
+        self.starter_skills(&who, base);
         self.charge(before, 0);
         ids.iter().map(|id| self.view(id)).collect()
     }
@@ -244,6 +276,7 @@ impl Monsters {
         for t in [&a, &b] {
             self.m_mut(t).cooldown_until_ms = now + HOUR_MS;
         }
+        self.treasury += self.breed_fee;
         self.charge(before, self.breed_fee);
         self.view(&id)
     }
@@ -281,6 +314,8 @@ impl Monsters {
         let royalty =
             if m.breeder != seller && m.r#gen > 0 { price * self.royalty_bps as u128 / BPS } else { 0 };
         self.treasury += fee;
+        self.push_price("monsters".into(), price);
+        skills::event("brawler", "sale", serde_json::json!({"key": "monsters", "token_id": token_id, "qty": 1, "price": U128(price), "seller": seller, "buyer": buyer}));
         self.pay(seller, price - fee - royalty);
         self.pay(m.breeder, royalty);
     }
@@ -417,7 +452,7 @@ impl Monsters {
                 // running top 3; stable sort keeps whoever reached the count first ahead on ties
                 self.season_top.retain(|(t, _)| t != id);
                 self.season_top.push((id.clone(), w + 1));
-                self.season_top.sort_by(|a, b| b.1.cmp(&a.1));
+                self.season_top.sort_by_key(|r| std::cmp::Reverse(r.1));
                 self.season_top.truncate(3);
             }
         }
@@ -470,7 +505,7 @@ impl Monsters {
                 rows.push((t.clone(), self.season_wins.get(&(s.id, t.clone())).copied().unwrap_or(0)));
             }
         }
-        rows.sort_by(|a, b| b.1.cmp(&a.1));
+        rows.sort_by_key(|r| std::cmp::Reverse(r.1));
         rows.truncate(limit.min(100) as usize);
         rows
     }
@@ -680,20 +715,21 @@ impl Monsters {
                 rental: None,
                 locked_until_ms: 0,
                 cooldown_until_ms: 0,
+                skills: vec![],
             },
         );
         NftMint { owner_id: owner, token_ids: &[&id], memo: None }.emit();
         id
     }
 
-    /// Caller pays `fee` (to treasury) + storage used since `before`; excess refunded.
+    /// Caller pays `fee` (already booked by the caller) + storage used since `before`; excess refunded.
     fn charge(&mut self, before: u64, fee: u128) {
         self.monsters.flush(); // store:: maps write lazily; flush so storage_usage sees it
+        self.flush_skills();
         let cost = env::storage_byte_cost().as_yoctonear() * (env::storage_usage().saturating_sub(before)) as u128;
         let need = fee + cost;
         let dep = env::attached_deposit().as_yoctonear();
         require!(dep >= need, format!("Attach at least {need} yoctoNEAR (fee + storage)"));
-        self.treasury += fee;
         if dep > need {
             Promise::new(env::predecessor_account_id()).transfer(NearToken::from_yoctonear(dep - need)).detach();
         }
@@ -742,6 +778,7 @@ impl Monsters {
             rent_offer: m.rent_offer,
             locked_until_ms: m.locked_until_ms,
             cooldown_until_ms: m.cooldown_until_ms,
+            skills: self.skill_refs(&m.skills),
         }
     }
 

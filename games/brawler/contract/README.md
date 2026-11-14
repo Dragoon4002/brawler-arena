@@ -3,6 +3,8 @@
 NEP-171/177/181 monster NFTs for Brawler Arena: on-chain genes, breeding, P2P market, rentals, seasons.
 Token id = "0", "1", ... Init: `new(owner_id, arena_id)`. Genes are an exact port of `src/genes.ts` (same u32 seed → same monster); seed = first 4 bytes of `env::random_seed()`.
 
+Skills (NEP-245 `"skill:<id>"`, presales, skill market, `equip`): see `../plans/skills-interface.md`. Deploy: `node scripts/deploy-monsters-v2.mjs` (balance preflight; `--check` only checks).
+
 ## Calls
 | call | who | deposit |
 |---|---|---|

@@ -486,7 +486,7 @@ fn void_refunds_every_bet_after_fee() {
     as_("ref", 0);
     c.report_result(0, None, None, None);
     assert_eq!(c.claimable(0, acc("bob")).0, 5 * N - 5 * N / 1000);
-    assert_eq!(c.config().treasury.0 - t0, N); // seed = min(SEED, stake)
+    assert_eq!(c.config().treasury.0 - t0, SEED);
 }
 
 /* ---------- monsters + tournaments ---------- */
@@ -884,22 +884,25 @@ fn unjoin_open_rejected() {
 }
 
 #[test]
-#[should_panic(expected = "Bettable rooms need stake >= min bet")]
-fn zero_stake_bettable_rejected() {
+fn zero_stake_bettable_seeded() {
     let mut c = setup();
     create(&mut c, "host", 0, true);
+    let m = c.get_match(0).unwrap();
+    assert!(m.bettable);
+    assert_eq!(m.amm[0].0, SEED);
 }
 
 #[test]
-fn seed_capped_at_stake_and_returned() {
+fn seed_independent_of_stake_and_returned() {
     let mut c = setup();
+    as_("arena", SEED);
+    c.fund();
     let t0 = c.config().treasury.0;
     create(&mut c, "host", N, true); // settle, no bets
     create(&mut c, "h2", 10 * N, true); // cancelled
-    create(&mut c, "h3", N / 10, true); // void
-    assert_eq!(c.get_match(0).unwrap().amm[0].0, N);
-    assert_eq!(c.get_match(1).unwrap().amm[0].0, SEED);
-    assert_eq!(t0 - c.config().treasury.0, N + SEED + N / 10);
+    create(&mut c, "h3", 0, true); // void
+    for id in 0..3 { assert_eq!(c.get_match(id).unwrap().amm[0].0, SEED); }
+    assert_eq!(t0 - c.config().treasury.0, 3 * SEED);
     join(&mut c, "guest", 0);
     join(&mut c, "g3", 2);
     as_("ref", 0);

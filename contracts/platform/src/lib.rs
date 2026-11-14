@@ -302,8 +302,6 @@ impl Arena {
         assert_one_yocto();
         let host = env::predecessor_account_id();
         let g = self.game(&game);
-        // house seed capped at stake: 0-stake rooms can't tie up or bleed treasury
-        require!(!bettable || stake.0 >= self.min_bet, "Bettable rooms need stake >= min bet");
         let seed = self.seed_for(stake.0, bettable);
         require!(self.treasury >= seed, "House can't fund bets right now");
         self.debit(&host, stake.0);
@@ -768,9 +766,10 @@ impl Arena {
         self.unlock(game, locked.into_iter().collect());
     }
 
-    /// Player room seed: config seed capped at stake.
-    fn seed_for(&self, stake: u128, bettable: bool) -> u128 {
-        if bettable { self.seed.min(stake) } else { 0 }
+    /// Spectator betting is independent of the players' stake: any bettable room gets the config seed.
+    // ponytail: colluding players can throw a bettable room to take up to `seed` per match; keep seed small (set_seed), add per-host limits if abused
+    fn seed_for(&self, _stake: u128, bettable: bool) -> u128 {
+        if bettable { self.seed } else { 0 }
     }
 
     /// Seed (0 = not bettable) comes out of treasury here; `finish` returns it.

@@ -2,7 +2,7 @@
 use brawler_sim::{Fighter, GameState, St, StageId, genes, new_game, step};
 use serde_json::Value;
 
-fn fields(f: &Fighter) -> [f64; 31] {
+fn fields(f: &Fighter) -> [f64; 33] {
     let b = |v: bool| v as u8 as f64;
     let st = [
         St::Idle,
@@ -51,6 +51,8 @@ fn fields(f: &Fighter) -> [f64; 31] {
         f.m.kb_taken,
         f.m.startup,
         f.m.run,
+        f.fx as f64,
+        b(f.wind_used),
     ]
 }
 
@@ -73,7 +75,7 @@ fn golden() -> Value {
 fn bit_exact_vs_ts() {
     let g = golden();
     let runs = g["runs"].as_array().unwrap();
-    assert!(runs.len() >= 9);
+    assert!(runs.len() >= 13);
     for (n, r) in runs.iter().enumerate() {
         let dna: Vec<_> = r["dna"]
             .as_array()
@@ -81,8 +83,14 @@ fn bit_exact_vs_ts() {
             .iter()
             .map(genes::sanitize)
             .collect();
+        let st = |i: usize| {
+            genes::apply_skills(
+                genes::stats_of(&dna[i]),
+                &genes::sanitize_skills(&r["skills"][i]),
+            )
+        };
         let mut s = new_game(
-            [genes::stats_of(&dna[0]), genes::stats_of(&dna[1])],
+            [st(0), st(1)],
             StageId::parse(r["stage"].as_str().unwrap()).unwrap(),
         );
         let hashes = r["hashes"].as_array().unwrap();

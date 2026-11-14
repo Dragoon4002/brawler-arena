@@ -8,7 +8,7 @@
 
 ## What it is
 
-Two monsters knock each other off a floating stage (3 stocks, damage %, blocks, dodges). Host a room, stake NEAR, and the winner takes the pot. Spectators trade a live prediction market on the fight. Monsters are NFTs whose DNA sets their stats; you can breed, rent and sell them. Bots keep the lobby alive with exhibition fights and take on anyone waiting for an opponent.
+Two monsters knock each other off a floating stage (3 stocks, damage %, blocks, dodges). Host a room, stake NEAR, and the winner takes the pot. Spectators trade a live prediction market on the fight. Monsters are NFTs whose DNA sets their stats; you can breed, rent and sell them. No opponent? Press "Call bot" in your room and a bot joins.
 
 ## Contracts (testnet)
 
@@ -36,7 +36,7 @@ Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DE
 
 - **Escrow without trust:** stakes and bets live in the platform contract. The game server can only call `report_result` through its referee key; it never holds funds.
 - **Provable fairness:** the sim is deterministic. The referee re-simulates both players' inputs, reports the winner and the tape's SHA-256 on-chain. Anyone can open `/replay/<id>`: the browser re-runs the tape, recomputes the hash and checks both against the contract.
-- **Prediction markets per fight:** each bettable match opens an AMM market seeded by the house treasury, capped at the stake so it can't be drained.
+- **Prediction markets per fight:** each bettable match opens an AMM market seeded by the house treasury, on staked and free rooms alike; the seed comes back at settle.
 - **NFT gameplay assets:** monster stats come from on-chain DNA, and the NFT is locked while it fights, so it can't be sold mid-match.
 - **One balance across games:** the platform registers games with their own referee; Brawler is the first.
 - **Wallet only when money moves:** Practice vs bot and watching need no wallet.
@@ -49,7 +49,7 @@ Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DE
 - Live spectator market with price chart.
 - Tournaments (4/8 players), leaderboard by wins and NEAR won, player profiles and match history with replays.
 - Monsters: hatch starters, breed, sell, rent.
-- Bots: exhibition fights and opponents for lonely rooms (`agents/`).
+- Bots: press "Call bot" in a free room and a bot joins, marked with a "bot" chip (`agents/`).
 
 ## Repo
 
@@ -63,7 +63,7 @@ Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DE
 | `crates/near-svc/` | Rust NEAR RPC, NEP-413 verify, referee tx queue |
 | `packages/platform/` | shared TS wallet + balance hooks |
 | `agents/` | bot service |
-| `market/` | game hub |
+| `market/` | skill + monster marketplace (Next.js + Tailwind, bun) |
 | `infra/` | Terraform, Ansible, Docker, Caddy |
 
 ## Run
@@ -74,12 +74,12 @@ cargo test --workspace                         # rust sim + server
 make dev                                       # backend in docker, ws :8787 (BRAWLER_PORT)
 cargo run -p brawler-server                    # same, no docker
 npm run dev -w @xyz/brawler                    # http://localhost:3000
-npm run dev -w @xyz/market
+cd market && bun install && bun dev           # market, http://localhost:3000 (?demo for mock data)
 ```
 
 - Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY`. No CONTRACT_ID = free rooms only.
 - Room lobby: a staked guest who leaves before the host presses Start frees the seat; referee `unjoin` refunds their stake and reopens the match (rejected once bets exist).
-- Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (default: same origin), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_BRAWLER_URL`.
+- Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (default: same origin), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_ASSETS_ID`, `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_BRAWLER_URL`, `NEXT_PUBLIC_DEMO=1`.
 - Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
 - New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?)` on platform.
 
@@ -96,7 +96,7 @@ make deploy                           # docker + repo (repo_version, default mai
 ```
 
 - DNS must resolve to the EIP before `make deploy`, or Caddy can't get a cert.
-- The client is served from the same box (Caddy routes WebSocket, `/history`, `/tape` to the server, the rest to the client). `?server=wss://<domain>` overrides the server for a quick test.
+- The box only runs the server and bots; the client and market deploy to Vercel (env in `infra/README.md`). `?server=wss://<domain>` overrides the server for a quick test.
 - Redeploy: `make deploy ANSIBLE_ARGS="-e repo_version=<sha>"`. Remote state: add an `s3` backend in `versions.tf` (optional).
 
 ## Controls

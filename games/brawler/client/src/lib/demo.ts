@@ -1,6 +1,6 @@
-import { randomDna, nameFor } from './genes.ts';
+import { randomDna, nameFor, type Skill } from './genes.ts';
 import type { FeedItem, LotView, MatchView, PositionView, TournamentView } from './near.ts';
-import type { HistoryEntry, MonstersApi, NftMonster } from './nft.ts';
+import type { HistoryEntry, MonstersApi, NftMonster, SkillType } from './nft.ts';
 import { breedPair, monsters as storeMonsters } from './store.ts';
 import { Market, ONE } from './market.ts';
 
@@ -70,13 +70,21 @@ const HOUR = 3600_000, DAY = 24 * HOUR;
 const fake = (seed: number, owner: string, extra: Partial<NftMonster> = {}): NftMonster => ({
   id: `d${seed}`, name: nameFor(seed), gen: seed % 3, parents: null, born: Date.now() - (seed % 9 + 1) * DAY,
   record: { w: seed % 7, l: seed % 4, ko: seed % 5 }, dna: randomDna(seed), owner, breeder: owner, titles: [],
-  lockedUntil: 0, cooldownUntil: 0, ...extra,
+  lockedUntil: 0, cooldownUntil: 0, skills: [], skillIds: [], ...extra,
 });
+const SKILL_TYPES: SkillType[] = ([
+  ['Iron Fist', 'Power', 1, 'Common'], ['Quick Hands', 'Agility', 1, 'Common'], ['Thick Hide', 'Durability', 1, 'Common'], ['Swift Feet', 'Speed', 1, 'Common'],
+  ['Titan Fist', 'Power', 2, 'Rare'], ['Gale Feet', 'Speed', 2, 'Rare'], ['Feather Step', 'AirJump', 1, 'Epic'], ['Vampire Fang', 'Lifesteal', 1, 'Rare'],
+  ['Shadow Roll', 'QuickDodge', 1, 'Rare'], ['Second Wind', 'SecondWind', 1, 'Epic'],
+] as const).map(([name, kind, mag, rarity], i) => ({ id: i + 1, name, kind, mag, rarity, media: `/skills/${kind}.svg` }));
+const FREE: Record<number, number> = { 1: 3, 2: 1, 3: 2, 4: 1, 6: 1, 8: 1, 9: 1, 10: 1 };
+const loadout = (ids: number[]): Skill[] => ids.map((id) => SKILL_TYPES.find((t) => t.id === id)!).map(({ kind, mag }) => ({ kind, mag }));
 const OTHERS = [61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72].map((n) => fake(n, `${nameFor(n).toLowerCase()}.testnet`));
 const NFTS: NftMonster[] = [];
 if (DEMO) {
   storeMonsters().forEach((m, i) => NFTS.push({
     ...m, owner: DEMO_ACCOUNT, breeder: DEMO_ACCOUNT, titles: i === 0 ? ['Season 1 Runner-up', 'Tournament #3 Champion'] : [], lockedUntil: 0, cooldownUntil: 0,
+    skillIds: i === 0 ? [5, 7] : [], skills: loadout(i === 0 ? [5, 7] : []),
   }));
   NFTS.push(
     ...OTHERS.slice(0, 4).map((m, i) => ({ ...m, price: NEAR([0.5, 1, 2.5, 4][i]) })), // for sale
@@ -106,7 +114,7 @@ export const demoMonsters: MonstersApi = {
     if (!ma || !mb) return null;
     await sent('breeding fee paid, new monster born');
     const { child } = breedPair(ma, mb); // also lands in the localStorage collection
-    const c: NftMonster = { ...child, owner: DEMO_ACCOUNT, breeder: DEMO_ACCOUNT, titles: [], lockedUntil: 0, cooldownUntil: 0 };
+    const c: NftMonster = { ...child, owner: DEMO_ACCOUNT, breeder: DEMO_ACCOUNT, titles: [], lockedUntil: 0, cooldownUntil: 0, skills: [], skillIds: [] };
     NFTS.push(c);
     patch(a, { cooldownUntil: Date.now() + HOUR }); patch(b, { cooldownUntil: Date.now() + HOUR });
     return { ...c };
@@ -121,6 +129,14 @@ export const demoMonsters: MonstersApi = {
   rentOffers: () => wait(NFTS.filter((m) => m.rentOffer).map((m) => ({ ...m }))),
   owed: () => wait('0'),
   withdrawOwed: () => sent('owed NEAR sent to your wallet'),
+  skillTypes: () => wait(SKILL_TYPES),
+  skills: () => wait(SKILL_TYPES.filter((t) => FREE[t.id]).map((t) => ({ ...t, free: FREE[t.id], listed: 0 }))),
+  equip: (id, ids) => mutate('skills equipped', () => {
+    const m = find(id)!;
+    m.skillIds.forEach((s) => { FREE[s] = (FREE[s] ?? 0) + 1; });
+    ids.forEach((s) => { FREE[s]--; });
+    patch(id, { skillIds: [...ids], skills: loadout(ids) });
+  }),
   config: () => wait({ owner: 'admin.testnet', arena: 'arena.testnet', treasury: NEAR(3), breed_fee: NEAR(0.1), market_fee_bps: 250, royalty_bps: 500, rent_fee_bps: 250 }),
 };
 const fmtN = (y: string) => Number(BigInt(y) / 10n ** 21n) / 1000;

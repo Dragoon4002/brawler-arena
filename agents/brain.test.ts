@@ -1,16 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { IN, newGame } from '../games/brawler/client/src/lib/sim/sim.ts';
-import { bot } from '../games/brawler/client/src/lib/bot.ts';
-import { joinable, pilot, template, type View } from './brain.ts';
+import { bot, isBot } from '../games/brawler/client/src/lib/bot.ts';
+import { pilot, template, type View } from './brain.ts';
 
-test('challenger joins only public free rooms with a lone human host', () => {
-  const row = { code: 'ABCD', pub: true, status: 'waiting', matchId: null, bettable: false, stake: '0', players: [{ account: 'ana.testnet' }] };
-  assert.ok(joinable(row, 21_000, 20_000));
-  assert.ok(!joinable(row, 19_000, 20_000)); // not waiting long enough
-  for (const bad of [{ pub: false }, { status: 'live' }, { matchId: 7 }, { bettable: true }, { stake: '100000' },
-    { players: [] }, { players: [{ account: 'ana.testnet' }, { account: 'bo.testnet' }] }, { players: [{ account: 'bot-1.brawler' }] }])
-    assert.ok(!joinable({ ...row, ...bad }, 60_000, 20_000), JSON.stringify(bad));
+test('isBot', () => {
+  assert.ok(isBot('bot-1.brawler'));
+  for (const a of ['', undefined, 'ana.testnet', 'bot-1.brawler.testnet', 'robot-1.brawler']) assert.ok(!isBot(a), String(a));
 });
 
 test('difficulty knob', () => {

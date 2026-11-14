@@ -4,7 +4,7 @@ import { DEMO, DEMO_ROOMS, demoChat, demoSettle } from '@/lib/demo.ts';
 import { fmt, slip, toYocto, useArena, type FeedItem, type Limits, type LotView, type MatchView, type PositionView } from '@/lib/near.ts';
 import { startBotFight, startSpectate, type ChatLine, type RoomState } from '@/lib/session.ts';
 import { errText, signed } from '@/lib/format.ts';
-import { asset, Ico, Portrait } from '@/components/ui.tsx';
+import { asset, BotTag, Ico, Portrait } from '@/components/ui.tsx';
 import { Chat } from './Chat.tsx';
 import { PriceChart } from './PriceChart.tsx';
 
@@ -145,7 +145,7 @@ export function Watch({ code }: { code: string }) {
             {[0, 1].map((i) => (
               <div key={i} className={`wwin-side s${i}`} style={tint(players[i])}>
                 <span className="wwin-pic">{players[i]?.dna && <Portrait dna={players[i].dna} size={64} flip={i === 1} />}</span>
-                <b>{players[i]?.name ?? 'Open seat'}</b>
+                <b>{players[i]?.name ?? 'Open seat'} <BotTag account={(players[i] as { account?: string } | undefined)?.account} /></b>
                 {market && <span className="wwin-pct">{pct[i]}%</span>}
               </div>
             ))}

@@ -55,10 +55,10 @@ pub fn tape_of(v: &Value) -> i32 {
     }
 }
 
-fn players(r: &Room) -> Value {
+pub fn players(r: &Room) -> Value {
     r.seats
         .iter()
-        .map(|s| json!({ "name": s.name, "dna": s.dna, "account": s.account }))
+        .map(|s| json!({ "name": s.name, "dna": s.dna, "skills": s.skills, "account": s.account }))
         .collect()
 }
 
@@ -66,6 +66,7 @@ pub fn room_row(r: &Room) -> Value {
     json!({
         "code": r.code, "pub": r.public, "status": r.status.as_str(), "stage": r.stage.name(), "bettable": r.bettable,
         "matchId": r.match_id, "stake": r.stake, "winner": r.winner, "players": players(r), "watchers": r.spectators.len(),
+        "wantsBot": r.wants_bot && r.seats.len() == 1 && r.match_id.is_none(),
     })
 }
 
@@ -73,7 +74,7 @@ pub fn room_state(r: &Room) -> Value {
     let seats: Vec<Value> = r
         .seats
         .iter()
-        .map(|s| json!({ "name": s.name, "dna": s.dna, "account": s.account, "connected": s.conn.is_some() }))
+        .map(|s| json!({ "name": s.name, "dna": s.dna, "skills": s.skills, "account": s.account, "connected": s.conn.is_some() }))
         .collect();
     json!({
         "t": "roomstate", "code": r.code, "status": r.status.as_str(), "stage": r.stage.name(), "stake": r.stake,

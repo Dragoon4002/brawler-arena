@@ -3,7 +3,7 @@ import { archetype, type Monster } from '@/lib/genes.ts';
 import { usePlayable } from '@/hooks/useMons.ts';
 import { RoomList } from '@/components/rooms/Lobby.tsx';
 import { CreateRoom, JoinByCode } from '@/components/rooms/OnlineStart.tsx';
-import { Ico, Portrait } from '@/components/ui.tsx';
+import { Ico, Portrait, SkillChips } from '@/components/ui.tsx';
 import { practice } from '@/components/Arena.tsx';
 
 function Fighter({ mon, groups, onPick }: { mon: Monster; groups: [string, Monster[]][]; onPick: (id: string) => void }) {
@@ -12,6 +12,12 @@ function Fighter({ mon, groups, onPick }: { mon: Monster; groups: [string, Monst
       <Portrait dna={mon.dna} size={150} />
       <b>{mon.name}</b>
       <span className="tile-meta">{archetype(mon.dna)}</span>
+      {'owner' in mon && (
+        <div className="play-skills">
+          <SkillChips skills={mon.skills} />
+          <a className="link row-ico" href={`/customize/${mon.id}`}><Ico n="/skills/Power.svg" />{mon.skills?.length ? 'Customize' : 'Equip skills'}</a>
+        </div>
+      )}
       <button type="button" className="btn ghost" onClick={() => practice(mon)}><span><Ico n="ko" />Practice vs bot</span></button>
       {groups.map(([title, list]) => list.length > 0 && (
         <div key={title} className="roster">

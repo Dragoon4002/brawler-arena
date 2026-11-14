@@ -11,7 +11,7 @@ test('tape hash matches the server vector', async () => {
 test('headless replay of a golden tape reaches the recorded winner', () => {
   const g = JSON.parse(readFileSync(new URL('../../../sim/testdata/golden.json', import.meta.url), 'utf8'));
   for (const run of g.runs) {
-    const s = simulate({ stage: run.stage, frames: run.tape, players: run.dna.map((dna: unknown) => ({ name: '', account: '', dna })) });
+    const s = simulate({ stage: run.stage, frames: run.tape, players: run.dna.map((dna: unknown, i: number) => ({ name: '', account: '', dna, skills: run.skills?.[i] })) });
     assert.equal(s.winner, run.winner);
   }
 });

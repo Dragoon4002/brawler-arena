@@ -7,7 +7,7 @@ import { useArena, useSignMatch } from '@/lib/near.ts';
 import { startBotFight, startOnline, type ChatLine, type HostOpts, type Player, type RoomState } from '@/lib/session.ts';
 import { monsters, recordResult } from '@/lib/store.ts';
 import { usePlayable } from '@/hooks/useMons.ts';
-import { asset, Ico } from '@/components/ui.tsx';
+import { asset, Ico, StageThumb } from '@/components/ui.tsx';
 import { RoomLobby } from '@/components/rooms/RoomLobby.tsx';
 import { go } from '@/lib/nav.ts';
 import { setTouch } from '@/lib/input.ts';
@@ -26,7 +26,7 @@ const saved = (): FightSetup | null => { try { return JSON.parse(sessionStorage.
 const forget = () => { try { sessionStorage.removeItem(LIVE); } catch { /* storage blocked */ } };
 export const prepareFight = (s: FightSetup) => { setup = s; go('/fight'); };
 
-const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna });
+const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna, skills: m.skills }); // skills: local fights only, the server sends seats for online ones
 
 // Demo states for /fight/<state>?demo : waiting (host lobby) | challenger (guest lobby) | fight | victory | defeat | void
 const DEMO_STAGE = (new URLSearchParams(location.search).get('stage') ?? 'ember') as StageId; // ?demo&stage=grove
@@ -163,7 +163,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
     if (ctl.current) return ctl.current.begin();
     if (!rs) return;
     setLive(true);
-    bots.current = startBotFight(canvas.current!, rs.seats.map((x) => ({ name: x.name, dna: x.dna })), rs.stage);
+    bots.current = startBotFight(canvas.current!, rs.seats.map((x) => ({ name: x.name, dna: x.dna, account: x.account })), rs.stage);
   };
   const hostOpts = s?.kind === 'host' ? s.opts : null;
   const lobbyRs: RoomState | null = rs ?? (room && s ? { // until the server's first roomstate
@@ -201,7 +201,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
       ) : room && lobbyRs ? (
         <RoomLobby rs={lobbyRs} seat={room.seat} mine={mine} options={options} locked={locked} status={status} chat={chat}
           leaveLabel={room.matchId != null && s.kind === 'host' && !lobbyRs.seats[1] ? 'Cancel and refund' : 'Leave'}
-          onPick={pickMon} onStage={pickStage} onStart={start} onChat={say} onLeave={cancel} />
+          onPick={pickMon} onStage={pickStage} onStart={start} onChat={say} onLeave={cancel} onCallBot={() => ctl.current?.callBot()} />
       ) : (
         <div className="arena-overlay">
           <div className="slab" role="status"><p>{status || 'Loading…'}</p><button className="btn ghost" onClick={cancel}><span><Ico n="icon-back" />Back</span></button></div>
@@ -243,19 +243,46 @@ const pick = <T,>(l: T[]) => l[Math.floor(Math.random() * l.length)];
 
 export function Practice() {
   const [n, setN] = useState(0);
-  return <PracticeFight key={n} again={() => setN((x) => x + 1)} />;
+  const [stage, setStage] = useState<StageId | null>(null);
+  if (!stage) return <PracticePick onPick={setStage} />;
+  return <PracticeFight key={n} stage={stage} again={() => setN((x) => x + 1)} change={() => setStage(null)} />;
 }
 
-function PracticeFight({ again }: { again: () => void }) {
+function PracticePick({ onPick }: { onPick: (id: StageId) => void }) {
+  return (
+    <div className="arena">
+      <div className="arena-overlay">
+        <div className="slab practice-pick" role="dialog" aria-label="Pick an arena">
+          <h2>Pick an arena</h2>
+          <div className="room-stages" role="group" aria-label="Choose arena">
+            {STAGE_IDS.map((id) => (
+              <button key={id} type="button" className="hub-card" onClick={() => onPick(id)}>
+                <StageThumb id={id} />
+                <b>{STAGES[id].name}</b>
+              </button>
+            ))}
+          </div>
+          <div className="end-actions">
+            <button className="btn" onClick={() => onPick(pick(STAGE_IDS))}><span><Ico n="icon-refresh" />Random</span></button>
+            <a className="btn alt" href="/"><span><Ico n="icon-back" />Back</span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PracticeFight({ stage, again, change }: { stage: StageId; again: () => void; change: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [over, setOver] = useState<number | null>(null);
   const [names, setNames] = useState<string[]>([]);
   const [muted, setMuted] = useState(getAudio().muted);
+  const account = useArena().account ?? '';
   useEffect(() => {
     const list = monsters(), me = practiceMon ?? list[0];
-    const players = [asPlayer(me), asPlayer(pick(list.filter((m) => m.id !== me.id)) ?? me)];
+    const players = [{ ...asPlayer(me), account }, { ...asPlayer(pick(list.filter((m) => m.id !== me.id)) ?? me), account: 'bot-0.brawler' }];
     setNames(players.map((p) => p.name));
-    const g = startBotFight(canvas.current!, players, pick(STAGE_IDS), { result: (w) => setTimeout(() => setOver(w), 1000) }, true);
+    const g = startBotFight(canvas.current!, players, stage, { result: (w) => setTimeout(() => setOver(w), 1000) }, true);
     const key = (e: KeyboardEvent) => {
       if (e.code === 'Escape') go('/');
       if (e.code === 'KeyM') setMuted(toggleMute().muted);
@@ -279,6 +306,7 @@ function PracticeFight({ again }: { again: () => void }) {
             <p><b>{names[over]}</b> wins by three knockouts.</p>
             <div className="end-actions">
               <button className="btn" onClick={again}><span><Ico n="icon-refresh" />Play again (R)</span></button>
+              <button className="btn alt" onClick={change}><span><Ico n="icon-map" />Change arena</span></button>
               <a className="btn alt" href="/"><span><Ico n="icon-back" />Back (Esc)</span></a>
             </div>
           </div>

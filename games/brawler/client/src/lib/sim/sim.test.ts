@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newGame, step, hash, IN, STAGES, MAX_HP, type GameState } from './sim.ts';
+import { newGame, step, hash, IN, FX, STAGES, MAX_HP, DEFAULT_STATS, type GameState } from './sim.ts';
 import { STAGE_IDS } from '../stages.ts';
 
 const STAGE = { main: STAGES.ember.solids[0], blast: STAGES.ember.blast };
@@ -133,4 +133,47 @@ for (const id of STAGE_IDS) test(`${id}: layout is mirror-symmetric around x=800
     const keys = new Set(list.map(key));
     for (const r of list) assert.ok(keys.has(mirror(r)), `${key(r)} has no mirror`);
   }
+});
+
+test('AirJump skill: 3 air jumps instead of 2', () => {
+  for (const [fx, n] of [[0, 2], [FX.AIR_JUMP, 3]]) {
+    const s = newGame([{ ...DEFAULT_STATS, fx }, DEFAULT_STATS]);
+    s.fighters[0].y -= 300;
+    let jumps = 0;
+    for (let i = 0; i < 10; i++) { const left = s.fighters[0].airJumps; step(s, [i % 2 ? 0 : IN.JUMP, 0]); if (s.fighters[0].airJumps < left && s.fighters[0].vy < 0) jumps++; }
+    assert.equal(jumps, n);
+  }
+});
+
+test('Lifesteal heals floor(dealt / 5), never below 0', () => {
+  for (const start of [10, 0]) {
+    const s = faceOff(), a = s.fighters[0];
+    Object.assign(a, { fx: FX.LIFESTEAL, damage: start });
+    step(s, [IN.LIGHT, 0]);
+    run(s, 12, () => [0, 0]);
+    assert.ok(s.fighters[1].damage >= 5);
+    assert.equal(a.damage, Math.max(0, start - Math.floor(s.fighters[1].damage / 5)));
+  }
+});
+
+test('QuickDodge cuts dodge cooldown by a third', () => {
+  const s = faceOff();
+  s.fighters[0].fx = FX.QUICK_DODGE;
+  step(s, [IN.DODGE, IN.DODGE]);
+  assert.deepEqual(s.fighters.map((f) => f.dodgeCd), [34, 50]);
+});
+
+test('SecondWind heals 30 once per stock at HP <= 50', () => {
+  const s = faceOff(), b = s.fighters[1];
+  Object.assign(b, { fx: FX.SECOND_WIND, damage: MAX_HP - 51 });
+  step(s, [IN.LIGHT, 0]);
+  run(s, 12, () => [0, 0]);
+  assert.ok(b.windUsed);
+  const dealt = b.damage + 30 - (MAX_HP - 51);
+  assert.ok(dealt > 0);
+  const t = faceOff();
+  Object.assign(t.fighters[1], { fx: FX.SECOND_WIND, damage: MAX_HP - 51, windUsed: true });
+  step(t, [IN.LIGHT, 0]);
+  run(t, 12, () => [0, 0]);
+  assert.equal(t.fighters[1].damage, MAX_HP - 51 + dealt, 'no second heal this stock');
 });
