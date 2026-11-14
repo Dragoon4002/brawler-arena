@@ -65,7 +65,7 @@ export function Watch({ code }: { code: string }) {
   const seen = useRef<number | null>(null); // newest feed id already shown (null until first poll, so old bets don't flood in)
 
   useEffect(() => {
-    const hooks = { status: setStatus, info: setSpec, started: () => setStatus(''), over: (w: number | null, r: string) => setOver({ winner: w, reason: r }) };
+    const hooks = { status: setStatus, info: setSpec, started: () => { setStatus(''); setOver(null); }, over: (w: number | null, r: string) => setOver({ winner: w, reason: r }) };
     const demoRoom = DEMO && (DEMO_ROOMS.find((r) => r.code === code) ?? DEMO_ROOMS[0]);
     if (demoRoom) setSpec({ ...demoRoom, status: 'live' });
     const game = demoRoom ? startBotFight(canvas.current!, demoRoom.players.map((p) => ({ ...p })), demoRoom.stage, { ...hooks, result: (w: number) => hooks.over(w, 'ko') })

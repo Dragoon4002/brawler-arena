@@ -158,11 +158,11 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
         &json!({ "t": "over", "winner": winner, "reason": reason }),
     );
     lobby.push(app);
-    let (app, at) = (app.clone(), r.handle());
+    let (app, at, round) = (app.clone(), r.handle(), r.round);
     tokio::spawn(async move {
         tokio::time::sleep(DONE_TTL).await;
         let mut st = app.lock();
-        if at.get_mut(&mut st.rooms).is_some() {
+        if at.get_mut(&mut st.rooms).is_some_and(|r| r.round == round) {
             st.rooms.remove(&at.code);
         }
     });

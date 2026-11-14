@@ -1,4 +1,4 @@
-// E2E: host + join free room, send golden KO tape, expect {t:'over', reason:'ko'} w/ golden winner.
+// E2E: host + join free room, golden KO tape -> {t:'over', reason:'ko'}; rematch restarts the same room.
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -44,8 +44,10 @@ async fn until(rx: &mut mpsc::UnboundedReceiver<Value>, t: &str) -> Value {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn free_room_to_ko() {
+type Tx = mpsc::UnboundedSender<Value>;
+type Rx = mpsc::UnboundedReceiver<Value>;
+
+async fn serve() -> String {
     let near = Arc::new(near_svc::Near::new(
         "http://127.0.0.1:9",
         String::new(),
@@ -59,14 +61,21 @@ async fn free_room_to_ko() {
             .await
             .unwrap()
     });
+    url
+}
 
+fn golden() -> Value {
     let g: Value = serde_json::from_str(include_str!("../../sim/testdata/golden.json")).unwrap();
-    let run = &g["runs"][4];
-    let (a, mut ar) = client(&url).await;
-    let (b, mut br) = client(&url).await;
+    g["runs"][4].clone()
+}
+
+/// Host + join (optionally on-chain matchId, unchecked w/o CONTRACT_ID), both got `start`.
+async fn pair(url: &str, run: &Value, match_id: Value) -> (Tx, Rx, Tx, Rx, Value) {
+    let (a, mut ar) = client(url).await;
+    let (b, mut br) = client(url).await;
     until(&mut ar, "hello").await;
     until(&mut br, "hello").await;
-    a.send(json!({ "t": "host", "name": "A", "dna": run["dna"][0], "stage": run["stage"] }))
+    a.send(json!({ "t": "host", "name": "A", "dna": run["dna"][0], "stage": run["stage"], "pub": true, "matchId": match_id }))
         .unwrap();
     let code = until(&mut ar, "room").await["code"].clone();
     b.send(json!({ "t": "join", "code": code, "name": "B", "dna": run["dna"][1] }))
@@ -77,15 +86,69 @@ async fn free_room_to_ko() {
         (Some(0), Some(1))
     );
     assert!((3..=15).contains(&sa["delay"].as_u64().unwrap()));
+    (a, ar, b, br, code)
+}
 
+async fn play_ko(run: &Value, a: &Tx, ar: &mut Rx, b: &Tx, br: &mut Rx) {
     let tape: Vec<Value> = run["tape"].as_array().unwrap().clone();
     for (i, chunk) in tape.chunks(600).enumerate() {
         let msg = json!({ "t": "tape", "f0": i * 600, "ins": chunk });
         a.send(msg.clone()).unwrap();
         b.send(msg).unwrap();
     }
-    let over = until(&mut ar, "over").await;
+    let over = until(ar, "over").await;
     assert_eq!(over["reason"], "ko");
     assert_eq!(over["winner"], run["winner"]);
-    assert_eq!(until(&mut br, "over").await["winner"], run["winner"]);
+    assert_eq!(until(br, "over").await["winner"], run["winner"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn free_room_to_ko() {
+    let url = serve().await;
+    let run = golden();
+    let (a, mut ar, b, mut br, _) = pair(&url, &run, Value::Null).await;
+    play_ko(&run, &a, &mut ar, &b, &mut br).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rematch_restarts_room() {
+    let url = serve().await;
+    let run = golden();
+    let (a, mut ar, b, mut br, code) = pair(&url, &run, Value::Null).await;
+    let (w, mut wr) = client(&url).await;
+    w.send(json!({ "t": "watch", "code": code })).unwrap();
+    until(&mut wr, "spec").await;
+    w.send(json!({ "t": "rematch" })).unwrap();
+    assert_eq!(
+        until(&mut wr, "error").await["msg"],
+        "Spectators can't rematch"
+    );
+    a.send(json!({ "t": "rematch" })).unwrap();
+    assert_eq!(until(&mut ar, "error").await["msg"], "Match is not over");
+
+    play_ko(&run, &a, &mut ar, &b, &mut br).await;
+    a.send(json!({ "t": "rematch" })).unwrap();
+    until(&mut br, "rematch").await;
+    b.send(json!({ "t": "rematch" })).unwrap();
+    let (sa, sb) = (until(&mut ar, "start").await, until(&mut br, "start").await);
+    assert_eq!(
+        (sa["seat"].as_u64(), sb["seat"].as_u64()),
+        (Some(0), Some(1))
+    );
+    let spec = until(&mut wr, "spec").await;
+    assert_eq!(spec["status"], "live");
+    assert_eq!(spec["frames"].as_array().unwrap().len(), 0);
+    play_ko(&run, &a, &mut ar, &b, &mut br).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rematch_rejected_on_chain_room() {
+    let url = serve().await;
+    let run = golden();
+    let (a, mut ar, ..) = pair(&url, &run, json!(7)).await;
+    a.send(json!({ "t": "rematch" })).unwrap();
+    assert_eq!(
+        until(&mut ar, "error").await["msg"],
+        "On-chain matches need a new match"
+    );
 }
