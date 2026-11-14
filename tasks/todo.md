@@ -46,3 +46,43 @@
 - Demo screenshots of all new routes at 1280x800 + 390x844 (scratchpad).
 - Not tested: real wallet signing, live cross-contract calls, end-to-end tournament on testnet.
 - Known/deferred: relay reconnect mid-match; bettable 0-stake spam drains treasury seed (pre-existing); random_seed bias by block producers (testnet ok).
+
+# Multi-game refactor (plan v2, not started)
+
+## Target layout (grouped per game)
+```
+market/                 # xyz.com vite app: game list, wallet, balance, deposit/withdraw
+games/brawler/
+  client/               # vite app (current src/) -> brawler.xyz.com
+  server/               # rust ws svc: relay + lobby + referee
+  sim/                  # rust crate: sim port + genes, no near deps
+  contract/             # monsters NFT contract (from contracts/monsters)
+packages/platform/      # ts: wallet hooks, platform contract calls, balance hook. used by market + every client
+crates/near-svc/        # rust: near-api wrapper: view, NEP-413 verify, per-match referee tx queue. reused by every game server
+contracts/platform/     # arena generalized
+Cargo.toml              # workspace: games/*/server, games/*/sim, crates/*. contracts excluded (wasm toolchain)
+package.json            # npm workspaces: market, games/*/client, packages/*
+```
+
+## Phases
+- [ ] P1 move: git mv into layout, no logic change. tests + builds green.
+- [ ] P2 platform contract (from arena):
+  - deposit/withdraw/balance_of; stake/bet/entry fee debit balance, payouts credit it
+  - Match/Tournament get `game`; `register_game(game, referee, assets: Option<AccountId>)` owner only
+  - assets contract = current ext_monsters iface (lock -> Dna, unlock, record_result, add_title), per game instead of global
+  - port + extend tests (conservation w/ balances); fresh testnet deploy
+- [ ] P3 rust sim + golden test:
+  - sim crate: port sim.ts/moves.ts/stages.ts; genes from monsters genes.rs (split near derive out, contract re-exports)
+  - scripts/golden.ts dumps per-frame fighter fields for N seeded tapes -> games/brawler/sim/testdata/golden.json
+  - cargo test: bit-exact every frame
+  - traps: JS Math.round (half -> +inf) != f64::round, use (x+0.5).floor(); `|0`/Math.imul/>>> -> i32/u32 wrapping ops; client hash() stays TS-only
+- [ ] P4 rust brawler server (tokio + axum ws): same protocol as server/relay.ts. referee via crates/near-svc. delete server/.
+- [ ] P5 market app + packages/platform; brawler client reads balance from it, deposit links to xyz.com.
+- [ ] P6 deploy: market + brawler client static (vercel), brawler server -> ws.brawler.xyz.com.
+- [ ] comments caveman-trimmed per file as moved.
+
+## Design calls
+- Unified payment = balance in platform contract. one source of truth, no sync/custody. ponytail: no off-chain payment svc until fiat/offchain credits.
+- One platform contract; new game = register_game + rust server (+ optional assets contract w/ same 4 methods).
+- Subdomains: each origin = own wallet connect (near-connect localStorage per origin). accepted cost.
+- Rust over Go: NEAR has no official Go SDK (community, stale); official rust `near-api` crate covers view, signed fn calls, NEP-413 verify. reuse genes.rs. one backend lang w/ contracts.
