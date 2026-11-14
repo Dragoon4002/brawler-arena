@@ -6,9 +6,7 @@
 
 | | |
 |---|---|
-| Game (hosted) | https://13-54-190-122.sslip.io |
-| Shop (skills and monsters market, hosted) | https://market.13-54-190-122.sslip.io |
-| Game server | `wss://52-64-167-184.sslip.io` |
+| Run it | [Run everything locally](#run-everything-locally): game `localhost:3000`, Shop `localhost:3000/shop`, server `localhost:8787` |
 | Demo video | X post: _link added at submission_ |
 | Tracks | `games` (Games With Real Economies), `nfts` (NFTs That Do Something) |
 | Network | NEAR testnet · License: MIT |
@@ -56,17 +54,16 @@ Every row names the place to check it: code, a contract method or a test.
 
 ## Try it: do X, see Y
 
-**A. No wallet, 1 minute (hosted).**
+**A. No wallet, 1 minute.** Start the game and server first ([Run everything locally](#run-everything-locally); bots need `cd agents && npm start`).
 
-1. Open https://13-54-190-122.sslip.io → press **Practice vs bot** → you fight a bot right away. Keys: WASD, Space jump, J light, K heavy, L block, C dodge.
+1. Open `http://localhost:3000` → press **Practice vs bot** → you fight a bot right away. Keys: WASD, Space jump, J light, K heavy, L block, C dodge.
 2. Press **Play** → create a free room → press **Call bot** → a bot joins with a "bot" chip → **Start fight** → online match through the server referee.
 
-**B. Google login (local, about 5 minutes).** NEAR Auth's shared testnet login accepts only `http://localhost:3000`, so the hosted build ships with Google login off.
+**B. Google login (local, about 5 minutes).** NEAR Auth's shared testnet login accepts only `http://localhost:3000`, so open the game exactly there.
 
 ```sh
 npm install
 # games/brawler/client/.env.local
-#   NEXT_PUBLIC_SERVER_URL=wss://52-64-167-184.sslip.io
 #   FASTAUTH_RELAYER_ID=<funded testnet account>
 #   FASTAUTH_RELAYER_KEY=ed25519:...
 npm run dev -w @xyz/brawler          # http://localhost:3000
@@ -94,7 +91,7 @@ cd market && bun install && bun dev     # :3100
 
 1. **Balance** → deposit 1 NEAR (Google-login users sign locally, with no popup).
 2. **Play** → stake 0.3 NEAR → turn on **Let spectators bet** → **Create**. Your monster shows "Locked on-chain for this match".
-3. A second player joins with the same stake from the hosted game (any testnet wallet) → **Start fight** → fight to a KO → **Victory** → **Claim** → your balance rises by 2× the stake minus a 0.1% fee.
+3. A second player joins with the same stake from a second browser (any testnet wallet, or another Google account) → **Start fight** → fight to a KO → **Victory** → **Claim** → your balance rises by 2× the stake minus a 0.1% fee.
 4. **Account** → **Match history** → **Replay** → the **Fairness check** shows ✓ for the re-run winner and the tape hash against the contract, with an explorer link.
 
 **E. Spectator market.** From another browser: **Lobby** → **Watch** a live staked room → buy "A wins" or "B wins" → after the fight, **Account → Claims** pays out.
