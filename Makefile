@@ -1,6 +1,8 @@
 COMPOSE := docker compose -f infra/compose.yml
 
-.PHONY: dev down logs test wasm e2e
+TF := terraform -chdir=infra/terraform
+
+.PHONY: dev down logs test wasm e2e deploy-infra deploy
 
 dev:
 	$(COMPOSE) up --build -d
@@ -25,3 +27,12 @@ wasm:
 
 e2e: wasm
 	cd contracts/e2e && cargo test -- --nocapture
+
+deploy-infra:
+	$(TF) init
+	$(TF) apply
+
+# extra flags: make deploy ANSIBLE_ARGS="-e @infra/ansible/secrets.yml --ask-vault-pass"
+deploy:
+	ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook infra/ansible/playbook.yml \
+		-i "$$($(TF) output -raw public_ip)," -e domain="$$($(TF) output -raw domain)" $(ANSIBLE_ARGS)
