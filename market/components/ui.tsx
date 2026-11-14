@@ -48,8 +48,8 @@ export function Shell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-40 border-b-3 border-ink bg-sky-0/85 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 sm:flex-nowrap sm:gap-4">
           <Link href="/" className="flex shrink-0 items-center gap-2">
-            <span className="grid size-10 place-items-center rounded-xl border-3 border-ink bg-ember font-display text-2xl text-ink shadow-drop-sm">B</span>
-            <span className="font-display text-xl leading-none sm:text-2xl">Brawler <span className="text-ember">Market</span></span>
+            <span className="grid size-10 place-items-center rounded-xl border-3 border-ink bg-ember font-display text-2xl text-ink shadow-drop-sm">S</span>
+            <span className="font-display text-xl leading-none text-ember sm:text-2xl">Shop</span>
           </Link>
           <nav className="order-last -mx-1 flex w-full min-w-0 gap-1 overflow-x-auto sm:order-none sm:mx-0 sm:ml-4 sm:w-auto">
             {NAV.map(([href, label]) => (

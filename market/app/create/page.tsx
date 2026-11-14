@@ -28,7 +28,7 @@ export default function Create() {
 
   if (!a.account) return <Empty>Connect a wallet to create skills.</Empty>;
   if (!d) return <Loading />;
-  if (!d.creator) return <Empty>Creating is invite-only for now. Ask the Brawler team to approve <b>{a.account}</b> as a creator.</Empty>;
+  if (!d.creator) return <Empty>Creating is invite-only for now. Ask the team to approve <b>{a.account}</b> as a creator.</Empty>;
 
   return (
     <>
