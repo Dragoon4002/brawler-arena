@@ -10,6 +10,7 @@ import { Claims } from './Claims.tsx';
 import { FundsDialog } from './Funds.tsx';
 import { History, Stats, useFights } from './History.tsx';
 import { short } from '@/lib/format.ts';
+import { isGuest, playAsGuest } from './Social.tsx';
 
 export function Account() {
   const { signedAccountId, signIn, signOut, getBalance, loading, network } = useWallet();
@@ -32,6 +33,7 @@ export function Account() {
           {loading ? <p>Checking wallet…</p> : signedAccountId ? (
             <>
               <h2 title={signedAccountId}>{short(signedAccountId)}</h2>
+              {isGuest(signedAccountId) && <p className="sub" style={{ margin: 0 }}>Guest account. Attach Google later on localhost:3000</p>}
               <dl className="kv"><dt>Game balance</dt><dd className="row-ico"><Ico n="coin-stack" />{balance === null ? 'loading…' : `${fmt(balance)} NEAR`} <button type="button" className="link" onClick={() => setFunds(true)}>Deposit / withdraw</button></dd><dt>Wallet</dt><dd className="row-ico"><Ico n="coin" />{bal ? `${bal} NEAR` : 'loading…'}</dd><dt>Monsters</dt><dd className="row-ico"><Ico n="icon-monster" />{monsters().length}</dd></dl>
               {owed !== '0' && <button className="btn" onClick={() => api.withdrawOwed().then(() => setOwed('0'))}><span><Ico n="coin" />Withdraw {fmt(owed)} NEAR from failed payouts</span></button>}
               <button className="btn ghost" onClick={() => signOut()}><span><Ico n="icon-close" />Disconnect</span></button>
@@ -41,6 +43,7 @@ export function Account() {
               <h2>Connect a wallet</h2>
               <p className="sub">Sign in once. Stakes and bets use your game balance.</p>
               <button className="btn" onClick={() => signIn()}><span><Ico n="icon-wallet" />Sign in</span></button>
+              <button className="btn ghost" onClick={playAsGuest}><span>Play as guest</span></button>
             </>
           )}
         </section>

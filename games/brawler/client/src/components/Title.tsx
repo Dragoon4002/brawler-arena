@@ -5,6 +5,7 @@ import { monsters } from '@/lib/store.ts';
 import { Ico, Logo, TitleArt } from '@/components/ui.tsx';
 import { FundsDialog } from '@/components/account/Funds.tsx';
 import { short } from '@/lib/format.ts';
+import { playAsGuest } from '@/components/account/Social.tsx';
 
 function HubBtn({ href, label, icon, badge, active }: { href: string; label: string; icon: string; badge?: number; active?: boolean }) {
   return (
@@ -36,6 +37,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
           <span className="hub-count" title="Total knockouts"><Ico n="ko" /><i>KOs</i>{kos}</span>
           {signedAccountId && <button type="button" className="hub-count" onClick={() => setPop('funds')} title="Unified balance, deposit / withdraw"><Ico n="coin" /><i>Balance</i>{balance === null ? '…' : `${fmt(balance)} NEAR`}</button>}
           <a className="hub-count wallet" href="/account"><Ico n="icon-wallet" />{signedAccountId ? short(signedAccountId) : 'Connect wallet'}</a>
+          {!signedAccountId && <button type="button" className="hub-count" onClick={playAsGuest}>Play as guest</button>}
           {DEMO && <a className="hub-count demo" href="/" target="_self">Demo mode · exit</a>}
         </div>
       </header>
