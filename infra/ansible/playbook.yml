@@ -15,6 +15,7 @@
     monsters_id: "{{ lookup('env', 'MONSTERS_ID') | default('v2.brawler-monsters-5c8e2b.testnet', true) }}"
     referee_id: "{{ lookup('env', 'REFEREE_ID') | default('referee.v2.brawler-platform-5c8e2b.testnet', true) }}"
     referee_key: "{{ lookup('env', 'REFEREE_KEY') }}"
+    merchant_keys: "{{ lookup('env', 'MERCHANT_KEYS') }}"
     deb_arch: "{{ 'arm64' if ansible_facts.architecture == 'aarch64' else 'amd64' }}"
 
   tasks:

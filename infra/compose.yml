@@ -22,6 +22,8 @@ services:
       SERVER_URL: ${AGENTS_SERVER_URL:-ws://brawler-server:8787}
       COMMENTATOR: ${AGENTS_COMMENTATOR:-1}
       BOT_LEVEL: ${AGENTS_BOT_LEVEL:-medium}
+      MERCHANTS: ${MERCHANTS:-smithy.brawler-platform-5c8e2b.testnet,alchemist.brawler-platform-5c8e2b.testnet}
+      MERCHANT_KEYS: ${MERCHANT_KEYS:-}
     depends_on: [brawler-server]
     restart: unless-stopped
 
