@@ -17,11 +17,8 @@
 
 | | |
 |---|---|
-| ![Staked fight in progress](docs/screens/fight.webp) **Staked 1v1 fight**: rollback netcode, server referee | ![Victory screen with claim](docs/screens/victory.webp) **Victory**: claim the pot, settled on-chain |
-| ![Create a staked room](docs/screens/create-staked-room.webp) **Create a room**: stake, visibility, spectator betting | ![Room lobby with both fighters](docs/screens/room-lobby.webp) **Room lobby**: both stakes and monsters locked on-chain |
-| ![Monster NFTs with DNA stats](docs/screens/monsters.webp) **Monsters**: NEP-171 NFTs, stats from on-chain DNA | ![Skill loadout on a monster](docs/screens/skills-loadout.webp) **Loadout**: equip NEP-245 skills, live stat preview |
-| ![Shop home](docs/screens/shop-home.webp) **Shop**: top skill, hottest monster, live presale | ![Skill item page](docs/screens/shop-skill-item.webp) **Skill page**: token `skill:8`, price history, supply cap, royalty |
-| ![Economy fast-forward](docs/screens/shop-economy.webp) **Economy**: a week of NPC merchant trading in about a minute | ![Replay with fairness check](docs/screens/replay-fairness-check.webp) **Replay**: re-run the tape, check winner and hash against the contract |
+| ![Staked fight in progress](docs/screens/fight.webp) **Staked 1v1 fight**, settled on-chain | ![Skill item page](docs/screens/shop-skill-item.webp) **NEP-245 skill** `skill:8`: price history, supply cap, royalty |
+| ![Economy fast-forward](docs/screens/shop-economy.webp) **NPC merchants**: a week of trading in about a minute | ![Replay with fairness check](docs/screens/replay-fairness-check.webp) **Fairness check**: winner and tape hash vs the contract |
 
 ## The problem
 
