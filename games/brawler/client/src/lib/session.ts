@@ -55,13 +55,26 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
   let spectate: ((advance: (inputs: number[]) => void, s: GameState) => void) | null = null;
   renderer.setPlayers(players.map((p, i) => (seat < 0 ? p.name : i === seat ? `${p.name} (you)` : p.name)), players.map((p) => lookOf(p.dna)));
 
+  let shown = 0; // first frame whose effects haven't played yet (predicted frames play once, never replayed)
+  function fx(s: GameState) {
+    if (s.frame <= shown) return;
+    shown = s.frame;
+    renderer.onEvents(s.events);
+    playEvents(s, seat);
+  }
   function advance(inputs: number[]) {
     if (state.winner >= 0) return; // match is over; server verdict decides
     step(state, inputs);
     tap?.(inputs, state.winner >= 0);
-    renderer.onEvents(state.events);
-    playEvents(state, seat);
+    fx(state);
     if (state.winner >= 0) hooks.result?.(state.winner, state.fighters.map((_, i) => 3 - state.fighters[1 - i].stocks), seat);
+  }
+  // Confirmed state + predicted frames up to the local head. ~1 µs per step, so resimulating every tick is free.
+  function view(): GameState {
+    if (!net || state.winner >= 0) return state;
+    const v = structuredClone(state);
+    for (const inputs of net.predicted()) { if (v.winner >= 0) break; step(v, inputs); fx(v); }
+    return v;
   }
 
   const DT = 1000 / 60;
@@ -80,7 +93,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
   function frame(now: number) {
     pump(now);
     const b = banner || (state.winner >= 0 ? '' : net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
-    renderer.draw(state, b, link);
+    renderer.draw(view(), b, link);
     raf = requestAnimationFrame(frame);
   }
   raf = requestAnimationFrame(frame);

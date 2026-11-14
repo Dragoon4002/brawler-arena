@@ -200,7 +200,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
               </>
             )}
             {canRematch && !gone && rm.wants && !rm.asked && <p className="note">Opponent wants a rematch — press R</p>}
-            <div className="row" style={{ justifyContent: 'center' }}>
+            <div className="end-actions">
               {canRematch && (
                 <button className="btn" disabled={rm.asked && !gone} onClick={rematch}>
                   <span><Ico n="icon-refresh" />{gone ? 'New room (R)' : rm.asked ? 'Waiting for opponent… (R)' : 'Rematch (R)'}</span>

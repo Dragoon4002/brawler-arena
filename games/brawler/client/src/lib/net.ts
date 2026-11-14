@@ -1,27 +1,31 @@
 // Every packet re-sends all local inputs the peer hasn't acked, so a lossy/unreliable channel never stalls for good.
-// ponytail: still delay-based; upgrade path = rollback (sim state is a plain object, snapshot via structuredClone).
+// Rollback: `frame` is the last frame with both inputs known (confirmed, fed to the referee tape). The local sim runs
+// ahead to `head` predicting the peer repeats its last input; the renderer resimulates frame..head from the confirmed
+// state every tick, so a late packet only causes a small correction instead of a freeze.
 export type Send = (m: object) => void;
+export const MAX_PRED = 10; // frames the local sim may run ahead of confirmed input (~170 ms)
 
 export class Netplay {
   frame = 0;
-  stalled = false; // this tick couldn't advance (peer input late)
+  head = 0;
+  stalled = false; // this tick couldn't advance (prediction window full)
   stallTicks = 0; // consecutive stalled ticks
   desync = false;
   private local = new Map<number, number>();
   private remote = new Map<number, number>();
+  private lastRemote = 0;
   private hashes = new Map<number, number>();
   private remoteHashes = new Map<number, number>();
   private peerNeed = 0; // first local frame the peer hasn't received yet
-  private peerFrame = 0; // peer's sim frame, as of its last packet
-  private peerAdv = 0; // peer's (its frame - our frame as it last saw it)
+  private peerFrame = 0; // peer's head, as of its last packet
+  private peerAdv = 0; // peer's (its head - our head as it last saw it)
   private sinceSkip = 0;
   private send: Send;
   readonly seat: number;
   readonly delay: number;
 
-  // Show 'waiting' only for a real hold-up. 1-3 tick micro-stalls from jitter/frame hitches are invisible in play
-  // but used to flash the banner on every one of them.
-  get lagging() { return this.stallTicks >= 15; } // 250 ms
+  // Only a real hold-up shows: the prediction window ran out and stayed out for 250 ms.
+  get lagging() { return this.stallTicks >= 15; }
 
   constructor(send: Send, seat: number, delay = 4) {
     this.send = send; this.seat = seat; this.delay = delay;
@@ -45,33 +49,11 @@ export class Netplay {
     this.hashes.delete(f); this.remoteHashes.delete(f);
   }
 
-  // Called at 60 Hz. Advances 0..2 frames (2 = catching up after a stall), then sends one input packet.
-  tick(readLocal: () => number, advance: (inputs: number[]) => void, hashNow: () => number) {
-    // Time sync: both sides see the other `latency` frames behind; half the difference is how far we're truly ahead.
-    // The side that's ahead would sit at the edge of the delay budget and stall on every timing wobble, so it
-    // skips at most 1 tick in 10 (invisible) until both sides share the margin. Timing only, sim stays deterministic.
-    const adv = this.frame - this.peerFrame;
-    if ((adv - this.peerAdv) / 2 > 1 && ++this.sinceSkip >= 10) { this.sinceSkip = 0; if (!this.remote.has(this.frame)) this.stallTicks++; }
-    else this.run(readLocal, advance, hashNow);
-    for (const f of this.local.keys()) if (f < this.peerNeed && f < this.frame) this.local.delete(f);
-    let need = this.frame;
-    while (this.remote.has(need)) need++;
-    const b: number[] = [];
-    for (let f = this.peerNeed; this.local.has(f) && b.length < 64; f++) b.push(this.local.get(f)!);
-    this.send({ t: 'in', f: this.peerNeed, b, a: need, fr: this.frame, v: adv });
-  }
-
-  private run(readLocal: () => number, advance: (inputs: number[]) => void, hashNow: () => number) {
-    this.stalled = false;
-    this.stallTicks++; // reset below once a frame advances
-    for (let n = 0; n < 2; n++) {
-      const target = this.frame + this.delay;
-      if (!this.local.has(target)) this.local.set(target, readLocal());
-      const r = this.remote.get(this.frame);
-      if (r === undefined) { this.stalled = n === 0; return; }
-      const l = this.local.get(this.frame)!;
-      advance(this.seat === 0 ? [l, r] : [r, l]);
-      this.stallTicks = 0;
+  private confirmAll(confirm: (inputs: number[]) => void, hashNow: () => number) {
+    while (this.frame < this.head && this.remote.has(this.frame)) {
+      const r = this.remote.get(this.frame)!;
+      confirm(this.pair(this.frame, r));
+      this.lastRemote = r;
       this.remote.delete(this.frame);
       this.frame++;
       if (this.frame % 60 === 0) {
@@ -80,9 +62,39 @@ export class Netplay {
         this.send({ t: 'hash', f: this.frame, h });
         this.check(this.frame);
       }
-      // Second step only when the peer's sim is ahead of ours (its input `delay` frames out already arrived).
-      if (!this.remote.has(this.frame + this.delay)) return;
     }
+  }
+
+  private pair(f: number, r: number) { const l = this.local.get(f)!; return this.seat === 0 ? [l, r] : [r, l]; }
+
+  // Inputs for the predicted frames frame..head-1 (peer input known if it already arrived, else its last one).
+  predicted(): number[][] {
+    const out: number[][] = [];
+    let r = this.lastRemote;
+    for (let f = this.frame; f < this.head; f++) { r = this.remote.get(f) ?? r; out.push(this.pair(f, r)); }
+    return out;
+  }
+
+  // Called at 60 Hz: moves head one frame (unless the window is full or time sync skips), confirms every frame whose
+  // peer input arrived, then sends one input packet.
+  tick(readLocal: () => number, confirm: (inputs: number[]) => void, hashNow: () => number) {
+    // Time sync: the side that's ahead would sit at the edge of the window, so it skips at most 1 tick in 10
+    // (invisible) until both share the margin. Timing only, sim stays deterministic.
+    const adv = this.head - this.peerFrame;
+    this.confirmAll(confirm, hashNow);
+    if (this.head - this.frame >= MAX_PRED) { this.stalled = true; this.stallTicks++; }
+    else {
+      this.stalled = false; this.stallTicks = 0;
+      if ((adv - this.peerAdv) / 2 > 1 && ++this.sinceSkip >= 10) this.sinceSkip = 0;
+      else { this.local.set(this.head + this.delay, readLocal()); this.head++; }
+    }
+    this.confirmAll(confirm, hashNow);
+    for (const f of this.local.keys()) if (f < this.peerNeed && f < this.frame) this.local.delete(f);
+    let need = this.frame;
+    while (this.remote.has(need)) need++;
+    const b: number[] = [];
+    for (let f = this.peerNeed; this.local.has(f) && b.length < 64; f++) b.push(this.local.get(f)!);
+    this.send({ t: 'in', f: this.peerNeed, b, a: need, fr: this.head, v: adv });
   }
 }
 
@@ -118,7 +130,7 @@ export function linkPeer(
       if (sent < 10) { sent++; return dc!.send(JSON.stringify({ t: 'p', s: performance.now() })); }
       clearInterval(iv);
       const rtt = Math.max(0, ...pongs);
-      const delay = Math.min(15, Math.max(4, Math.ceil(rtt / 2 / FRAME_MS) + 3));
+      const delay = Math.min(8, Math.max(2, Math.ceil(rtt / 2 / FRAME_MS) + 1));
       rsend({ t: 'go', p2p: true, delay });
       finish(true, delay);
     }, 50);
