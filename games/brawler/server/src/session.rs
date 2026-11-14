@@ -444,7 +444,7 @@ impl Session {
             c.send(&json!({
                 "t": "resume", "code": r.code, "seat": 1 - i, "stage": r.stage.name(), "matchId": r.match_id,
                 "bettable": r.bettable, "frames": tape,
-                "players": crate::protocol::players(&r),
+                "players": crate::protocol::players(r),
             }));
         }
     }
