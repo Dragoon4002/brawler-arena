@@ -154,7 +154,7 @@ Each monster is a NEP-171/177/181 NFT that does more than hold an image:
 | Double-rent | Rejected | `no_double_rent` |
 | Old holder withdraws the vault after selling | Withdraw checks the current owner | `old_holder_cannot_withdraw_after_transfer` |
 | Seller drains the vault while the buyer is paying for it | Vault is frozen while listed; a buy only works while listed | `listed_vault_is_frozen` |
-| Seller front-runs a buy: delist → withdraw → relist at the same price | `buy(token_id, min_vault)`: the buyer's floor on the vault balance, like slippage protection; the UI fills it from `vault_of` | `buyer_floor_blocks_delist_drain_relist` |
+| Seller front-runs a buy: delist → withdraw → relist at the same price | `buy(token_id, min_vault)`: the buyer's floor on the vault balance, like slippage protection; the UI fills it from `vault_of` at click time (it should use the balance the buyer was shown; not fixed yet) | `buyer_floor_blocks_delist_drain_relist` |
 | Spam 1-yocto deposits to push real entries out of the ledger | Minimum deposit 0.01 NEAR | `dust_deposit_rejected` |
 | A payout lands mid-sale and the seller keeps it | Deposits during the listing stay in the vault and go to the buyer | `vault_moves_with_sale_and_deposit_mid_sale_goes_to_buyer` |
 | Withdraw more than the vault holds | Rejected | `cannot_overdraw_vault` |
@@ -164,10 +164,11 @@ Each monster is a NEP-171/177/181 NFT that does more than hold an image:
 
 Games track:
 
-- **Investing in a broke merchant** is not built. A broke merchant reopens when sales refill its cash.
+- **A broke merchant reopens on its own** when sales refill its cash; there is no outside investment step.
 - **Merchants are rule-based agents** (`agents/pricing.ts`) on purpose, so their prices are readable and reproducible. No LLM.
 - **The fast-forward is an off-chain simulation** with simulated players, built on the same pricing file. The live merchants trade on testnet.
 - **Drops and wear are simple.** Every on-chain win drops one Common skill unit to the winner's owner, picked at random from Common types with supply left. Every equipped unit burns after 20 fights. There are no drop tables per rarity, and wear is tracked per (monster, skill) pair, so a unit moved to another monster starts fresh.
+- **Known economy holes.** Drops are paid on zero-stake matches too, so two accounts can farm Common units (and use up Common supply). Wear does not travel with a unit, so moving it to another monster before its 20th fight resets it. Planned fix: drop only on staked or tournament matches, and burn a partly worn unit on unequip.
 - **NEP-245 is partial.** Transfers, batch transfers, balance and supply views and events are in; `mt_transfer_call` and approvals are not.
 - **NEAR Intents is mainnet-only**, so on testnet the app shows a live quote with funding disabled.
 
