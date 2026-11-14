@@ -427,3 +427,42 @@ async fn tournament_of_four() -> anyhow::Result<()> {
     assert_eq!(total, 4 * N, "conservation");
     Ok(())
 }
+
+#[tokio::test]
+async fn skills_presale_equip_lock() -> anyhow::Result<()> {
+    let e = setup().await?;
+    let m = e.m.id();
+    let dep = NearToken::from_millinear(100);
+    ok(e.owner.call(m, "add_creator").args_json(json!({"account_id": e.owner.id()})).deposit(Y1).transact().await?);
+    ok(e.owner.call(m, "create_collection").args_json(json!({"name": "Arena Basics", "description": "", "media": ""})).deposit(dep).transact().await?);
+    let skill = |kind: &str, mag: u8| {
+        e.owner.call(m, "create_skill").args_json(json!({"collection": 0, "name": kind, "kind": kind, "mag": mag, "rarity": "Rare", "max_supply": 200, "royalty_bps": 500, "media": ""})).deposit(dep).transact()
+    };
+    assert_eq!(ok(skill("AirJump", 1).await?).json::<u32>()?, 0);
+    let price = N / 20;
+    let pid = ok(e.owner.call(m, "create_presale").args_json(json!({"skill": 0, "price": price.to_string(), "start_ms": 0, "end_ms": null, "cap_total": 200, "per_wallet": 2, "allowlist": null})).deposit(dep).transact().await?).json::<u32>()?;
+    let buy = |qty: u32| e.alice.call(m, "buy_presale").args_json(json!({"id": pid, "qty": qty})).deposit(NearToken::from_near(1)).gas(Gas::from_tgas(50)).transact();
+    let r = clean(buy(2).await?);
+    gas_log("buy_presale", &r, 50);
+    fails(buy(1).await?, "Per-wallet limit reached");
+    assert_eq!(n(&view(&e.m, "owed_of", json!({"account_id": e.owner.id()})).await), 2 * price - 2 * price * 250 / 10_000);
+
+    let am = hatch(&e, &e.alice).await;
+    let equip = |skills: Value| e.alice.call(m, "equip").args_json(json!({"token_id": am[0], "skills": skills})).deposit(Y1).transact();
+    let r = clean(equip(json!([0])).await?);
+    gas_log("equip", &r, 30);
+    assert_eq!(monster(&e, &am[0]).await["skills"], json!([{"id": 0, "kind": "AirJump", "mag": 1}]));
+    assert_eq!(n(&view(&e.m, "mt_balance_of", json!({"account_id": e.alice.id(), "token_id": "skill:0"})).await), 1);
+
+    deposit(&e, &e.alice, 3).await;
+    deposit(&e, &e.bob, 3).await;
+    let bm = hatch(&e, &e.bob).await;
+    let id = clean(create(&e, &e.alice, "brawler", N, false, Some(&am[0])).await).json::<Option<u64>>()?.unwrap();
+    clean(join(&e, &e.bob, id, Some(&bm[0])).await);
+    fails(equip(json!([])).await?, "Monster is busy");
+    clean(result(&e, &e.referee, id, Some(0), [3, 0]).await);
+    clean(equip(json!([])).await?);
+    assert_eq!(monster(&e, &am[0]).await["skills"], json!([]));
+    assert_eq!(n(&view(&e.m, "mt_balance_of", json!({"account_id": e.alice.id(), "token_id": "skill:0"})).await), 2);
+    Ok(())
+}
