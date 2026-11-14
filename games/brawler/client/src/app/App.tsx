@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NearProvider } from 'near-connect-hooks';
+import { NearProvider, NETWORK } from '@xyz/platform';
 import { DEMO } from '../demo.ts';
 import { DemoIndex } from './demo.tsx';
 import { MarketSim } from './sim.tsx';
@@ -7,8 +7,6 @@ import { Title, Play, Collection, Detail, Breed, Account } from './screens.tsx';
 import { Arena } from './arena.tsx';
 import { Lobby, Watch } from './rooms.tsx';
 import { Market, Season, TournamentPage, Tournaments } from './economy.tsx';
-
-export const NETWORK = 'testnet' as const;
 
 function useHash() {
   const [h, setH] = useState(location.hash || '#/');

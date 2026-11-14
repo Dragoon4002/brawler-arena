@@ -15,7 +15,7 @@ const errText = (e: unknown) => ((e as Error)?.message ?? String(e)).slice(0, 16
 
 // Pay the on-chain stake if the room needs it, then go fight.
 // On-chain monsters (NftMonster has `owner`) are locked in the match; local demo-store monsters aren't.
-export const BUSY = 'Monster busy or unavailable. Deposit refunded.';
+export const BUSY = 'Monster busy or unavailable. Stake refunded.';
 export const chainId = (m: Monster) => ('owner' in m ? m.id : undefined);
 
 async function joinRoom(arena: Arena, code: string, mon: Monster, say: (t: string) => void) {
@@ -27,7 +27,7 @@ async function joinRoom(arena: Arena, code: string, mon: Monster, say: (t: strin
     if (!arena.ready) return say('Betting contract not configured on this build.');
     if (!arena.account) { say('Connect your NEAR wallet to join a staked or bettable room.'); return arena.signIn(); }
     if (r.players[0]?.account === arena.account) return say('You are the host of that room.');
-    say(r.stake === '0' ? 'Confirm the join in your wallet…' : `Confirm the ${fmt(r.stake)} NEAR stake in your wallet…`);
+    say(r.stake === '0' ? 'Confirm the join in your wallet…' : `Confirm in your wallet: ${fmt(r.stake)} NEAR stake from your balance…`);
     if ((await arena.joinMatch(r.matchId, r.stake, chainId(mon))) !== true && !DEMO) return say(BUSY); // demo returns null
   }
   prepareFight({ kind: 'join', mon, code: r.code, stage: r.stage, account: arena.account ?? '', matchId: r.matchId });
@@ -284,7 +284,7 @@ export function Watch({ code }: { code: string }) {
     : (shares[0] * BigInt(bps) + shares[1] * BigInt(10000 - bps)) / 10000n; // marked at the current price
   const say = (card: number, text: string) => setMsg({ card, text });
 
-  // Same checks as `buy` in contracts/arena/src/lib.rs, so the wallet only opens for a trade that can land.
+  // mirrors contract `buy` checks so wallet opens only for landable trade
   const trade = async (side: number, amount: string, card: number) => { // card = the one clicked, for its status line
     if (!arena.account) { say(card, 'Connect your wallet, then trade.'); return arena.signIn(); }
     let y: bigint;
@@ -301,7 +301,7 @@ export function Watch({ code }: { code: string }) {
   };
   const label = (l: LotView) => (l.dir === 'long' ? `Backed ${name(l.card)}` : `Short ${name(l.card)}`);
   const claim = async () => {
-    try { say(-1, 'Claiming…'); await arena.claim(matchId!); say(-1, 'Sent to your wallet.'); setTick((t) => t + 1); } catch (e) { say(-1, errText(e)); }
+    try { say(-1, 'Claiming…'); await arena.claim(matchId!); say(-1, 'Added to your balance.'); setTick((t) => t + 1); } catch (e) { say(-1, errText(e)); }
   };
 
   const note = !spec ? null : !spec.bettable ? 'Betting is off for this fight.' : mine ? 'You are fighting in this match, so its market is hidden from you.'

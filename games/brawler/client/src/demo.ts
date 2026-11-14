@@ -8,6 +8,7 @@ import { Market, ONE } from './market.ts';
 
 export const DEMO = new URLSearchParams(location.search).has('demo');
 export const DEMO_ACCOUNT = 'demo-player.testnet';
+export const DEMO_BALANCE = (25n * 10n ** 24n).toString(); // 25 NEAR
 const NEAR = (n: number) => (BigInt(Math.round(n * 1000)) * 10n ** 21n).toString();
 const mon = (seed: number) => ({ name: nameFor(seed), dna: randomDna(seed), account: `${nameFor(seed).toLowerCase()}.testnet` });
 
@@ -20,7 +21,7 @@ export const DEMO_ROOMS = [
 
 // amm = pool's [A, B] shares; fighter 0's price = b / (a + b).
 const match = (id: number, status: MatchView['status'], amm: [number, number], kos = 1): MatchView => ({
-  id, host: DEMO_ROOMS[0].players[0].account, guest: DEMO_ROOMS[0].players[1].account, stake: NEAR(0.5), bettable: true,
+  id, game: 'brawler', host: DEMO_ROOMS[0].players[0].account, guest: DEMO_ROOMS[0].players[1].account, stake: NEAR(0.5), bettable: true,
   status, winner: status === 'settled' ? 0 : null, kos, amm: [NEAR(amm[0]), NEAR(amm[1])], price_bps: amm[0] + amm[1] ? Math.round((amm[1] / (amm[0] + amm[1])) * 1e4) : 5000,
   collateral: NEAR(Math.max(...amm)), created_ms: Date.now() - 600_000, started_ms: Date.now() - 300_000,
   monsters: [null, null], tournament: null,
@@ -132,10 +133,10 @@ const mm = (id: number, host: string, guest: string, mh: string, mg: string, sta
 const ent = (n: number) => ({ account: OTHERS[n].owner, monster: OTHERS[n].id });
 const me = (): { account: string; monster: string } => ({ account: DEMO_ACCOUNT, monster: mineNow()[0]?.id ?? OTHERS[0].id });
 const TOURNAMENTS: TournamentView[] = [
-  { id: 1, size: 4, entry_fee: NEAR(0.2), pot: NEAR(0.4), bettable: true, status: 'open', entrants: [ent(0), ent(1)], rounds: [[null, null], [null]], champion: null, created_ms: Date.now() - 3 * HOUR },
-  { id: 2, size: 8, entry_fee: NEAR(0.5), pot: NEAR(4), bettable: true, status: 'live', entrants: [me(), ent(1), ent(2), ent(3), ent(4), ent(5), ent(6), ent(7)],
+  { id: 1, game: 'brawler', size: 4, entry_fee: NEAR(0.2), pot: NEAR(0.4), bettable: true, status: 'open', entrants: [ent(0), ent(1)], rounds: [[null, null], [null]], champion: null, created_ms: Date.now() - 3 * HOUR },
+  { id: 2, game: 'brawler', size: 8, entry_fee: NEAR(0.5), pot: NEAR(4), bettable: true, status: 'live', entrants: [me(), ent(1), ent(2), ent(3), ent(4), ent(5), ent(6), ent(7)],
     rounds: [[101, 102, 103, 104], [null, 105], [null]], champion: null, created_ms: Date.now() - 6 * HOUR },
-  { id: 3, size: 4, entry_fee: NEAR(0.1), pot: NEAR(0.4), bettable: false, status: 'done', entrants: [ent(8), ent(9), ent(10), ent(11)],
+  { id: 3, game: 'brawler', size: 4, entry_fee: NEAR(0.1), pot: NEAR(0.4), bettable: false, status: 'done', entrants: [ent(8), ent(9), ent(10), ent(11)],
     rounds: [[201, 202], [203]], champion: OTHERS[8].owner, created_ms: Date.now() - 2 * DAY },
 ];
 {
@@ -158,7 +159,7 @@ export const demoArena = {
   createTournament: async (size: number, feeYocto: string, bettable: boolean) => {
     await sent('tournament created');
     const id = TOURNAMENTS.length + 1;
-    TOURNAMENTS.push({ id, size, entry_fee: feeYocto, pot: '0', bettable, status: 'open', entrants: [], rounds: size === 8 ? [[null, null, null, null], [null, null], [null]] : [[null, null], [null]], champion: null, created_ms: Date.now() });
+    TOURNAMENTS.push({ id, game: 'brawler', size, entry_fee: feeYocto, pot: '0', bettable, status: 'open', entrants: [], rounds: size === 8 ? [[null, null, null, null], [null, null], [null]] : [[null, null], [null]], champion: null, created_ms: Date.now() });
     return id;
   },
   enterTournament: (id: number, monsterId: string, feeYocto: string) => tx(() => {
@@ -169,12 +170,12 @@ export const demoArena = {
     alert('Demo: entered tournament. In the real app your wallet asks you to confirm.');
     return null;
   }),
-  claimTournament: () => sent('prize sent to your wallet'),
+  claimTournament: () => sent('prize added to your balance'),
   cancelTournament: () => sent('tournament cancelled, entry fees refundable'),
   cancelMatch: () => sent('match cancelled, stake refunded'),
   buy: (id: number, side: number, yocto: string, minOut: string, meta?: { card: number; dir: 'long' | 'short' }) => id === 1 ? tx(() => LIVE.buy(DEMO_ACCOUNT, side, BigInt(yocto), BigInt(minOut), Date.now(), meta)) : sent('position opened'),
   getLots: (id: number): Promise<LotView[]> => wait(id !== 1 ? [] : (LIVE.lots.get(DEMO_ACCOUNT) ?? []).map((l) => ({ ...l, shares: l.shares.toString(), cost: l.cost.toString() }))),
-  claim: (id: number) => id === 1 ? tx(() => LIVE.claim(DEMO_ACCOUNT)) : sent('winnings sent to your wallet'),
+  claim: (id: number) => id === 1 ? tx(() => LIVE.claim(DEMO_ACCOUNT)) : sent('winnings added to your balance'),
   expire: () => sent('match released for refund'),
   getMatch: (id: number) => wait(id === 1 ? liveView() : MATCHES.find((m) => m.id === id) ?? match(id, 'live', [5, 5])),
   getPosition: (id: number): Promise<PositionView | null> => wait(id === 1 ? posView() : POS[id] ?? null),

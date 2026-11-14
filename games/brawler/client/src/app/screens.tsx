@@ -6,7 +6,7 @@ import { ArenaBackdrop, Ico, Logo, MonsterCard, Portrait, STAGE_ICON, StageThumb
 import { STAGES, STAGE_IDS, type StageId } from '../stages.ts';
 import { prepareFight } from './arena.tsx';
 import { Claims, OnlineStart } from './rooms.tsx';
-import { toYocto, fmt, useWallet } from '../near.ts';
+import { toYocto, fmt, useWallet, useUnifiedBalance, MARKET_URL } from '../near.ts';
 import { useMonsters, type HistoryEntry, type NftMonster } from '../nft.ts';
 import { Badges, isFree, useAct, useLoad, useMons, when } from './economy.tsx';
 import { getAudio, setAudio } from '../audio.ts';
@@ -48,6 +48,7 @@ function HubDialog({ title, onClose, children }: { title: string; onClose: () =>
 export function Title({ page, children }: { page?: string; children?: React.ReactNode }) {
   const list = useMemo(monsters, []);
   const { signedAccountId } = useWallet();
+  const { balance } = useUnifiedBalance();
   const [i, setI] = useState(0);
   const [stage, setStage] = useState<StageId>('ember');
   const [pop, setPop] = useState<'mon' | 'map' | null>(null);
@@ -62,6 +63,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
         <div className="hub-counters">
           <span className="hub-count" title="Total wins"><Ico n="trophy" /><i>Wins</i>{wins}</span>
           <span className="hub-count" title="Total knockouts"><Ico n="ko" /><i>KOs</i>{kos}</span>
+          {signedAccountId && <a className="hub-count" href={MARKET_URL} title="Unified balance, top up on market"><Ico n="coin" /><i>Balance</i>{balance === null ? '…' : `${fmt(balance)} NEAR`}</a>}
           <a className="hub-count wallet" href="#/account"><Ico n="icon-wallet" />{signedAccountId || 'Connect wallet'}</a>
           {DEMO && <a className="hub-count demo" href="/">Demo mode · exit</a>}
         </div>
@@ -442,6 +444,7 @@ export function Breed() {
 /* ---------- Account ---------- */
 export function Account() {
   const { signedAccountId, signIn, signOut, getBalance, loading, network } = useWallet();
+  const { balance } = useUnifiedBalance();
   const [bal, setBal] = useState<string>('');
   useEffect(() => {
     if (!signedAccountId) return setBal('');
@@ -460,14 +463,14 @@ export function Account() {
           {loading ? <p>Checking wallet…</p> : signedAccountId ? (
             <>
               <h2 style={{ overflowWrap: 'anywhere' }}>{signedAccountId}</h2>
-              <dl className="kv"><dt>Balance</dt><dd className="row-ico"><Ico n="coin" />{bal ? `${bal} NEAR` : 'loading…'}</dd><dt>Monsters</dt><dd className="row-ico"><Ico n="icon-monster" />{monsters().length}</dd></dl>
+              <dl className="kv"><dt>Game balance</dt><dd className="row-ico"><Ico n="coin-stack" />{balance === null ? 'loading…' : `${fmt(balance)} NEAR`} <a href={MARKET_URL}>Deposit / withdraw</a></dd><dt>Wallet</dt><dd className="row-ico"><Ico n="coin" />{bal ? `${bal} NEAR` : 'loading…'}</dd><dt>Monsters</dt><dd className="row-ico"><Ico n="icon-monster" />{monsters().length}</dd></dl>
               {owed !== '0' && <button className="btn" onClick={() => api.withdrawOwed().then(() => setOwed('0'))}><span><Ico n="coin" />Withdraw {fmt(owed)} NEAR from failed payouts</span></button>}
               <button className="btn ghost" onClick={() => signOut()}><span><Ico n="icon-close" />Disconnect</span></button>
             </>
           ) : (
             <>
               <h2>Connect a wallet</h2>
-              <p className="sub">Sign in once. Fights never ask for a signature.</p>
+              <p className="sub">Sign in once. Stakes and bets use your game balance.</p>
               <button className="btn" onClick={() => signIn()}><span><Ico n="icon-wallet" />Connect NEAR wallet</span></button>
             </>
           )}

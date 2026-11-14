@@ -348,7 +348,7 @@ export function TournamentPage({ id }: { id: number }) {
 
       {(canClaim || stale) && (
         <section className="slab row" aria-label="Payouts">
-          {canClaim && <button className="btn big" disabled={act.busy} onClick={() => act.run(() => arena.claimTournament(t.id), t.status === 'done' ? 'Prize sent to your wallet.' : 'Refund sent to your wallet.')}><span><Ico n="icon-claim" />{t.status === 'done' ? 'Claim prize' : 'Claim refund'}</span></button>}
+          {canClaim && <button className="btn big" disabled={act.busy} onClick={() => act.run(() => arena.claimTournament(t.id), t.status === 'done' ? 'Prize added to your balance.' : 'Refund added to your balance.')}><span><Ico n="icon-claim" />{t.status === 'done' ? 'Claim prize' : 'Claim refund'}</span></button>}
           {stale && <button className="btn ghost" disabled={act.busy} onClick={() => act.run(() => arena.cancelTournament(t.id), 'Cancelled. Entrants can claim refunds.')}><span><Ico n="icon-close" />Cancel (not filled in 24 h)</span></button>}
         </section>
       )}
