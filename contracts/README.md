@@ -24,7 +24,7 @@ Init `new(owner_id)`, fresh deploy (no migration from arena v3).
   `add_title(token_id, title)`. Brawler -> monsters contract. No assets -> monster ids rejected.
 
 ## Match flow
-1. Host `create_match(game, stake, bettable, monster_id?)`. Bettable needs stake >= min_bet; house seed = min(seed, stake), returned at settle/void. Monster: lock first (attach >= 100 Tgas), `on_create` opens or re-credits.
+1. Host `create_match(game, stake, bettable, monster_id?)`. Any room can be bettable (free or staked); house seed = config seed, returned at settle/void. Monster: lock first (attach >= 100 Tgas), `on_create` opens or re-credits.
 2. Guest `join_match(match_id, monster_id?)`: debits same stake, Live.
 3. Spectators `buy(match_id, side, amount, min_out)` while Live. A share + B share = 1 NEAR; price A = b / (a + b). No selling.
 4. Referee `report_kos`, then `report_result(match_id, winner | null, kos?, tape_hash?)` (tape_hash = 64-char lowercase sha256 hex, in MatchView). Guest joined but fight never started: referee `unjoin(match_id)` refunds guest, reopens (rejected once bets exist: void instead).

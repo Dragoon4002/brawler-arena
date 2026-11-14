@@ -36,7 +36,7 @@ Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DE
 
 - **Escrow without trust:** stakes and bets live in the platform contract. The game server can only call `report_result` through its referee key; it never holds funds.
 - **Provable fairness:** the sim is deterministic. The referee re-simulates both players' inputs, reports the winner and the tape's SHA-256 on-chain. Anyone can open `/replay/<id>`: the browser re-runs the tape, recomputes the hash and checks both against the contract.
-- **Prediction markets per fight:** each bettable match opens an AMM market seeded by the house treasury, capped at the stake so it can't be drained.
+- **Prediction markets per fight:** each bettable match opens an AMM market seeded by the house treasury, on staked and free rooms alike; the seed comes back at settle.
 - **NFT gameplay assets:** monster stats come from on-chain DNA, and the NFT is locked while it fights, so it can't be sold mid-match.
 - **One balance across games:** the platform registers games with their own referee; Brawler is the first.
 - **Wallet only when money moves:** Practice vs bot and watching need no wallet.

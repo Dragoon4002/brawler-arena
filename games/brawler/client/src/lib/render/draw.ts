@@ -82,19 +82,22 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     cam.z += (z - cam.z) * 0.08;
   }
 
+  // Same colour on the fighter's tag and its HUD card: gold = you, else blue / red by seat.
+  const isYou = (i: number) => NAMES[i].endsWith(' (you)');
+  const colorOf = (i: number) => (isYou(i) ? '#ffd166' : ['#4fc3ff', '#ff6b6b'][i]);
+
   // Floating label over each fighter, constant on-screen size whatever the camera zoom.
   function nameTag(x: number, y: number, i: number) {
-    const you = NAMES[i].endsWith(' (you)'), acc = ACCOUNTS[i];
-    const base = isBot(acc) ? `${NAMES[i]} · bot` : acc ? (acc.length > 22 ? acc.slice(0, 20) + '…' : acc) : NAMES[i].replace(' (you)', '');
-    const text = you ? `You · ${base}` : base;
+    const acc = ACCOUNTS[i];
+    const text = isYou(i) ? 'You' : isBot(acc) ? `${NAMES[i]} · bot` : acc ? (acc.length > 22 ? acc.slice(0, 20) + '…' : acc) : NAMES[i];
     ctx.save();
     ctx.translate(x, y); ctx.scale(1 / cam.z, 1 / cam.z);
     ctx.font = "800 16px Nunito, system-ui"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const w = ctx.measureText(text).width + 20;
-    ctx.fillStyle = 'rgba(12,8,22,0.8)'; ctx.strokeStyle = LOOKS[i].body; ctx.lineWidth = 2.5;
+    const w = ctx.measureText(text).width + 22;
+    ctx.fillStyle = colorOf(i); ctx.strokeStyle = '#0c0816'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.roundRect(-w / 2, -14, w, 28, 14); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-6, 14); ctx.lineTo(6, 14); ctx.lineTo(0, 22); ctx.closePath(); ctx.fillStyle = LOOKS[i].body; ctx.fill();
-    ctx.fillStyle = '#fff3dc'; ctx.fillText(text, 0, 1);
+    ctx.beginPath(); ctx.moveTo(-7, 14); ctx.lineTo(7, 14); ctx.lineTo(0, 23); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#0c0816'; ctx.fillText(text, 0, 1);
     ctx.restore();
   }
 
@@ -172,12 +175,12 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       const cw = 400, ch = ACCOUNTS[i] ? 128 : 104, x = i === 0 ? 24 : W - 24 - cw, y = 18, R = i === 1;
       const hp = f.state === 'dead' ? 0 : Math.max(0, MAX_HP - f.damage), k = hp / MAX_HP;
       hpShown[i] = hp > hpShown[i] ? hp : hpShown[i] + (hp - hpShown[i]) * 0.06;
-      const col = LOOKS[i].body, pad = 20, tx = R ? x + cw - pad : x + pad;
-      ctx.fillStyle = 'rgba(20,14,38,0.86)'; ctx.strokeStyle = '#0c0816'; ctx.lineWidth = 3;
+      const col = colorOf(i), pad = 20, tx = R ? x + cw - pad : x + pad;
+      ctx.fillStyle = 'rgba(20,14,38,0.86)'; ctx.strokeStyle = col; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.roundRect(x, y, cw, ch, 18); ctx.fill(); ctx.stroke();
       ctx.fillStyle = col; ctx.beginPath(); ctx.roundRect(R ? x + cw - 11 : x + 4, y + 12, 7, ch - 24, 3); ctx.fill();
       ctx.textAlign = R ? 'right' : 'left'; ctx.textBaseline = 'alphabetic';
-      ctx.font = "30px 'Lilita One', system-ui"; ctx.fillStyle = '#fff3dc';
+      ctx.font = "30px 'Lilita One', system-ui"; ctx.fillStyle = col;
       ctx.fillText(NAMES[i], tx, y + 40, cw - 140);
       let by = y + 58;
       if (isBot(ACCOUNTS[i])) { // bots show a "bot" chip instead of their account

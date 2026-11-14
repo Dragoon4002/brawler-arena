@@ -33,13 +33,12 @@ export async function joinRoom(arena: Arena, code: string, mon: Monster, say: (t
 export function CreateRoom({ mon }: { mon: Monster }) {
   const arena = useArena();
   const [pub, setPub] = useState(true);
-  const [betOn, setBetOn] = useState(false);
+  const [bettable, setBettable] = useState(false);
   const [view, setView] = useState(true);
   const [stake, setStake] = useState('0');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
-  const bettable = betOn && Number(stake) >= 0.01; // contract: bettable rooms need stake >= min bet
-  const onChain = Number(stake) > 0;
+  const onChain = bettable || Number(stake) > 0;
 
   const create = async () => {
     if (!arena.account) { setMsg(NEED_WALLET); return arena.signIn(); }
@@ -68,14 +67,14 @@ export function CreateRoom({ mon }: { mon: Monster }) {
         <div className="stake-presets" role="group" aria-label="Quick stake">
           {['0', '0.5', '1', '5'].map((v) => <button key={v} type="button" className="chip" aria-pressed={stake === v} onClick={() => setStake(v)}>{v === '0' ? 'Free' : `${v} NEAR`}</button>)}
         </div>
-        <p id="stake-help" className="note">{st ? `Your opponent matches ${stake} NEAR. Winner takes both, minus 0.1%.` : '0 = friendly match, nothing on-chain.'}</p>
+        <p id="stake-help" className="note">{st ? `Your opponent matches ${stake} NEAR. Winner takes both, minus 0.1%.` : bettable ? 'No stake: only spectators bet.' : '0 = friendly match, nothing on-chain.'}</p>
         <fieldset className="seg" aria-label="Visibility">
           <legend>Visibility</legend>
           <label><input type="radio" name="vis" checked={pub} onChange={() => setPub(true)} /><span className="row-ico"><Ico n="icon-room-public" />Public</span><small>Listed in the lobby</small></label>
           <label><input type="radio" name="vis" checked={!pub} onChange={() => setPub(false)} /><span className="row-ico"><Ico n="icon-room-private" />Private</span><small>Join by code or link</small></label>
         </fieldset>
         {!pub && <label className="toggle row"><input type="checkbox" checked={view} onChange={(e) => setView(e.target.checked)} /><span>Let anyone watch<small>Shown in the lobby as watch-only</small></span></label>}
-        <label className="toggle row"><input type="checkbox" checked={bettable} disabled={Number(stake) < 0.01} onChange={(e) => setBetOn(e.target.checked)} /><span>Let spectators bet<small>{Number(stake) < 0.01 ? 'Needs a stake' : 'Opens a prediction market on this fight'}</small></span></label>
+        <label className="toggle row"><input type="checkbox" checked={bettable} onChange={(e) => setBettable(e.target.checked)} /><span>Let spectators bet<small>Opens a prediction market on this fight, with or without a stake</small></span></label>
       </div>
       <aside className="ticket" aria-label="Match summary">
         <h3>Match ticket</h3>

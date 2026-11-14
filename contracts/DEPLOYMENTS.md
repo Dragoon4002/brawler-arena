@@ -9,7 +9,7 @@
 | referee (game "brawler") | [referee.v2.brawler-platform-5c8e2b.testnet](https://testnet.nearblocks.io/address/referee.v2.brawler-platform-5c8e2b.testnet) |
 | monsters (unchanged, `set_arena` -> v2) | [brawler-monsters-5c8e2b.testnet](https://testnet.nearblocks.io/address/brawler-monsters-5c8e2b.testnet) |
 
-Config: fee 10 bps, min_bet 0.01, max_bet 100, seed 0.5 NEAR (bettable rooms seed min(seed, stake)), treasury funded 1.5 NEAR.
+Config: fee 10 bps, min_bet 0.01, max_bet 100, seed 0.5 NEAR (every bettable room seeds the config seed, stake or not), treasury funded 1.5 NEAR.
 Keys: `~/.near-credentials/testnet/<account>.json`.
 
 Deploy txs: create v2 `H2sX5ki3iABGYi9dCxXC25srMLro8te6NL7nX5Mb9vho`, deploy `2jJY3DfukMXcubGGrG1mbcy9oYCo9n11ErLYk3iSLBsU`,
@@ -17,6 +17,8 @@ new `8wQ35R3R6xCvursohayPmjW7EZr3s3x9bV6cdmezhVC8`, create referee `5eGpnQ7VCUDL
 register_game `62F8bvUihZZ4RqrLmcozM7BFMnZdc4aCxMvsHdxbmrte`, set_limits `9jz4zqJzb2CdkGGpWJVujhHMwRViiHbkGcgNXJgvnb7S`,
 set_seed `ip3ubYsPX5A53xBfrJrEyuMydgHTgSqTSw2rsMmgheY`, fund `J2spQ9oVCUun4phZHNtNY2tAZ2yYBuMMsjuW5SoHL9EE`,
 monsters set_arena `AmDFAiztdj7dPFmVcY7sEFY4C8tsCXz9aJEf8NspqWnT`.
+
+Code upgrade 2026-11-14 (bettable free rooms, seed independent of stake): `6AaoAfj2mnNufnmnzjaYiG82turjMEGwtZdiW64JoEei`.
 
 v1 (`brawler-platform-5c8e2b.testnet`, referee `referee.brawler-platform-5c8e2b.testnet`) is superseded; monsters no longer accept its lock/unlock.
 
