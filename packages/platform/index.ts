@@ -1,12 +1,11 @@
-// Shared by market + game clients: wallet, platform contract, unified balance.
 import { useCallback, useEffect, useState } from 'react';
 import { NearProvider, useNearWallet } from 'near-connect-hooks';
 import { nearToYocto, yoctoToNear } from 'near-api-js';
 
 export { NearProvider, useNearWallet };
 export const NETWORK = 'testnet' as const;
-export const PLATFORM_ID: string = import.meta.env?.VITE_PLATFORM_ID ?? 'brawler-arena-v3-ed5da3.testnet'; // ponytail: placeholder until platform redeploy
-export const MARKET_URL: string = import.meta.env?.VITE_MARKET_URL ?? 'https://xyz.com';
+export const PLATFORM_ID: string = process.env.NEXT_PUBLIC_PLATFORM_ID ?? 'brawler-arena-v3-ed5da3.testnet'; // ponytail: placeholder until platform redeploy
+export const MARKET_URL: string = process.env.NEXT_PUBLIC_MARKET_URL ?? 'https://xyz.com';
 export const GAS = '30000000000000';
 
 export const toYocto = (near: string | number) => nearToYocto(String(near) as `${number}`).toString();

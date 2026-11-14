@@ -1,4 +1,4 @@
-# Parses the SVG path subset used by client/src/render/parts.ts into polygons Godot can draw.
+# Parses the SVG path subset used by client/src/lib/render/parts.ts into polygons Godot can draw.
 # Supports M L C Q A Z (absolute) and a (relative arc). Result is cached per string:
 #   [{ "pts": PackedVector2Array, "closed": bool, "ok": bool (triangulates) }]
 # ponytail: arcs ignore x-axis-rotation (always 0 in our parts); add it if a rotated ellipse ever shows up.

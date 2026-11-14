@@ -36,8 +36,8 @@ ConfigView { owner, arena, treasury: U128, breed_fee: U128, market_fee_bps: u32,
 ```
 
 ### Calls
-- `hatch_starters()` payable: once per account, mints 3 gen-0 (random DNA from env::random_seed, same rules as `src/genes.ts randomDna/nameFor`). Deposit covers storage, excess refunded. Panic "Starters already claimed".
-- `breed(a: String, b: String) -> MonsterView` payable: caller owns both, a≠b, neither rented out / locked / on cooldown. Deposit ≥ breed_fee (0.1 NEAR) + storage; fee → treasury. Child gen = max+1, parents set, breeder = caller. Cooldown 1 h on both parents. Port `breed()` from `src/genes.ts` (mulberry32 rng, same normalize).
+- `hatch_starters()` payable: once per account, mints 3 gen-0 (random DNA from env::random_seed, same rules as `src/lib/genes.ts randomDna/nameFor`). Deposit covers storage, excess refunded. Panic "Starters already claimed".
+- `breed(a: String, b: String) -> MonsterView` payable: caller owns both, a≠b, neither rented out / locked / on cooldown. Deposit ≥ breed_fee (0.1 NEAR) + storage; fee → treasury. Child gen = max+1, parents set, breeder = caller. Cooldown 1 h on both parents. Port `breed()` from `src/lib/genes.ts` (mulberry32 rng, same normalize).
 - `list(token_id, price: U128)` / `delist(token_id)`: owner only, not locked / rented.
 - `buy(token_id)` payable == price: seller gets price − market fee (2.5%) − royalty (5% to breeder, only if breeder ≠ seller and gen > 0). Fee → treasury. Transfers token (emit NEP-171 transfer event), clears listing/offer.
 - `offer_rent(token_id, price_per_day: U128, max_days: u32)` / `cancel_rent_offer(token_id)`: owner only.
@@ -83,7 +83,7 @@ TournamentView { id: u64, size: u8, entry_fee: U128, pot: U128, bettable: bool, 
 ```
 
 ## Frontend data layer
-- `src/near.ts`: `useArena()` gains `createMatch(bettable, stakeYocto, monsterId?)`, `joinMatch(id, stakeYocto, monsterId?)`, `listTournaments()`, `getTournament(id)`, `createTournament(size, feeYocto, bettable)`, `enterTournament(id, monsterId, feeYocto)`, `claimTournament(id)`, `cancelTournament(id)`. `MatchView` gains `monsters`, `tournament`. Export `TournamentView`. `MONSTERS_ID` from `VITE_MONSTERS_ID`.
+- `src/near.ts`: `useArena()` gains `createMatch(bettable, stakeYocto, monsterId?)`, `joinMatch(id, stakeYocto, monsterId?)`, `listTournaments()`, `getTournament(id)`, `createTournament(size, feeYocto, bettable)`, `enterTournament(id, monsterId, feeYocto)`, `claimTournament(id)`, `cancelTournament(id)`. `MatchView` gains `monsters`, `tournament`. Export `TournamentView`. `MONSTERS_ID` from `NEXT_PUBLIC_MONSTERS_ID`.
 - NEW `src/nft.ts`: `useMonsters()` returns `{ mine(): Promise<NftMonster[]> /*owned + rented-in*/, get(id), history(id), hatchStarters(), startersClaimed(), breed(a,b), list(id, yocto), delist(id), buy(id, yocto), offerRent(id, perDayYocto, maxDays), cancelRent(id), rent(id, days, totalYocto), listings(), rentOffers(), season(), leaderboard(), config() }`. `NftMonster = Monster & { owner, breeder, titles, price?, rentOffer?, rental?, lockedUntil, cooldownUntil }` (Monster from genes.ts; record/dna/gen/parents/born map 1:1; id = token_id).
 - Demo: `demoMonsters` + demo tournament data in `src/demo.ts` style (fake, in-memory, seeded by store.ts localStorage monsters). Non-demo uses contract views/calls via near-connect-hooks like near.ts.
 
@@ -102,5 +102,5 @@ Collection/Detail/Breed switch to `useMonsters()`. Detail: titles, history, owne
 - monsters: arena `lock` by the renter panics "Rental ends before the match" if `until_ms > rental.until_ms`.
 - monsters: a bounced `nft_transfer_call` clears listing, rent offer AND any rental the receiver sold meanwhile (rent stays with the receiver).
 - monsters: `list`/`offer_rent` require exactly 1 yocto (`#[payable]`, function-call keys can't list). `delist`/`cancel_rent_offer` take no deposit. Prices must be > 0; `max_days` 1..=365.
-- genes: `hueMix` now ends with `% 360` in both `src/genes.ts` and `contracts/monsters/src/genes.rs` (was able to return 360). Gene port is bit-exact.
+- genes: `hueMix` now ends with `% 360` in both `src/lib/genes.ts` and `contracts/monsters/src/genes.rs` (was able to return 360). Gene port is bit-exact.
 - arena (review fixes): match monster lock = now+5h (was 3h). `enter_tournament` panics "Entry closed" once tournament > 24 h old and "Attach 150 Tgas" if prepaid gas < 150 Tgas (frontend must attach 150 Tgas). Void/expired bracket match advances a random seat (`random_seed[0] & 1`), not seat 0. New `#[private] on_refund(amount)`: failed bounce refund → treasury.

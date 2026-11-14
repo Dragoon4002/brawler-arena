@@ -1,4 +1,4 @@
-# Port of client/src/render/rig.ts: keyframed poses on a bone rig + cel-shaded vector parts (gen-1 monster-folk).
+# Port of client/src/lib/render/rig.ts: keyframed poses on a bone rig + cel-shaded vector parts (gen-1 monster-folk).
 # Parts are the SVG path strings from parts.ts (via data.json), parsed by SvgPath. Render-only: never touches sim state.
 class_name Rig
 extends RefCounted
@@ -101,8 +101,6 @@ static func pose_for(f: Dictionary, now: int, sim: Sim) -> Dictionary:
 				return _with(p, {"r": (f.t - su) * 0.55}) if f.move == "recovery" else p
 			return lerp_pose(hit, rest, _ease(float(f.t - end) / m.recovery))
 	return rest
-
-# ---------- drawing ----------
 
 static func _down(o: Vector2, a: float, l: float) -> Vector2:
 	return o + Vector2(sin(a) * l, cos(a) * l)
@@ -258,7 +256,6 @@ static func draw(ci: CanvasItem, base: Transform2D, p: Dictionary, look: Diction
 		if not far:
 			g.bone(shoulder, u, func(): g.part(parts.PAULDRON, armor, 2.5))
 
-	# tail: hangs back-and-down, lifts with p.tail, tip curls up
 	var ta: float = -(1.0 + p.tail * 0.5)
 	var ta2 := ta - 0.7
 	g.bone(hip, ta, func(): g.part(LIMB.tail1, skin, 2.2, true))
@@ -269,7 +266,6 @@ static func draw(ci: CanvasItem, base: Transform2D, p: Dictionary, look: Diction
 	leg.call(p.bt, p.bs, true)
 	arm.call(p.bu, p.bl, true)
 
-	# torso
 	g.push(); g.translate((hip + neck) / 2.0); g.rotate(p.t)
 	g.part(parts.TORSO, cloth)
 	g.part(parts.PLATE, armor, 2.2)
@@ -281,7 +277,6 @@ static func draw(ci: CanvasItem, base: Transform2D, p: Dictionary, look: Diction
 	g.part(parts.BUCKLE, metal, 1.6)
 	g.pop()
 
-	# neck + head
 	var ha: float = p.t + p.h
 	g.bone(_down(neck, up, -4), PI - ha, func(): g.part(LIMB.neck, skin, 2.2))
 	var head := _down(neck, PI - ha, 14)

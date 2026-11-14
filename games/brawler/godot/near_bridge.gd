@@ -1,6 +1,6 @@
 # NEAR bridge for the Godot web export hosted at /godot (Godot 4).
 # Add as an Autoload named "Near" (Project Settings > Autoload). Web builds only; the wallet lives in the
-# parent React page (games/brawler/client/src/app/godot.tsx), which signs and sends after the user confirms.
+# parent React page (games/brawler/client/src/app/godot/page.tsx), which signs and sends after the user confirms.
 #
 #   var r = await Near.connect_wallet()          # {ok, data: "alice.testnet" | null}
 #   var r = await Near.sign("hello from godot")  # {ok, data: {account, message, recipient, nonce, publicKey, signature}}

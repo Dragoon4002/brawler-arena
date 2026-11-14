@@ -27,7 +27,6 @@ fn bal(c: &Arena, who: &str) -> u128 {
     c.balance_of(acc(who)).0
 }
 
-/// Deposit `amt` into `who`'s balance.
 fn fund(c: &mut Arena, who: &str, amt: u128) {
     if amt > 0 {
         as_(who, amt);
@@ -257,7 +256,7 @@ fn conserve(winner: Option<u8>) {
         as_(who, 1);
         c.buy(0, side, U128(amt), U128(0));
     }
-    assert!(ledger(&c) < l0); // escrowed
+    assert!(ledger(&c) < l0);
     as_("ref", 0);
     c.report_result(0, winner, None);
     for who in ACTORS {

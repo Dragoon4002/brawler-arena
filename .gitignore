@@ -3,8 +3,10 @@ dist
 .vercel
 /.claude/
 
-# art sources + sliced UI images (hosted externally, see VITE_ASSET_URL)
+# art sources + sliced UI images (hosted externally, see NEXT_PUBLIC_ASSET_URL)
 /assets/
 /games/brawler/client/public/ui/
 .env*
 target/
+.next/
+out/

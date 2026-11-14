@@ -95,7 +95,7 @@ fn as_callback(ok: bool) {
 
 #[test]
 fn gene_vectors_match_ts() {
-    // from `node --experimental-strip-types` against src/genes.ts
+    // from `node --experimental-strip-types` against client/src/lib/genes.ts
     let rand: [(u32, [u16; 11], &str); 5] = [
         (0, [5, 4, 7, 6, 168, 196, 2, 1, 1, 2, 97], "Tormak"),
         (1, [4, 3, 6, 9, 348, 101, 2, 2, 1, 3, 101], "Rhator"),

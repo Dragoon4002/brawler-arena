@@ -1,5 +1,4 @@
-# Brawler Arena — Godot client (v1: local same-keyboard fights + NEAR wallet test buttons).
-# Port of client/src/render/draw.ts + session loop. Sim = sim.gd, art = rig.gd (original gen-1 monster-folk).
+# Port of client/src/lib/render/draw.ts + session loop. Sim = sim.gd, art = rig.gd (original gen-1 monster-folk).
 # Wallet goes through the Near autoload (near_bridge.gd) -> parent page /godot -> user's wallet.
 extends Node2D
 
@@ -31,7 +30,7 @@ var frame := 0
 var cam := Vector2(800, 450)
 var cam_z := 0.8
 var shake := 0.0
-var fx := [] # particles
+var fx := []
 var squash := [0.0, 0.0]
 var hp_shown := [200.0, 200.0]
 var match_id := -1
@@ -53,8 +52,6 @@ func _ready() -> void:
 	if "--demo" in OS.get_cmdline_user_args(): # attract mode: both fighters mash random inputs (also used for headless smoke tests)
 		demo = true
 		_start()
-
-# ---------- loop ----------
 
 func _physics_process(_dt: float) -> void:
 	frame += 1
@@ -102,8 +99,6 @@ func _to_menu() -> void:
 	state = null
 	menu.visible = true
 
-# ---------- fx ----------
-
 func _burst(p: Vector2, n: int, speed: float, c: Color, kind: String, size := 4.0, life := 22) -> void:
 	for i in n:
 		var a := randf() * TAU
@@ -132,8 +127,6 @@ func _on_events(events: Array) -> void:
 			"jump":
 				_burst(p, 5, 2.5, Color(0.86, 0.82, 0.75, 0.8), "dust", 5.0, 14)
 
-# ---------- drawing ----------
-
 func _update_camera(fs: Array) -> void:
 	var b: Dictionary = data.stages[stage_id].cam
 	var x0: float = b.x0
@@ -155,10 +148,9 @@ func _draw() -> void:
 	var fs: Array = state.fighters if state != null else _menu_fighters(st)
 	_update_camera(fs)
 
-	# sky (screen space)
 	draw_set_transform_matrix(Transform2D.IDENTITY)
 	draw_polygon(PackedVector2Array([Vector2(0, 0), Vector2(W, 0), Vector2(W, H), Vector2(0, H)]), PackedColorArray([pal[0], pal[0], pal[1], pal[1]]))
-	for k in 24: # drifting motes
+	for k in 24:
 		var x := fmod(k * 173.0 + frame * (0.2 + k % 3 * 0.1), W)
 		draw_circle(Vector2(x, fmod(k * 97.0, H * 0.7)), 1.5 + k % 3, Color(pal[5], 0.25))
 
@@ -168,10 +160,9 @@ func _draw() -> void:
 	var world := Transform2D(0.0, Vector2(cam_z, cam_z), 0.0, Vector2(W / 2 + sx, H / 2 + sy)) * Transform2D(0.0, -cam)
 	draw_set_transform_matrix(world)
 
-	# stage
 	for s in st.solids:
 		var r := Rect2(s.x0, s.y, s.x1 - s.x0, s.y1 - s.y)
-		draw_rect(Rect2(r.position + Vector2(0, 14), r.size + Vector2(0, 60)), pal[2].darkened(0.35)) # underside
+		draw_rect(Rect2(r.position + Vector2(0, 14), r.size + Vector2(0, 60)), pal[2].darkened(0.35))
 		draw_rect(r, pal[2])
 		draw_rect(Rect2(r.position, Vector2(r.size.x, 14)), pal[3])
 		draw_rect(r, INK, false, 4.0)
@@ -180,7 +171,6 @@ func _draw() -> void:
 		draw_rect(r, pal[4])
 		draw_rect(r, INK, false, 3.0)
 
-	# fighters
 	var r: Array = data.roster
 	for i in fs.size():
 		var f: Dictionary = fs[i]
@@ -195,7 +185,7 @@ func _draw() -> void:
 		Rig.draw(self, base, pose, r[picks[i]].look, parts, f.hitlag > 0 and f.state == "hitstun", alpha)
 		draw_set_transform_matrix(world)
 		var hb = sim.hitbox_of(f) if state != null else null
-		if hb != null: # strike swoosh
+		if hb != null:
 			var c: Vector2 = hb.get_center()
 			var pts := PackedVector2Array()
 			var a0 := -1.4 if f.facing == 1 else PI - 0.9
@@ -204,7 +194,6 @@ func _draw() -> void:
 				pts.append(c + Vector2(cos(a) * hb.size.x / 2, sin(a) * hb.size.y / 2))
 			draw_polyline(pts, Color(1, 1, 1, 0.55), 6.0, true)
 
-	# particles
 	for i in range(fx.size() - 1, -1, -1):
 		var p: Dictionary = fx[i]
 		p.p += p.v
@@ -228,7 +217,6 @@ func _draw() -> void:
 	if state != null:
 		_hud()
 
-# Two idle fighters standing on the stage behind the menu.
 func _menu_fighters(st: Dictionary) -> Array:
 	var fs := []
 	for i in 2:
@@ -263,8 +251,6 @@ func _hud() -> void:
 	if state.winner >= 0:
 		draw_rect(Rect2(0, H / 2 - 40, W, 70), Color(0, 0, 0, 0.5))
 		draw_string(font, Vector2(0, H / 2 + 8), "%s WINS — Enter: rematch · Esc: menu" % r[picks[state.winner]].name, HORIZONTAL_ALIGNMENT_CENTER, W, 28)
-
-# ---------- menu + wallet ----------
 
 func _build_menu() -> void:
 	var layer := CanvasLayer.new()

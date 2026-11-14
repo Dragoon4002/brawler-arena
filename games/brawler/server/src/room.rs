@@ -1,0 +1,177 @@
+use crate::App;
+use crate::protocol::lobby_msg;
+use crate::referee::Referee;
+use crate::session::{Conn, broadcast};
+use brawler_sim::{StageId, genes::Dna};
+use rand::Rng;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
+const CODE_LETTERS: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ";
+const LOBBY_THROTTLE: Duration = Duration::from_millis(500);
+
+pub struct Seat {
+    pub conn: Option<Arc<Conn>>,
+    pub name: String,
+    pub dna: Dna,
+    pub account: String,
+    pub seen: Instant,
+    /// Confirmed inputs mirrored by this player, packed host<<8|guest.
+    pub tape: Vec<i32>,
+}
+
+impl Seat {
+    pub fn new(conn: Arc<Conn>, name: String, dna: Dna, account: String) -> Self {
+        Seat {
+            conn: Some(conn),
+            name,
+            dna,
+            account,
+            seen: Instant::now(),
+            tape: vec![],
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Status {
+    Waiting,
+    Live,
+    Done,
+}
+
+impl Status {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Status::Waiting => "waiting",
+            Status::Live => "live",
+            Status::Done => "done",
+        }
+    }
+}
+
+pub struct Room {
+    /// Codes get reused; uid tells a room apart from a later one with the same code.
+    pub uid: u64,
+    pub code: String,
+    pub public: bool,
+    pub view: bool,
+    pub bettable: bool,
+    pub match_id: Option<u64>,
+    pub stake: String,
+    pub stage: StageId,
+    pub seats: Vec<Seat>,
+    pub spectators: HashMap<u64, Arc<Conn>>,
+    pub status: Status,
+    pub winner: Option<i32>,
+    pub referee: Option<Referee>,
+    pub frames: Vec<[i32; 2]>,
+    pub created: Instant,
+    /// `match` rooms: on-chain seat of 1st arrival (wins if other never shows).
+    pub no_show: Option<i32>,
+}
+
+impl Room {
+    pub fn handle(&self) -> RoomRef {
+        RoomRef {
+            code: self.code.clone(),
+            uid: self.uid,
+        }
+    }
+
+    pub fn seat_of(&self, c: &Conn) -> Option<usize> {
+        self.seats
+            .iter()
+            .position(|s| s.conn.as_ref().is_some_and(|x| x.id == c.id))
+    }
+
+    pub fn opponent(&self, seat: usize) -> Option<&Arc<Conn>> {
+        self.seats.get(1 - seat).and_then(|s| s.conn.as_ref())
+    }
+
+    pub fn players(&self) -> impl Iterator<Item = &Arc<Conn>> {
+        self.seats.iter().filter_map(|s| s.conn.as_ref())
+    }
+}
+
+#[derive(Clone)]
+pub struct RoomRef {
+    pub code: String,
+    pub uid: u64,
+}
+
+impl RoomRef {
+    pub fn get_mut<'a>(&self, rooms: &'a mut HashMap<String, Room>) -> Option<&'a mut Room> {
+        rooms.get_mut(&self.code).filter(|r| r.uid == self.uid)
+    }
+}
+
+#[derive(Default)]
+pub struct Lobby {
+    pub subs: HashMap<u64, Arc<Conn>>,
+    pending: bool,
+}
+
+impl Lobby {
+    pub fn push(&mut self, app: &Arc<App>) {
+        if self.pending {
+            return;
+        }
+        self.pending = true;
+        let app = app.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(LOBBY_THROTTLE).await;
+            let mut st = app.lock();
+            st.lobby.pending = false;
+            broadcast(st.lobby.subs.values(), &lobby_msg(&st.rooms));
+        });
+    }
+}
+
+#[derive(Default)]
+pub struct Shared {
+    pub rooms: HashMap<String, Room>,
+    pub lobby: Lobby,
+    last_uid: u64,
+}
+
+impl Shared {
+    pub fn open_room(&mut self, seat: Seat, configure: impl FnOnce(&mut Room)) -> RoomRef {
+        self.last_uid += 1;
+        let mut r = Room {
+            uid: self.last_uid,
+            code: self.new_code(),
+            public: false,
+            view: false,
+            bettable: false,
+            match_id: None,
+            stake: "0".into(),
+            stage: StageId::Ember,
+            seats: vec![seat],
+            spectators: HashMap::new(),
+            status: Status::Waiting,
+            winner: None,
+            referee: None,
+            frames: vec![],
+            created: Instant::now(),
+            no_show: None,
+        };
+        configure(&mut r);
+        let at = r.handle();
+        self.rooms.insert(r.code.clone(), r);
+        at
+    }
+
+    fn new_code(&self) -> String {
+        let mut rng = rand::rng();
+        loop {
+            let code: String = (0..4)
+                .map(|_| CODE_LETTERS[rng.random_range(0..CODE_LETTERS.len())] as char)
+                .collect();
+            if !self.rooms.contains_key(&code) {
+                return code;
+            }
+        }
+    }
+}

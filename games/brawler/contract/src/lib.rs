@@ -1,6 +1,3 @@
-//! Brawler Arena monsters: NEP-171/177/181 NFTs with on-chain genes, breeding, a P2P market,
-//! rentals (the renter may only fight) and seasons.
-//!
 //! The arena contract (`arena`) locks monsters into matches and writes results (record, history,
 //! season wins, titles). A busy monster (locked or rented out) cannot move.
 //!
@@ -489,7 +486,6 @@ impl Monsters {
         set.iter().skip(from as usize).take(limit.min(MAX_PAGE) as usize).map(|id| self.view(&id)).collect()
     }
 
-    /// Monsters this account is renting right now.
     pub fn rented_by(&self, account_id: AccountId) -> Vec<MonsterView> {
         let now = now_ms();
         let ids = self.rented_by.get(&account_id).cloned().unwrap_or_default();
@@ -658,7 +654,6 @@ impl Monsters {
     fn m_mut(&mut self, id: &TokenId) -> &mut Monster {
         self.monsters.get_mut(id).unwrap_or_else(|| env::panic_str("No such monster"))
     }
-    /// Caller's monster that is neither locked nor rented out.
     fn owned_free(&self, id: &TokenId, who: &AccountId, now: u64) -> Monster {
         require!(self.owner_of(id) == *who, "Not your monster");
         let m = self.get(id);

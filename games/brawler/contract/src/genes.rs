@@ -1,4 +1,4 @@
-//! Exact port of `src/genes.ts` (mulberry32, randomDna, nameFor, breed, normalize).
+//! Exact port of `client/src/lib/genes.ts` (mulberry32, randomDna, nameFor, breed, normalize).
 //! Same u32 seed -> same monster on chain and in the app. Keep the two in lockstep.
 
 use near_sdk::near;

@@ -1,10 +1,9 @@
-// Golden vectors for rust sim port. Run: node --experimental-strip-types scripts/golden.ts
-// Per run: dna, stage, packed tape (host<<8|guest), per-frame FNV over fighter f64 bits.
+// Golden vectors for the rust sim port; rerun after any TS sim change.
 import { writeFileSync } from 'node:fs';
-import { newGame, step, IN, type Fighter, type GameState } from '../games/brawler/client/src/sim/sim.ts';
-import { MOVES } from '../games/brawler/client/src/sim/moves.ts';
-import { randomDna, sanitize, statsOf } from '../games/brawler/client/src/genes.ts';
-import { STAGE_IDS } from '../games/brawler/client/src/stages.ts';
+import { newGame, step, IN, type Fighter, type GameState } from '../games/brawler/client/src/lib/sim/sim.ts';
+import { MOVES } from '../games/brawler/client/src/lib/sim/moves.ts';
+import { randomDna, sanitize, statsOf } from '../games/brawler/client/src/lib/genes.ts';
+import { STAGE_IDS } from '../games/brawler/client/src/lib/stages.ts';
 
 const STATES = ['idle', 'run', 'jumpsquat', 'air', 'land', 'dodge', 'attack', 'hitstun', 'dead'];
 const MOVE_IDS = Object.keys(MOVES);
@@ -32,7 +31,7 @@ function botTape(s: GameState, me: number, rnd: () => number) {
   let b = Math.abs(dx) > 60 ? (dx > 0 ? IN.RIGHT : IN.LEFT) : 0;
   const r = rnd();
   if (Math.abs(dx) < 110 && r < 90) b |= r < 40 ? IN.HEAVY : IN.LIGHT;
-  if (r > 200) b |= rnd() & 255; // noise
+  if (r > 200) b |= rnd() & 255;
   if (o.y < f.y - 60 && r % 7 === 0) b |= IN.JUMP;
   if (r % 13 === 0) b |= IN.UP | (r % 2 ? IN.DOWN : 0);
   if (f.x < 420 || f.x > 1180) b = (b & ~(IN.LEFT | IN.RIGHT)) | (f.x < 800 ? IN.RIGHT : IN.LEFT) | (r % 9 === 0 ? IN.JUMP | IN.HEAVY : 0);

@@ -1,13 +1,11 @@
-// Exports game data from the TS source of truth to godot/data.json, so the Godot client never drifts:
-// moves (frame data), stages (geometry), SVG part paths, and the gen-1 roster (DNA -> stats + resolved colours).
-// Run: node --experimental-strip-types --no-warnings games/brawler/godot/tools/export-data.ts
+// TS is the source of truth; godot/data.json is generated so the Godot client never drifts.
 import { writeFileSync } from 'node:fs';
-import { MOVES } from '../../client/src/sim/moves.ts';
-import { STAGES } from '../../client/src/stages.ts';
-import * as PARTS from '../../client/src/render/parts.ts';
-import { lookOf, nameFor, randomDna, statsOf, archetype } from '../../client/src/genes.ts';
+import { MOVES } from '../../client/src/lib/sim/moves.ts';
+import { STAGES } from '../../client/src/lib/stages.ts';
+import * as PARTS from '../../client/src/lib/render/parts.ts';
+import { lookOf, nameFor, randomDna, statsOf, archetype } from '../../client/src/lib/genes.ts';
 
-// 'hsl(h s% l%)' -> '#rrggbb' (Godot reads hex)
+// Godot reads hex, not hsl().
 const hex = (c: string) => {
   const m = c.match(/hsl\((\d+) (\d+)% (\d+)%\)/);
   if (!m) return c;

@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "next dev",
+    "build": "next build",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings --test src/sim/sim.test.ts src/net.test.ts src/genes.test.ts src/market.test.ts src/nft.test.ts",
+    "test": "node --experimental-strip-types --no-warnings --test src/lib/sim/sim.test.ts src/lib/genes.test.ts src/lib/net.test.ts src/lib/market.test.ts src/lib/nft.test.ts",
     "godot:build": "node --experimental-strip-types --no-warnings ../godot/tools/export-data.ts && mkdir -p public/godot/game && \"${GODOT:-godot}\" --headless --path ../godot --export-release Web"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
     "@xyz/platform": "*",
     "near-api-js": "^7.2.0",
     "near-connect-hooks": "^1.1.6",
+    "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
@@ -22,8 +23,6 @@
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.3.0",
-    "typescript": "^7.0.2",
-    "vite": "^8.3.7"
+    "typescript": "^7.0.2"
   }
 }

@@ -1,11 +1,8 @@
-//! Platform: one NEAR balance per player, shared by every game.
-//! deposit -> balance; stakes, bets, entry fees debit it; payouts/refunds credit it; withdraw sends NEAR out.
 //! Spend calls need 1 yocto: wallet confirm, fn-call keys can't spend.
 //! Games: `register_game(game, referee, assets?)`. Referee settles that game's matches; assets = optional NFT
 //! contract w/ lock/unlock/record_result/add_title (lock first, `#[private]` callback re-credits on fail).
 //! Market: per-match constant-product AMM, A share + B share = 1 NEAR, no selling, winners redeem 1 NEAR/share,
 //! void refunds net bets. House treasury seeds bettable pools, takes fees.
-//! Tournaments: 4|8 entrants, single-elim bracket of zero-stake Live matches, champion claims pot - fee.
 
 use ethnum::U256;
 use near_sdk::json_types::U128;
@@ -16,7 +13,7 @@ use near_sdk::{
 };
 
 const BPS: u128 = 10_000;
-const EXPIRY_NS: u64 = 2 * 60 * 60 * 1_000_000_000; // 2 h
+const EXPIRY_NS: u64 = 2 * 60 * 60 * 1_000_000_000;
 const MAX_LIST: u64 = 50;
 const MAX_RECENT: u32 = 20;
 const MAX_SCAN: usize = 500; // ponytail: game filter scans newest 500; per-game index if games outgrow it
@@ -34,7 +31,7 @@ const TITLE_GAS: Gas = Gas::from_tgas(10);
 const MATCH_LOCK_MS: u64 = 5 * 60 * 60 * 1000; // 2 h open + 2 h live + 1 h buffer
 // ponytail: 72 h = 24 h entry + 3 rounds x 2 h; re-lock per round if brackets get slower
 const TOURNEY_LOCK_MS: u64 = 72 * 60 * 60 * 1000;
-const TOURNEY_CANCEL_NS: u64 = 24 * 60 * 60 * 1_000_000_000; // entry window
+const TOURNEY_CANCEL_NS: u64 = 24 * 60 * 60 * 1_000_000_000;
 
 /// (token id, until_ms). unlock passes both: stale unlock can't free newer lock.
 type Lock = (String, u64);
@@ -87,13 +84,13 @@ pub struct Match {
     bettable: bool,
     status: Status,
     kos: u8,
-    amm: [u128; 2],   // pool A, B shares
-    seed: u128,       // house liquidity
+    amm: [u128; 2],
+    seed: u128,
     collateral: u128, // NEAR backing market (= all A shares = all B shares)
     bet_count: u32,
     created_ns: u64,
     started_ns: u64,
-    claimed: [bool; 2], // by seat
+    claimed: [bool; 2],
     advances: u8,       // tournament: seat that moved on
     monsters: [Option<Lock>; 2],
     tournament: Option<(u64, u8, u8)>, // (id, round, slot)
@@ -121,10 +118,9 @@ pub struct Tournament {
     rounds: Vec<Vec<Option<u64>>>,      // match ids
     champion: Option<AccountId>,
     created_ns: u64,
-    claimed: Vec<bool>, // by entrant
+    claimed: Vec<bool>,
 }
 
-/// Per spectator totals; what settles.
 #[near(serializers = [borsh])]
 #[derive(Clone, Default)]
 pub struct Position {
@@ -235,7 +231,7 @@ fn amm_buy(r: [u128; 2], side: usize, x: u128) -> (u128, [u128; 2]) {
     let o = 1 - side;
     let k = U256::from(r[0]) * U256::from(r[1]);
     let ro = U256::from(r[o] + x);
-    let keep = ((k + ro - 1) / ro).as_u128(); // ceil
+    let keep = ((k + ro - 1) / ro).as_u128();
     let mut n = r;
     n[o] = r[o] + x;
     n[side] = keep;
@@ -248,7 +244,7 @@ impl Arena {
     pub fn new(owner_id: AccountId) -> Self {
         Self {
             owner: owner_id,
-            fee_bps: 10, // 0.1%
+            fee_bps: 10,
             min_bet: NearToken::from_millinear(10).as_yoctonear(),
             max_bet: NearToken::from_near(100).as_yoctonear(),
             seed: NearToken::from_near(5).as_yoctonear(),
@@ -358,7 +354,6 @@ impl Arena {
         false
     }
 
-    /// Host backs out before join; stake re-credited.
     pub fn cancel_match(&mut self, match_id: u64) {
         let m = self.get_mut(match_id);
         require!(env::predecessor_account_id() == m.host, "Only host");
@@ -680,7 +675,6 @@ impl Arena {
         self.seed = seed.0;
     }
 
-    /// Owner tops up treasury (seeds pools).
     #[payable]
     pub fn fund(&mut self) {
         require!(env::predecessor_account_id() == self.owner, "Only owner");
@@ -800,7 +794,6 @@ impl Arena {
         self.tournaments.get_mut(tid as u32).unwrap().rounds[round as usize][slot as usize] = Some(id);
     }
 
-    /// Match ended: unlock monsters, or advance bracket.
     fn after(&mut self, id: u64) {
         let m = self.get_match_internal(id);
         let Some((tid, round, slot)) = m.tournament else {
@@ -889,7 +882,6 @@ fn lock(g: &Game, mon: &str, who: &AccountId, until_ms: u64) -> Promise {
     ext_assets::ext(a).with_static_gas(LOCK_GAS).lock(mon.into(), who.clone(), until_ms)
 }
 
-/// Ids newest first after skipping `from`, capped at MAX_SCAN.
 fn newest(len: u32, from: u64) -> impl Iterator<Item = u64> {
     (0..(len as u64).saturating_sub(from)).rev().take(MAX_SCAN)
 }

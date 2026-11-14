@@ -2,7 +2,7 @@ COMPOSE := docker compose -f infra/compose.yml
 
 .PHONY: dev down logs test wasm e2e
 
-dev: ## backend svcs (brawler ws :8787)
+dev:
 	$(COMPOSE) up --build -d
 	@echo "brawler ws -> ws://localhost:$${BRAWLER_PORT:-8787}"
 
@@ -23,5 +23,5 @@ wasm:
 	cd contracts/platform && cargo near build non-reproducible-wasm
 	cd games/brawler/contract && cargo near build non-reproducible-wasm
 
-e2e: wasm ## sandbox: real wasm + xcc
+e2e: wasm
 	cd contracts/e2e && cargo test -- --nocapture

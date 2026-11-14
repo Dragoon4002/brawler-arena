@@ -1,4 +1,4 @@
-# Port of client/src/sim/sim.ts: deterministic 60 Hz platform-fighter rules, same numbers.
+# Port of client/src/lib/sim/sim.ts: deterministic 60 Hz platform-fighter rules, same numbers.
 # Moves + stages come from data.json (exported from the TS source by tools/export-data.ts).
 # ponytail: not yet verified bit-for-bit against the TS sim. Add a replay-hash parity test before Godot <-> web cross-play.
 class_name Sim
