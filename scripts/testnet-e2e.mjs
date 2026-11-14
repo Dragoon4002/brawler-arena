@@ -8,20 +8,21 @@ import fs from 'node:fs';
 import os from 'node:os';
 
 const env = process.env;
-const P = env.PLATFORM_ID ?? 'v2.brawler-platform-5c8e2b.testnet';
-const M = env.MONSTERS_ID ?? 'brawler-monsters-5c8e2b.testnet';
+const P = env.PLATFORM_ID ?? 'v3.brawler-platform-5c8e2b.testnet';
+const M = env.MONSTERS_ID ?? 'v2.brawler-monsters-5c8e2b.testnet';
 const OWNER = env.OWNER_ID ?? 'brawler-platform-5c8e2b.testnet';
-const REF = env.REFEREE_ID ?? `referee.${P}`;
-const FUNDER = env.FUNDER_ID ?? M;
+const REF = env.REFEREE_ID ?? 'referee.v2.brawler-platform-5c8e2b.testnet';
+const FUNDER = env.FUNDER_ID ?? 'brawler-monsters-5c8e2b.testnet';
 const rpc = new JsonRpcProvider({ url: env.NEAR_RPC ?? 'https://test.rpc.fastnear.com' });
 const CREDS = `${os.homedir()}/.near-credentials/testnet`;
-const local = (id) => new Account(id, rpc, JSON.parse(fs.readFileSync(`${CREDS}/${id}.json`)).private_key);
+const key = (id) => JSON.parse(fs.readFileSync(`${CREDS}/${id}.json`)).private_key;
+const local = (id) => new Account(id, rpc, key(id));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const Y = (n) => nearToYocto(String(n)).toString();
 const TG = (n) => BigInt(n) * 10n ** 12n;
 
 const txs = [];
-async function tx(step, a, contractId, methodName, args = {}, deposit = '0', gas = TG(50)) {
+async function tx(step, a, contractId, methodName, args = {}, deposit = '0', gas = TG(100)) {
   const r = await a.callFunctionRaw({ contractId, methodName, args, deposit, gas });
   const hash = r.transaction.hash;
   const fail = r.receipts_outcome.find((o) => o.outcome.status.Failure);
@@ -34,7 +35,18 @@ async function tx(step, a, contractId, methodName, args = {}, deposit = '0', gas
 const view = (contractId, method, args = {}) => rpc.callFunction({ contractId, method, args, blockQuery: { finality: 'optimistic' } });
 const bal = async (who) => BigInt(await view(P, 'balance_of', { account_id: who.accountId }));
 const tape = (s) => createHash('sha256').update(s).digest('hex');
-const quote = async (id, side, amt) => ((BigInt(await view(P, 'quote_buy', { match_id: id, side, amount: amt })) * 97n) / 100n).toString();
+const UNIT = 10n ** 22n, TICK = UNIT / 10000n;
+// referee attestation, same as brawler-server referee::attestation: ed25519 over sha256(settle_msg), base64
+const attest = (match_id, winner, kos, tape_hash) => {
+  const msg = `brawler-settle|${P}|${match_id}|${winner ?? 'none'}|${kos[0]},${kos[1]}|${tape_hash}`;
+  const signature = Buffer.from(KeyPair.fromString(key(REF)).sign(createHash('sha256').update(msg).digest()).signature).toString('base64');
+  return { match_id, winner, kos, tape_hash, signature };
+};
+const rejects = async (step, p, msg) => {
+  const e = await p.then(() => null, (e) => e);
+  assert.ok(e && String(e.message ?? e).includes(msg), `${step}: expected '${msg}', got ${e?.message ?? 'success'}`);
+  console.log(`${step.padEnd(34)} rejected: ${msg}`);
+};
 
 const funder = local(FUNDER), owner = local(OWNER), ref = local(REF);
 const tag = `e2e${Date.now().toString(36)}`;
@@ -68,23 +80,34 @@ const [a, b, c, d] = await Promise.all(['a', 'b', 'c', 'd'].map((n) => mk(n, n =
 console.log('accounts', [a, b, c, d].map((x) => x.accountId));
 for (const x of [a, b, c, d]) await tx(`deposit ${x.accountId.slice(tag.length, tag.length + 1)}`, x, P, 'deposit', {}, Y(0.12), TG(30));
 
-// staked bettable match, bets both sides, settle with tape hash, claims
+// staked bettable match, order book both sides, winner settles with the referee's attestation (no referee gas)
 const stake = Y(0.05);
 const m1 = await tx('create_match bettable 0.05', a, P, 'create_match', { game: 'brawler', stake, bettable: true, monster_id: null }, '1');
 await tx('join_match', b, P, 'join_match', { match_id: m1, monster_id: null }, '1');
-await tx('buy c side0 0.02', c, P, 'buy', { match_id: m1, side: 0, amount: Y(0.02), min_out: await quote(m1, 0, Y(0.02)) }, '1');
-await tx('buy d side1 0.02', d, P, 'buy', { match_id: m1, side: 1, amount: Y(0.02), min_out: await quote(m1, 1, Y(0.02)) }, '1');
+await rejects('player order', a.callFunction({ contractId: P, methodName: 'place_order', args: { match_id: m1, side: 0, price_bps: 5000, qty: 1 }, deposit: 1n, gas: TG(100) }), 'Players cannot bet');
+const c0 = await bal(c), d0 = await bal(d);
+await tx('order c side0 @60% x5 (rests)', c, P, 'place_order', { match_id: m1, side: 0, price_bps: 6000, qty: 5 }, '1');
+const fill = await tx('order d side1 @50% x3 (fills @40%)', d, P, 'place_order', { match_id: m1, side: 1, price_bps: 5000, qty: 3 }, '1');
+assert.deepEqual([fill.id, fill.filled, fill.cost], [null, 3, (3n * 4000n * TICK).toString()], 'price improvement to taker');
+assert.equal(d0 - (await bal(d)), 3n * 4000n * TICK);
+assert.deepEqual(await view(P, 'get_book', { match_id: m1 }), [[[6000, 2]], []]);
+const [oc] = await view(P, 'get_orders', { match_id: m1, account_id: c.accountId });
+assert.equal(await tx('cancel c rest', c, P, 'cancel_order', { match_id: m1, order_id: oc.id }), (2n * 6000n * TICK).toString());
+assert.equal(c0 - (await bal(c)), 3n * 6000n * TICK);
+assert.equal((await view(P, 'get_fills', { match_id: m1, limit: 5 }))[0].price_bps, 4000);
 const h1 = tape(`${tag} match ${m1}`);
-await tx('report_result w0 + tape_hash', ref, P, 'report_result', { match_id: m1, winner: 0, kos: [3, 1], tape_hash: h1 }, '0', TG(100));
+const s1 = attest(m1, 0, [3, 1], h1);
+await rejects('settle forged', a.callFunction({ contractId: P, methodName: 'settle', args: { ...s1, winner: 1 }, gas: TG(100) }), 'Bad signature');
+const aBefore = await bal(a);
+await tx('settle by winner a (attestation)', a, P, 'settle', s1);
 const mv = await view(P, 'get_match', { match_id: m1 });
 assert.equal(mv.status, 'settled');
 assert.equal(mv.tape_hash, h1);
-const aBefore = await bal(a);
-await tx('claim winner a', a, P, 'claim', { match_id: m1 });
-assert.equal(await bal(a) - aBefore, 2n * BigInt(stake) - (2n * BigInt(stake)) / 1000n);
+assert.equal(await bal(a) - aBefore, 2n * BigInt(stake) - (2n * BigInt(stake)) / 1000n, 'winner credited by settle, no claim');
+await rejects('settle replay', b.callFunction({ contractId: P, methodName: 'settle', args: s1, gas: TG(100) }), 'Match not live');
 const cBefore = await bal(c);
 await tx('claim bettor c', c, P, 'claim', { match_id: m1 });
-assert.ok(await bal(c) > cBefore + BigInt(Y(0.02)), 'winning bettor profits');
+assert.equal(await bal(c) - cBefore, 3n * UNIT - (3n * UNIT) / 1000n, 'winning shares pay UNIT - fee');
 assert.equal(await view(P, 'claimable', { match_id: m1, account_id: d.accountId }), '0');
 
 // unjoin: guest refunded, room reopens, new challenger joins
@@ -97,9 +120,9 @@ assert.equal(v2.status, 'open');
 assert.equal(v2.guest, null);
 assert.equal(await bal(b), bB);
 await tx('join_match c', c, P, 'join_match', { match_id: m2, monster_id: null }, '1');
-await tx('report_result void', ref, P, 'report_result', { match_id: m2, winner: null, kos: null, tape_hash: null }, '0', TG(100));
-await tx('claim void a', a, P, 'claim', { match_id: m2 });
-await tx('claim void c', c, P, 'claim', { match_id: m2 });
+const [a2, c2] = [await bal(a), await bal(c)];
+await tx('report_result void (fallback path)', ref, P, 'report_result', { match_id: m2, winner: null, kos: null, tape_hash: null }, '0', TG(100));
+assert.deepEqual([await bal(a) - a2, await bal(c) - c2], [BigInt(stake), BigInt(stake)], 'void stakes credited');
 
 // monsters: starters, breed, market, rent, failed payout -> withdraw_owed
 const hatch = async (x) => (await tx(`hatch_starters ${x.accountId.slice(tag.length, tag.length + 1)}`, x, M, 'hatch_starters', {}, Y(0.1))).map((m) => m.token_id);
@@ -114,14 +137,14 @@ await tx('offer_rent', b, M, 'offer_rent', { token_id: mb[0], price_per_day: Y(0
 await tx('rent 1 day', c, M, 'rent', { token_id: mb[0], days: 1 }, Y(0.01));
 assert.equal((await view(M, 'get_monster', { token_id: mb[0] })).rental.renter, c.accountId);
 // seller account gone at sale time -> payout parks in owed; recreate it, withdraw
-const e = await mk('e', 0.2);
+const e = await mk('e', 0.4);
 const me = await hatch(e);
 await tx('list (seller e)', e, M, 'list', { token_id: me[0], price: Y(0.05) }, '1');
 await drop(e);
 await tx('buy from deleted seller (payout fails, expected)', c, M, 'buy', { token_id: me[0] }, Y(0.05));
 const owed = BigInt(await view(M, 'owed_of', { account_id: e.accountId }));
 assert.ok(owed > 0n, 'failed payout owed');
-const e2 = await mk('e', 0.1);
+const e2 = await mk('e', 0.2);
 assert.equal(await tx('withdraw_owed', e2, M, 'withdraw_owed', {}), owed.toString());
 
 // 4-player tournament: settle, void decided by KOs, final, champion claims
@@ -132,7 +155,7 @@ for (const [x, mon] of [[a, child.token_id], [b, mb[1]], [c, mc[0]], [d, md[0]]]
 let t = await view(P, 'get_tournament', { id: tid });
 assert.equal(t.status, 'live');
 const [r0, r1] = t.rounds[0];
-await tx('report t-semi1 w1 (b)', ref, P, 'report_result', { match_id: r0, winner: 1, kos: [1, 3], tape_hash: tape(`${tag} ${r0}`) }, '0', TG(100));
+await tx('settle t-semi1 w1 by b', b, P, 'settle', attest(r0, 1, [1, 3], tape(`${tag} ${r0}`)));
 await tx('report t-semi2 void kos[0,2]', ref, P, 'report_result', { match_id: r1, winner: null, kos: [0, 2], tape_hash: null }, '0', TG(100));
 t = await view(P, 'get_tournament', { id: tid });
 const fin = await view(P, 'get_match', { match_id: t.rounds[1][0] });

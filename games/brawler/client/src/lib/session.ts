@@ -6,7 +6,7 @@ import { applySkills, sanitize, sanitizeSkills, statsOf, type Dna, type Skill } 
 import { STAGE_IDS, type StageId } from './stages.ts';
 import { music, playEvents } from './audio.ts';
 import { bot } from './bot.ts';
-import type { SignMatch } from './near.ts';
+import type { Attestation, SignMatch } from './near.ts';
 import { unpack } from './tape.ts';
 
 export interface Player { name: string; dna: Dna; account?: string; skills?: Skill[] }
@@ -15,7 +15,7 @@ export interface Hooks {
   status?: (text: string) => void; // lobby text (room code, connecting…)
   started?: (players: Player[], seat: number) => void;
   result?: (winnerSeat: number, kos: number[], seat: number) => void; // once per finished game; kos[i] = stocks player i took
-  over?: (winner: number | null, reason: string) => void; // server referee verdict (online / spectate)
+  over?: (winner: number | null, reason: string, settle?: Attestation) => void; // server referee verdict (online / spectate)
   room?: (info: { code: string; matchId: number | null; bettable: boolean; seat: number }) => void;
   rematch?: () => void; // opponent asked for a rematch
   left?: () => void; // opponent (or our socket) gone: no rematch in this room
@@ -45,8 +45,7 @@ export interface HostOpts { pub: boolean; view: boolean; bettable: boolean; matc
 const params = new URLSearchParams(location.search);
 const FORCE_RELAY = params.has('relay'); // ?relay -> skip P2P (debug fallback path)
 const WS = location.protocol === 'https:' ? 'wss' : 'ws';
-export const SERVER = params.get('server') ?? process.env.NEXT_PUBLIC_SERVER_URL ??
-  (process.env.NODE_ENV === 'development' ? `${WS}://${location.hostname}:8787` : `${WS}://${location.host}`);
+export const SERVER = params.get('server') ?? process.env.NEXT_PUBLIC_SERVER_URL ?? `${WS}://${location.hostname}:8787`;
 
 function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage: StageId, hooks: Hooks, tap?: (inputs: number[], end: boolean) => void) {
   const renderer = createRenderer(canvas);
@@ -82,6 +81,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
   const DT = 1000 / 60;
   let acc = 0, last = performance.now();
   function pump(now: number) {
+    if (!renderer.ready(stage)) { last = now; return; }
     acc = Math.min(acc + now - last, 250); last = now;
     while (acc >= DT) {
       acc -= DT;
@@ -226,7 +226,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: First, me: Player,
         const until = Date.now() + 30_000; // server forfeits ~30 s after their last message
         const tick = () => game?.setBanner(`Opponent reconnecting… forfeit in ${Math.max(0, Math.ceil((until - Date.now()) / 1000))} s`);
         clearInterval(leftIv); tick(); leftIv = setInterval(tick, 1000);
-      } else if (m.t === 'over') { ended = true; clearInterval(leftIv); hooks.over?.(m.winner, m.reason); if (m.reason !== 'ko') game?.setBanner(verdict(m.winner, m.reason, seat)); }
+      } else if (m.t === 'over') { ended = true; clearInterval(leftIv); hooks.over?.(m.winner, m.reason, m.settle ?? undefined); if (m.reason !== 'ko') game?.setBanner(verdict(m.winner, m.reason, seat)); }
       else if (m.t === 'rematch') hooks.rematch?.();
       else net?.onMessage(m);
     };

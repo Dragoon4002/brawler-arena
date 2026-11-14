@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { archetype, lookOf, STAT_KEYS, type Dna, type Monster, type Skill } from '@/lib/genes.ts';
+import { archetype, STAT_KEYS, type Dna, type Monster, type Skill } from '@/lib/genes.ts';
 import { skillLabel } from '@/components/monsters/text.ts';
-import { drawMonster, idlePose, type Pose } from '@/lib/render/rig.ts';
+import { idlePose, type Pose } from '@/lib/render/rig.ts';
 import { drawHero, hero, heroOf, tintOf } from '@/lib/render/cutout.ts';
 import { isBot } from '@/lib/bot.ts';
 import { drawStageThumb } from '@/lib/render/stage.ts';
@@ -9,8 +9,7 @@ import type { StageId } from '@/lib/stages.ts';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// UI art lives in Vercel Blob (store brawler-arena-ui), not in the repo. Override with NEXT_PUBLIC_ASSET_URL=/ui to use a local public/ui copy.
-const ASSET_URL = process.env.NEXT_PUBLIC_ASSET_URL ?? 'https://oimajowqffhgowbd.public.blob.vercel-storage.com/ui';
+const ASSET_URL = process.env.NEXT_PUBLIC_ASSET_URL ?? '/ui';
 const ASSET_V = 2; // bump after re-uploading art (Blob files are cached for a year)
 export const asset = (name: string) => `${ASSET_URL}/${name}.webp?v=${ASSET_V}`;
 // CSS can't build url() from a variable, so expose the images theme.css uses as --img-<name>.
@@ -41,7 +40,6 @@ export function Portrait({ dna, size = 200, pose, flip = false, className = 'por
     const dpr = devicePixelRatio || 1;
     c.width = size * dpr; c.height = size * dpr;
     ctx.scale(dpr, dpr);
-    const look = lookOf(dna);
     let raf = 0, t = 0;
     const paint = () => {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -50,8 +48,8 @@ export function Portrait({ dna, size = 200, pose, flip = false, className = 'por
       ctx.translate(size / 2, size * 0.86); ctx.scale(k * (flip ? -1 : 1), k);
       ctx.fillStyle = 'rgb(12 8 22 / 0.35)';
       ctx.beginPath(); ctx.ellipse(0, 4, 38, 8, 0, 0, Math.PI * 2); ctx.fill();
-      const h = hero(heroOf(dna)); // vector monster until the hero's parts load
-      if (h) drawHero(ctx, pose ?? idlePose(t), h, false, tintOf(dna)); else drawMonster(ctx, pose ?? idlePose(t), look, false);
+      const h = hero(heroOf(dna));
+      if (h) drawHero(ctx, pose ?? idlePose(t), h, false, tintOf(dna));
       t++;
       if (!h || (!reduceMotion() && !pose)) raf = requestAnimationFrame(paint);
     };
@@ -98,24 +96,19 @@ export function MonsterCard({ m, onClick, selected, href, extra, disabled }: { m
     : <button type="button" className="tile" aria-pressed={selected} disabled={disabled} onClick={onClick}>{body}</button>;
 }
 
-// Title-screen key art: layers loaded as-is from public/title (1-5.png),
-// back -> front with a parallax depth each. Each image keeps its own aspect, cover-fit into the stage.
-// Follows the pointer, drifts when idle, static under reduced motion.
-// n: file in public/title, d: parallax depth (px), z: zoom about the frame centre (1 = fills the frame; 0 = off)
 const TITLE = [
-  { n: '5', d: 0, z: 1 }, // sky
-  { n: '4', d: 6, z: 1.5 }, // far
-  { n: '3', d: 12, z: 1.01 }, // clouds
-  { n: '2', d: 16, z: 1.1 }, // sides
-  { n: '1', d: 34, z: 0.8 }, // warriors
+  { n: '5', d: 0, z: 1 },
+  { n: '4', d: 6, z: 1.5 },
+  { n: '3', d: 12, z: 1.01 },
+  { n: '2', d: 16, z: 1.1 },
+  { n: '1', d: 34, z: 0.8 },
 ] as const;
 const STAGE_W = 1980, STAGE_H = 1280;
 export function TitleArt({ className }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current!, ctx = c.getContext('2d')!;
-    // Each layer draws as soon as its own image has loaded (one slow/broken file never blanks the rest); z: 0 = not loaded.
-    const imgs = TITLE.map((l) => { if (!l.z) return null; const i = new Image(); i.src = `/title/${l.n}.png`; return i; });
+    const imgs = TITLE.map((l) => { if (!l.z) return null; const i = new Image(); i.src = `/title/${l.n}.webp`; return i; });
     const aim = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
     let raf = 0, last = -1e9;
     const draw = () => {
@@ -126,7 +119,7 @@ export function TitleArt({ className }: { className?: string }) {
       ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * (w - STAGE_W * k) / 2, dpr * (h - STAGE_H * k) / 2);
       imgs.forEach((im, i) => {
         if (!im?.complete || !im.naturalWidth) return;
-        const { d, z } = TITLE[i], f = Math.max(STAGE_W / im.naturalWidth, STAGE_H / im.naturalHeight) * z; // keep aspect, cover the stage
+        const { d, z } = TITLE[i], f = Math.max(STAGE_W / im.naturalWidth, STAGE_H / im.naturalHeight) * z;
         const w2 = im.naturalWidth * f, h2 = im.naturalHeight * f;
         ctx.drawImage(im, (STAGE_W - w2) / 2 - cur.x * d, (STAGE_H - h2) / 2 - cur.y * d * 0.5, w2, h2);
       });
@@ -135,7 +128,7 @@ export function TitleArt({ className }: { className?: string }) {
     imgs.forEach((im) => im?.addEventListener('load', () => still && draw()));
     if (still) addEventListener('resize', draw);
     const frame = (t: number) => {
-      const idle = t - last > 3000; // no pointer lately: slow figure-eight drift
+      const idle = t - last > 3000;
       const tx = idle ? Math.sin(t / 3200) * 0.6 : aim.x, ty = idle ? Math.sin(t / 1600) * 0.4 : aim.y;
       cur.x += (tx - cur.x) * 0.06; cur.y += (ty - cur.y) * 0.06;
       draw();

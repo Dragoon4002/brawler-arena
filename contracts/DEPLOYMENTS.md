@@ -1,6 +1,74 @@
 # Testnet deployments
 
-## v2 (current, 2026-11-14)
+## v3 + monsters v2 (current live, 2026-11-15)
+
+| role | account |
+|---|---|
+| platform v3 (signed settle, order book) | [v3.brawler-platform-5c8e2b.testnet](https://testnet.nearblocks.io/address/v3.brawler-platform-5c8e2b.testnet) |
+| monsters + NEP-245 skills | [v2.brawler-monsters-5c8e2b.testnet](https://testnet.nearblocks.io/address/v2.brawler-monsters-5c8e2b.testnet) |
+| referee (unchanged) | [referee.v2.brawler-platform-5c8e2b.testnet](https://testnet.nearblocks.io/address/referee.v2.brawler-platform-5c8e2b.testnet) |
+
+Skills: 12 types seeded (ids 0-11), shop listings for the four "I" skills, Air Jump presale 24h.
+
+| step | tx |
+|---|---|
+| platform v3 create+deploy+`new` | [96LECGG3Fe…](https://testnet.nearblocks.io/txns/96LECGG3FehbdntwcYyk2qNP2DCKZSF1wqv5VpMfjDkL) |
+| `register_game("brawler", …)` | [FqqcKGhd2U…](https://testnet.nearblocks.io/txns/FqqcKGhd2UNJgc1eeWovqDULSF75dpUM5pdD5n1QcjnJ) |
+| monsters v2 create+deploy | [8J7eiGg6ty…](https://testnet.nearblocks.io/txns/8J7eiGg6tyJx7Z5CKH3hG8aVizc5yG5B4GfftZbQovMw) |
+| monsters `set_arena(v3)` | [FRtU3mp7jP…](https://testnet.nearblocks.io/txns/FRtU3mp7jPBiW9S5iBGnDKfu78ZdYp35Nakrtq6ojUVi) |
+
+e2e 2026-11-15 19:28Z (`node scripts/testnet-e2e.mjs`, v3 + monsters v2): all asserts passed. Tx log (tail, from breed on):
+
+| step | tx |
+|---|---|
+| breed | [eA4R1bQq8h…](https://testnet.nearblocks.io/txns/eA4R1bQq8hACTYwiCqQynMMGFoWh3MPC8v3FBXFtHok) |
+| list | [659p3vrQsu…](https://testnet.nearblocks.io/txns/659p3vrQsubsXYtthBY85tiZJF7gNnU9U3oZY2b6fiAe) |
+| buy monster | [CRcyQFuu2d…](https://testnet.nearblocks.io/txns/CRcyQFuu2dq5CypH9ofzQfKGHY2RWB88tt8yKESeU6ri) |
+| offer_rent | [BZGNn8wjo6…](https://testnet.nearblocks.io/txns/BZGNn8wjo6E5YkxxQDgFMie9zQsGmBJas1PQvSKMbzb4) |
+| rent 1 day | [G3DVcS8Txn…](https://testnet.nearblocks.io/txns/G3DVcS8TxnJtZ185b8ZMNUKpg8KUvgYdUyTZkPNcJ2ch) |
+| create e | [Fa8ikv4nyt…](https://testnet.nearblocks.io/txns/Fa8ikv4nytrgukkqxYgUo8GaQR5HG6spPfyHzLgCCeaw) |
+| hatch_starters e | [7RMAwGBsyp…](https://testnet.nearblocks.io/txns/7RMAwGBsypamvWvAkT9VBpdnzRjMW9FMiQ4RoMQLvX3v) |
+| list (seller e) | [2fwRpC4Yvc…](https://testnet.nearblocks.io/txns/2fwRpC4Yvc28ecgnShpJhR5zxWz7xKt8YCWxku7EjCbJ) |
+| delete e.brawler-monsters-5c8e2b.testnet | [7yyHTiu54u…](https://testnet.nearblocks.io/txns/7yyHTiu54uEcZugawqomDUUjgUi7hCXKLPBpBwQsQ1VS) |
+| buy from deleted seller (payout fails, expected) | [JARVEdWswG…](https://testnet.nearblocks.io/txns/JARVEdWswGgUyzXA7fpS7tudoEN8tiRGUUxXw2sQBo7K) |
+| create e | [HQWqm4wJJR…](https://testnet.nearblocks.io/txns/HQWqm4wJJRfsKMnwrBTeAmLuZVS3pmCQSEHHdHdU6KXu) |
+| withdraw_owed | [ESPywuY2aX…](https://testnet.nearblocks.io/txns/ESPywuY2aXzitdJGL2Njk8788QEwSNapDquiZPqX4iSX) |
+| create_tournament 4 | [67XeTcXoZr…](https://testnet.nearblocks.io/txns/67XeTcXoZrMEHsRwipxjYZVuS65bYhqYgdYGAvfh9Cen) |
+| enter_tournament a | [FstYPwSz3f…](https://testnet.nearblocks.io/txns/FstYPwSz3fb3m8v1wdTh1e1LW7Sdp8Pxxy3YWQ8EXhGs) |
+| enter_tournament b | [3uvetALmZL…](https://testnet.nearblocks.io/txns/3uvetALmZLsF8AA7mcpX4MZXqPNG3qoqYSHoDtDD1iBv) |
+| enter_tournament c | [F6xdY5rQCu…](https://testnet.nearblocks.io/txns/F6xdY5rQCuCt2oa3jfasvJq65EvFBuABd786YRYFu6Pj) |
+| enter_tournament d | [J98A9QxyhJ…](https://testnet.nearblocks.io/txns/J98A9QxyhJNb8kDLjTgyTkJi4x2xh7cQSg7VQ2k5QhgH) |
+| settle t-semi1 w1 by b | [6xESq78TBu…](https://testnet.nearblocks.io/txns/6xESq78TBu1rYDHhw6q4GErgsnzfZTadhVXxm5rabeGx) |
+| report t-semi2 void kos[0,2] | [CSM9ZkwkuY…](https://testnet.nearblocks.io/txns/CSM9ZkwkuYQsMVdddpXZU39zpd7j1ziazatVrrJkb4L5) |
+| report final w1 (d) | [5wZMmbcJz5…](https://testnet.nearblocks.io/txns/5wZMmbcJz54Sd3rGiXU7Jsj9V8UQ3SQ9nWraE1zTH8Ss) |
+| claim_tournament | [G1hpsMPyCH…](https://testnet.nearblocks.io/txns/G1hpsMPyCHuCFDnepYtcGkcmSao8FQKMeyQUPoFock8X) |
+| withdraw a 0.1499 | [EgX3fMgztW…](https://testnet.nearblocks.io/txns/EgX3fMgztWQM56GEsnzha6afKfxjcEBGrk7Go5LEVY3d) |
+| withdraw b 0.05 | [4tjV13K23m…](https://testnet.nearblocks.io/txns/4tjV13K23mjm4wzN9yVqoRh5HpUXKhLGNByCJybKTahX) |
+| withdraw c 0.11197 | [DaDztnaH6u…](https://testnet.nearblocks.io/txns/DaDztnaH6u3KnmT1kx1KmTyX8t1WnqUkQZi3qibAutAE) |
+| withdraw d 0.16792 | [Dd6pxjC8eD…](https://testnet.nearblocks.io/txns/Dd6pxjC8eDWvEKGgsPo42r2ftati2jgpheJWcG14usKm) |
+| delete a.brawler-monsters-5c8e2b.testnet | [9UkhgLCB4B…](https://testnet.nearblocks.io/txns/9UkhgLCB4B6mDgE144ddqNPmqJSVfXc6P2JeQ3SFFAk3) |
+| delete b.brawler-monsters-5c8e2b.testnet | [AohZVRvEoS…](https://testnet.nearblocks.io/txns/AohZVRvEoSd7okds4FQXkK5mdhaxGMHgpA7YUKQKmGZL) |
+| delete c.brawler-monsters-5c8e2b.testnet | [EPNwKc3zva…](https://testnet.nearblocks.io/txns/EPNwKc3zvaWC9uFgGvB1u9sEiPHFZoqD2csL38NNb6FQ) |
+| delete d.brawler-monsters-5c8e2b.testnet | [Fb3PehBTce…](https://testnet.nearblocks.io/txns/Fb3PehBTceoUWpYHod2erzw1N8gjfLMSW4vioRw2vKjz) |
+| delete e.brawler-monsters-5c8e2b.testnet | [CfeSqkF97G…](https://testnet.nearblocks.io/txns/CfeSqkF97GJgQ7HXcuumGqdz1Z9cZ8Wyy7eMMSucAif6) |
+
+## v3 deploy notes (pre-deploy)
+
+Gasless `settle` by attestation + order-book market; fresh state, so a new account `v3.brawler-platform-5c8e2b.testnet`.
+Preflight 2026-11-15: wasm 317200 B, needs 3.722 NEAR spendable on `brawler-platform-5c8e2b.testnet` (3.672 to the new account
++ gas), has 0.265 -> short 3.457 NEAR; monsters owner ok. Nothing sent.
+
+Switch steps once funded:
+1. `cd contracts/platform && cargo near build non-reproducible-wasm`
+2. `node scripts/deploy-platform-v3.mjs` (preflight, then one tx create+deploy+`new`, then `wire-platform.mjs`:
+   `register_game("brawler", referee.v2.brawler-platform-5c8e2b.testnet, brawler-monsters-5c8e2b.testnet, <referee public key from ~/.near-credentials>)`
+   + monsters `set_arena(v3)` by the monsters owner). New monsters contract later: `MONSTERS_ID=<id> node scripts/wire-platform.mjs`.
+3. `node scripts/testnet-e2e.mjs` (defaults to v3: order book, settle by winner, forged/replayed settle rejected, fallback report, tournament).
+4. Point defaults at v3: `packages/platform/index.ts` PLATFORM_ID, server/infra `CONTRACT_ID`, README tables. Server keeps
+   `REFEREE_ID`/`REFEREE_KEY` (same key); it logs `referee: gasless attestations` once the contract holds its key.
+   The v2 treasury (≈1.57 NEAR) can be withdrawn by the owner (`withdraw_treasury`) once v2 is retired.
+
+## v2 (superseded, 2026-11-14)
 
 | role | account |
 |---|---|

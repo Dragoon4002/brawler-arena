@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { BRAWLER_URL, change24, fmt, KIND_DESC, KIND_LABEL, near, skillKey, toYocto, useAssets, type Point, type SkillListing } from "@/lib/assets";
+import { BRAWLER_URL, change24, fmt, KIND_DESC, KIND_LABEL, near, skillKey, toYocto, useAssets, type Point, type Presale, type SkillListing } from "@/lib/assets";
+import { MERCHANTS, merchantName, reasoning } from "@/lib/merchants";
 import { act, Btn, Chip, cx, Empty, Field, inputCls, Loading, MonsterArt, Panel, Pct, prices, RARITY_TEXT, SkillArt, Sparkline, STATS, useLoad } from "@/components/ui";
 
 const RANGES = [["24H", 864e5], ["3D", 2592e5], ["All", Infinity]] as const;
@@ -40,15 +41,29 @@ const Stat = ({ k, v, className }: { k: string; v: React.ReactNode; className?: 
   <div className={cx("rounded-2xl border-3 border-ink bg-sky-0/60 px-3 py-2", className)}><p className="text-[11px] font-extrabold uppercase tracking-wider text-muted">{k}</p><p className="font-display text-xl">{v}</p></div>
 );
 
-function Buy({ l, me, onDone }: { l: SkillListing; me: boolean; onDone: () => void }) {
+function MerchantBadge({ l, h, presales }: { l: SkillListing; h: Point[]; presales: Presale[] }) {
+  const [q] = useLoad(() => reasoning(l.seller, l.skill, h, presales), [l.seller, l.skill, l.price_each]);
+  return (
+    <span className="group relative ml-2 inline-block align-middle">
+      <button type="button" data-why className="rounded-md border-2 border-ink bg-teal px-1.5 text-[11px] font-extrabold uppercase leading-5 text-ink">Merchant (NPC)</button>
+      <span role="tooltip" className="pointer-events-none invisible absolute left-0 top-full z-30 mt-2 w-72 rounded-2xl border-3 border-ink bg-panel-2 p-3 text-sm font-bold text-cream opacity-0 shadow-drop transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+        <span className="block font-display text-base">{merchantName(l.seller)} prices by rule</span>
+        {q ? <>{q.why}.{Math.abs(q.ask - near(l.price_each)) / q.ask > 0.03 && <span className="mt-1 block text-muted">Listed at {fmt(l.price_each)}; re-lists on its next 2-min tick (when off by &gt;3%).</span>}</> : "Working it out…"}
+        <span className="mt-1 block text-xs text-muted">Recomputed here from public chain data with the bot&apos;s own rules file.</span>
+      </span>
+    </span>
+  );
+}
+
+function Buy({ l, me, onDone, h, presales }: { l: SkillListing; me: boolean; onDone: () => void; h: Point[]; presales: Presale[] }) {
   const a = useAssets();
   const [q, setQ] = useState(1);
   const max = Number(l.qty);
   return (
     <li className="flex flex-wrap items-center gap-3 rounded-2xl border-3 border-ink bg-panel-2 p-3">
       <span className="min-w-0 flex-1 basis-32">
-        <span className="block truncate font-bold">{me ? "You" : l.seller}</span>
-        <span className="text-sm font-extrabold text-muted">{l.qty} available</span>
+        <span className="block truncate font-bold">{me ? "You" : MERCHANTS.includes(l.seller) ? merchantName(l.seller) : l.seller}</span>
+        <span className="text-sm font-extrabold text-muted">{l.qty} available</span>{MERCHANTS.includes(l.seller) && <MerchantBadge l={l} h={h} presales={presales} />}
       </span>
       <span className="font-display text-xl tabular-nums">{fmt(l.price_each)} Ⓝ</span>
       {me ? <Btn small tone="ghost" onClick={() => act(() => a.cancelSkillListing(l.skill), "Listing cancelled.", onDone)}>Cancel</Btn> : (
@@ -65,7 +80,7 @@ function SkillItem({ id }: { id: number }) {
   const a = useAssets();
   const [d, reload] = useLoad(async () => {
     const [skills, cols, h, ls, mine, ps] = await Promise.all([a.skills(), a.collections(), a.history(skillKey(id)), a.skillListings(id), a.holdings(), a.presales()]);
-    return { s: skills.find((x) => x.id === id), cols, h, ls, held: mine.find((x) => x.skill === id), presale: ps.find((p) => p.skill === id && !p.ended && (!p.end_ms || p.end_ms > Date.now())) };
+    return { s: skills.find((x) => x.id === id), cols, h, ls, ps, held: mine.find((x) => x.skill === id), presale: ps.find((p) => p.skill === id && !p.ended && (!p.end_ms || p.end_ms > Date.now())) };
   }, [id, a.account]);
   const [qty, setQty] = useState("1");
   const [price, setPrice] = useState("");
@@ -94,7 +109,7 @@ function SkillItem({ id }: { id: number }) {
         </div>
         <Panel className="p-4 sm:p-5">
           <h2 className="mb-3 text-2xl">Listings</h2>
-          {ls.length ? <ul className="flex flex-col gap-2.5">{ls.map((l) => <Buy key={l.seller} l={l} me={l.seller === a.account} onDone={reload} />)}</ul> : <Empty>No one is selling right now.</Empty>}
+          {ls.length ? <ul className="flex flex-col gap-2.5">{ls.map((l) => <Buy key={l.seller} l={l} me={l.seller === a.account} onDone={reload} h={h} presales={d.ps} />)}</ul> : <Empty>No one is selling right now.</Empty>}
         </Panel>
       </div>
       <aside className="flex flex-col gap-5">

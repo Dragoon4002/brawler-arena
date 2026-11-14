@@ -1,7 +1,9 @@
 //! Brawler relay + lobby + referee. Port of old TS relay.
 //! - Pairs 2 players by room code, forwards netplay/signaling (players also go P2P).
 //! - Public rooms listed in lobby; spectators get confirmed input tape.
-//! - Players mirror confirmed inputs here; referee replays + reports KOs/winner on-chain. 30 s silent = forfeit.
+//! - Players mirror confirmed inputs here; referee replays, signs the result (gasless). 30 s silent = forfeit.
+//! - On-chain `over` carries `settle` = {match_id, winner, kos, tape_hash, signature}: args for platform `settle`, which
+//!   anyone (the winner's client) submits. Unsettled after SETTLE_FALLBACK_S -> referee report_result (pending.json).
 //!
 //! Protocol: server sends {t:'hello', nonce} (32 B base64). Client first msg one of
 //!   {t:'host', name, dna, stage, pub, view, bettable, matchId|null, stake, account, auth?}
@@ -43,7 +45,10 @@ use near_svc::Near;
 use room::Shared;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::sync::{Arc, Mutex, MutexGuard, atomic::AtomicU64};
+use std::sync::{
+    Arc, Mutex, MutexGuard,
+    atomic::{AtomicBool, AtomicU64, Ordering},
+};
 use std::time::Duration;
 
 const GAME: &str = "brawler";
@@ -55,6 +60,10 @@ pub struct App {
     /// Monsters NFT contract; empty = no on-chain DNA lookups.
     monsters: String,
     conn_ids: AtomicU64,
+    /// SETTLE_FALLBACK_S (default 300): unsettled this long after `over` -> referee posts report_result.
+    settle_fallback: Duration,
+    /// Contract holds our referee key -> results go out as attestations.
+    gasless: AtomicBool,
 }
 
 #[derive(Deserialize)]
@@ -82,6 +91,13 @@ impl App {
             near,
             monsters,
             conn_ids: AtomicU64::new(1),
+            gasless: AtomicBool::new(false),
+            settle_fallback: Duration::from_secs(
+                std::env::var("SETTLE_FALLBACK_S")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(300),
+            ),
         })
     }
 
@@ -109,6 +125,33 @@ impl App {
 }
 
 pub fn router(app: Arc<App>) -> Router {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as u64);
+    for (id, p) in app.history.pending() {
+        let wait = p["due_ms"].as_u64().unwrap_or(0).saturating_sub(now);
+        tokio::spawn(game::fallback(app.clone(), id, Duration::from_millis(wait)));
+    }
+    let a = app.clone();
+    tokio::spawn(async move {
+        let g: Option<Value> = a
+            .near
+            .view(&a.near.contract, "get_game", json!({ "game": GAME }))
+            .await;
+        let ok = a
+            .near
+            .public_key()
+            .is_some_and(|k| g.is_some_and(|g| g["referee_key"] == k.as_str()));
+        a.gasless.store(ok, Ordering::Relaxed);
+        eprintln!(
+            "referee: {}",
+            if ok {
+                "gasless attestations"
+            } else {
+                "direct report_result"
+            }
+        );
+    });
     let ticker = app.clone();
     tokio::spawn(async move {
         let mut iv = tokio::time::interval(Duration::from_secs(1));

@@ -1,9 +1,9 @@
-import { useNearWallet } from 'near-connect-hooks';
+import { useNearWallet } from '@xyz/platform';
 import { sanitize, sanitizeSkills, SKILL_KINDS, type Monster, type Skill, type SkillKind } from './genes.ts';
 import { DEMO, demoMonsters } from './demo.ts';
 
-export const MONSTERS_ID: string = process.env.NEXT_PUBLIC_MONSTERS_ID ?? 'brawler-monsters-5c8e2b.testnet';
-export const MARKET_URL: string = process.env.NEXT_PUBLIC_MARKET_URL ?? 'https://market.65-0-237-185.sslip.io';
+export const MONSTERS_ID: string = process.env.NEXT_PUBLIC_MONSTERS_ID ?? 'v2.brawler-monsters-5c8e2b.testnet';
+export const MARKET_URL: string = process.env.NEXT_PUBLIC_MARKET_URL ?? 'http://localhost:3100';
 const GAS = '30000000000000', GAS_X = '100000000000000';
 const NEAR = (n: number) => (BigInt(Math.round(n * 1000)) * 10n ** 21n).toString();
 

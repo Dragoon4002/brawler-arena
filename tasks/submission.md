@@ -4,7 +4,7 @@
 
 - **Name:** Brawler Arena
 - **Tagline (one line):** Real-time monster fights on NEAR: stake, bet, and verify every result on-chain.
-- **Live:** https://65-0-237-185.sslip.io
+- **Live:** https://13-54-190-122.sslip.io
 - **Repo:** <public GitHub URL>
 - **Video:** <YouTube / X video URL>
 - **Category:** Gaming
@@ -30,7 +30,7 @@ Real-time monster fights where:
 - spectators trade a live prediction market on the fight
 - every result is provably fair: the input tape's hash is on-chain, replay it in your browser and check
 
-Play now, no wallet needed: https://65-0-237-185.sslip.io
+Play now, no wallet needed: https://13-54-190-122.sslip.io
 
 <video>
 

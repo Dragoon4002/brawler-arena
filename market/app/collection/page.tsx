@@ -33,7 +33,7 @@ function PresaleCard({ p, s, onDone }: { p: Presale; s: Skill; onDone: () => voi
         {p.per_wallet && <span className="rounded-full border-2 border-ink bg-panel-2 px-2.5 py-0.5 text-muted">{p.per_wallet} per wallet{me?.bought ? ` · you have ${me.bought}` : ""}</span>}
         {!cap && !p.end_ms && <span className="rounded-full border-2 border-ink bg-panel-2 px-2.5 py-0.5 text-muted">Permanent shop</span>}
       </div>
-      <div className="flex items-end justify-between gap-3">
+      <div className="mt-auto flex items-end justify-between gap-3">
         <div><p className="text-xs font-extrabold uppercase text-muted">Price</p><p className="font-display text-3xl">{fmt(p.price)} Ⓝ</p></div>
         <div className="text-right text-sm font-extrabold">
           {state === "soon" ? <><p className="text-muted">Starts in</p><p className="font-display text-2xl text-gold"><Countdown to={p.start_ms} /></p></>
@@ -89,7 +89,7 @@ export default function CollectionPage() {
         <div className="mt-5 flex flex-wrap gap-5 text-sm font-extrabold">
           <span><span className="block text-muted">Skills</span><span className="font-display text-2xl">{skills.length}</span></span>
           <span><span className="block text-muted">Minted</span><span className="font-display text-2xl">{skills.reduce((x, s) => x + Number(s.minted), 0).toLocaleString()}</span></span>
-          <span><span className="block text-muted">Live presales</span><span className="font-display text-2xl">{ps.filter((p) => !p.ended && p.start_ms <= Date.now()).length}</span></span>
+          <span><span className="block text-muted">Live presales</span><span className="font-display text-2xl">{ps.filter((p) => !p.ended && p.start_ms <= Date.now() && (!p.end_ms || p.end_ms > Date.now())).length}</span></span>
         </div>
       </div>
       <h2 className="mb-4 text-3xl">Presales</h2>

@@ -1,9 +1,14 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
+const root = path.resolve(process.cwd(), ".."); // market imports agents/pricing.ts
+
 export default {
+  basePath: process.env.MARKET_BASE_PATH || "",
   output: "standalone",
+  outputFileTracingRoot: root,
   reactCompiler: true,
   devIndicators: false,
   agentRules: false,
-  turbopack: { rules: { "*.css": { loaders: ["@tailwindcss/turbopack"], as: "*.css" } } },
+  turbopack: { root, rules: { "*.css": { loaders: ["@tailwindcss/turbopack"], as: "*.css" } } },
 } satisfies NextConfig;

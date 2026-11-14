@@ -3,7 +3,8 @@ import type { Monster } from '@/lib/genes.ts';
 import { STAGES, STAGE_IDS, type StageId } from '@/lib/stages.ts';
 import { getAudio, toggleMute } from '@/lib/audio.ts';
 import { DEMO_ROOMS, demoChat } from '@/lib/demo.ts';
-import { useArena, useSignMatch } from '@/lib/near.ts';
+import { useArena, useSignMatch, type Attestation } from '@/lib/near.ts';
+import { errText } from '@/lib/format.ts';
 import { startBotFight, startOnline, type ChatLine, type HostOpts, type Player, type RoomState } from '@/lib/session.ts';
 import { monsters, recordResult } from '@/lib/store.ts';
 import { usePlayable } from '@/hooks/useMons.ts';
@@ -52,9 +53,8 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
   const [live, setLive] = useState(false);
   const [room, setRoom] = useState<{ code: string; matchId: number | null; bettable: boolean; seat: number } | null>(null);
   const [names, setNames] = useState<string[]>([]);
-  const [over, setOver] = useState<{ winner: number | null; reason: string; seat: number } | null>(null);
+  const [over, setOver] = useState<{ winner: number | null; reason: string; seat: number; settle?: Attestation } | null>(null);
   const [claimMsg, setClaimMsg] = useState('');
-  const [settled, setSettled] = useState(false);
   const [muted, setMuted] = useState(getAudio().muted);
   const [rs, setRs] = useState<RoomState | null>(null);
   const [chat, setChat] = useState<ChatLine[]>([]);
@@ -78,8 +78,9 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
         setRs(r); setChat(demoChat(r.seats[0].name, r.seats[1].name));
         return () => bots.current?.stop();
       }
-      setLive(true); setSettled(true);
-      if (demo !== 'fight') setOver({ winner: demo === 'void' ? null : demo === 'victory' ? 0 : 1, reason: demo === 'void' ? 'both left' : 'ko', seat: 0 });
+      setLive(true);
+      const w = demo === 'void' ? null : demo === 'victory' ? 0 : 1;
+      if (demo !== 'fight') setOver({ winner: w, reason: demo === 'void' ? 'both left' : 'ko', seat: 0, settle: { match_id: 99, winner: w, kos: [3, 1], tape_hash: '0'.repeat(64), signature: '' } });
       const players = [asPlayer(s.mon), asPlayer(monsters()[1] ?? s.mon)];
       setNames(players.map((p) => p.name));
       const g = startBotFight(canvas.current!, players, s.stage);
@@ -109,7 +110,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
       roomstate: setRs,
       chat: (l: ChatLine) => setChat((c) => [...c, l].slice(-200)),
       chatlog: setChat,
-      over: (winner: number | null, reason: string) => { forget(); setTimeout(() => setOver({ winner, reason, seat }), reason === 'ko' ? 1000 : 0); },
+      over: (winner: number | null, reason: string, settle?: Attestation) => { forget(); setTimeout(() => setOver({ winner, reason, seat, settle }), reason === 'ko' ? 1000 : 0); },
       result: (winner: number, kos: number[], st: number) => {
         const r = rsRef.current, them = r?.seats[1 - st];
         recordResult(monRef.current.id, winner === st, kos[st], them?.name || 'Online rival', 'online',
@@ -133,19 +134,15 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
     }
     go('/lobby');
   };
-  useEffect(() => { // wait for the referee's on-chain result before offering the claim
-    if (!over || room?.matchId == null) return;
-    const t = setInterval(async () => {
-      const m = await arena.getMatch(room.matchId!).catch(() => null);
-      if (m && (m.status === 'settled' || m.status === 'refund')) { setSettled(true); clearInterval(t); }
-    }, 2000);
-    return () => clearInterval(t);
-  }, [over, room?.matchId]);
-  const claim = async () => {
-    if (room?.matchId == null) return;
-    setClaimMsg('Claiming…');
-    try { await arena.claim(room.matchId); setClaimMsg('Sent to your wallet.'); }
-    catch (e) { setClaimMsg((e as Error).message.slice(0, 120)); }
+  // winner (or anyone on a void) submits the referee's signed result: one tx pays the seats, then back to the lobby
+  const settle = async () => {
+    const id = room?.matchId, a = over?.settle;
+    if (id == null || !a) return;
+    const done = async () => { const m = await arena.getMatch(id).catch(() => null); return m?.status === 'settled' || m?.status === 'refund'; };
+    setClaimMsg('Confirm in your wallet…');
+    if (await done()) return go('/lobby');
+    try { await arena.settle(a); go('/lobby'); }
+    catch (e) { if (await done()) return go('/lobby'); setClaimMsg(errText(e)); }
   };
 
   // Room lobby actions. Demo has no server, so it applies them locally (and Start runs a bot fight).
@@ -213,11 +210,12 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
           <div className="slab waiting" role="status">
             <img className="title-img" src={asset(over.winner === null ? 'title-void' : over.winner === over.seat ? 'title-victory' : 'title-defeat')} alt={over.winner === null ? 'Match void' : over.winner === over.seat ? 'Victory' : 'Defeat'} />
             <p>{over.winner === null ? `No result (${over.reason}). Stakes and bets are refunded.` : <><b>{names[over.winner] ?? 'Winner'}</b> wins {over.reason === 'ko' ? 'by three knockouts' : `by ${over.reason}`}.</>}</p>
-            {room?.matchId != null && s?.kind !== 'match' && (over.winner === over.seat || over.winner === null) && (
+            {room?.matchId != null && (over.winner === over.seat || over.winner === null) && (
               <>
-                {!settled && <p className="note">Posting the result on-chain…</p>}
-                <button className="btn big" disabled={!settled} onClick={claim}><span><Ico n="icon-claim" />{over.winner === null ? 'Claim refund' : 'Claim winnings'}</span></button>
-                {claimMsg && <p className="note">{claimMsg}</p>}
+                {over.settle
+                  ? <button className="btn big" onClick={settle}><span><Ico n="icon-claim" />{over.winner === null ? 'Settle and return to lobby' : 'Claim and return to lobby'}</span></button>
+                  : over.winner !== null && <p className="note">Result posts on-chain automatically within ~5 min; winnings land in your balance.</p>}
+                {claimMsg && <p className="note" role="status">{claimMsg}</p>}
               </>
             )}
             {canRematch && !gone && rm.wants && !rm.asked && <p className="note">Opponent wants a rematch — press R</p>}
@@ -306,7 +304,7 @@ function PracticeFight({ stage, again, change }: { stage: StageId; again: () => 
             <p><b>{names[over]}</b> wins by three knockouts.</p>
             <div className="end-actions">
               <button className="btn" onClick={again}><span><Ico n="icon-refresh" />Play again (R)</span></button>
-              <button className="btn alt" onClick={change}><span><Ico n="icon-map" />Change arena</span></button>
+              <button className="btn alt" onClick={change}><span><Ico n="icon-refresh" />Change arena</span></button>
               <a className="btn alt" href="/"><span><Ico n="icon-back" />Back (Esc)</span></a>
             </div>
           </div>

@@ -1,8 +1,8 @@
 import { randomDna, nameFor, type Skill } from './genes.ts';
-import type { FeedItem, LotView, MatchView, PositionView, TournamentView } from './near.ts';
+import type { Attestation, Book, FillView, Limits, MatchView, OrderView, PositionView, TournamentView } from './near.ts';
 import type { HistoryEntry, MonstersApi, NftMonster, SkillType } from './nft.ts';
 import { breedPair, monsters as storeMonsters } from './store.ts';
-import { Market, ONE } from './market.ts';
+import { Market } from './market.ts';
 
 export const DEMO = new URLSearchParams(location.search).has('demo');
 export const DEMO_ACCOUNT = 'demo-player.testnet';
@@ -22,46 +22,43 @@ export const demoChat = (a: string, b: string) => [
   [a, 0, 'gl hf!'], [b, 1, 'you too. no heavy spam pls'], ['fan-ana.testnet', -1, 'backing the blue one'], [a, 0, 'arena ok?'], [b, 1, 'docks plz'], ['Spectator', -1, 'this is gonna be close'],
 ].map(([from, seat, text], i, l) => ({ from: from as string, seat: seat as number, text: text as string, ts: Date.now() - (l.length - i) * 25_000 }));
 
-// amm = pool's [A, B] shares; fighter 0's price = b / (a + b).
-const match = (id: number, status: MatchView['status'], amm: [number, number], kos = 1): MatchView => ({
+const match = (id: number, status: MatchView['status'], price = 5000, kos = 1): MatchView => ({
   id, game: 'brawler', host: DEMO_ROOMS[0].players[0].account, guest: DEMO_ROOMS[0].players[1].account, stake: NEAR(0.5), bettable: true,
-  status, winner: status === 'settled' ? 0 : null, kos, amm: [NEAR(amm[0]), NEAR(amm[1])], price_bps: amm[0] + amm[1] ? Math.round((amm[1] / (amm[0] + amm[1])) * 1e4) : 5000,
-  collateral: NEAR(Math.max(...amm)), created_ms: Date.now() - 600_000, started_ms: Date.now() - 300_000,
-  monsters: [null, null], tournament: null,
+  status, winner: status === 'settled' ? 0 : null, kos, price_bps: price, collateral: '0', fills: 0,
+  created_ms: Date.now() - 600_000, started_ms: Date.now() - 300_000, monsters: [null, null], tournament: null,
 });
 const MATCHES: MatchView[] = [
-  match(1, 'live', [4.1, 6.2]),
-  match(4, 'settled', [3, 8]), match(5, 'refund', [5, 5]),
-  { ...match(6, 'open', [0, 0], 0), host: DEMO_ACCOUNT },
-  { ...match(7, 'live', [0, 0], 0), started_ms: Date.now() - 3 * 3600_000, host: DEMO_ACCOUNT },
+  match(1, 'live'),
+  match(4, 'settled', 7300), match(5, 'refund'),
+  { ...match(6, 'open', 5000, 0), host: DEMO_ACCOUNT },
+  { ...match(7, 'live', 5000, 0), started_ms: Date.now() - 3 * 3600_000, host: DEMO_ACCOUNT },
 ];
 const wait = <T,>(v: T) => new Promise<T>((r) => setTimeout(() => r(v), 400));
 const sent = (what: string) => { alert(`Demo: ${what}. In the real app your wallet asks you to confirm.`); return wait(null); };
-// Match 1 (room LIVE) is a real market run in the browser with the contract's math: bots trade every few
-// seconds, your Long/Short/Close move the price, and the demo fight's result settles it.
-export const LIVE = new Market(5n * ONE);
+// Match 1 (room LIVE) is a real order book run in the browser with the contract's math: bots quote around a drifting
+// fair price every few seconds, your orders match against them, and the demo fight's result settles it.
+export const LIVE = new Market();
 const BOTS = ['fan-ana.testnet', 'fan-bo.testnet', 'fan-cy.testnet', 'fan-dee.testnet', 'fan-eli.testnet'];
-let lead = 0.3;
+let fair = 5600;
 const botTrade = (t: number) => {
-  lead += (Math.random() - 0.5) * 0.5;
-  const who = BOTS[Math.floor(Math.random() * BOTS.length)];
-  try {
-    LIVE.buy(who, Math.random() < 1 / (1 + Math.exp(-lead * 2)) ? 0 : 1, BigInt(Math.round((0.05 + Math.random() ** 2 * 1.5) * 1000)) * (ONE / 1000n), 0n, t);
-  } catch { /* skipped */ }
+  fair = Math.min(9000, Math.max(1000, fair + Math.round((Math.random() - 0.5) * 500)));
+  const side = Math.random() < 0.5 ? 0 : 1, mine = side ? 10_000 - fair : fair;
+  try { LIVE.place(BOTS[Math.floor(Math.random() * BOTS.length)], side, mine + Math.round((Math.random() - 0.6) * 600), 5 + Math.floor(Math.random() ** 2 * 80), t); } catch { /* skipped */ }
 };
 if (DEMO) {
-  for (let i = 0; i < 30; i++) botTrade(Date.now() - (30 - i) * 8000); // the last 4 minutes of trading
-  LIVE.buy(DEMO_ACCOUNT, 0, ONE, 0n, Date.now() - 60_000); // you already hold some fighter-1 shares
+  for (let i = 0; i < 40; i++) botTrade(Date.now() - (40 - i) * 6000); // the last 4 minutes of trading
+  try { LIVE.place(DEMO_ACCOUNT, 0, 9000, 20, Date.now() - 60_000); } catch { /* no asks */ }
   setInterval(() => LIVE.status === 'live' && botTrade(Date.now()), 3000);
 }
-const liveView = (): MatchView => ({
-  ...match(1, LIVE.status, [0, 0]), winner: LIVE.winner, amm: [LIVE.amm[0].toString(), LIVE.amm[1].toString()], price_bps: LIVE.price, collateral: LIVE.collateral.toString(),
-});
-const posView = (p = LIVE.pos(DEMO_ACCOUNT)): PositionView | null => p ? { shares: [p.shares[0].toString(), p.shares[1].toString()], paid: p.paid.toString(), claimed: p.claimed } : null;
+const liveView = (): MatchView => ({ ...match(1, LIVE.status), winner: LIVE.winner, price_bps: LIVE.price, collateral: LIVE.collateral.toString(), fills: LIVE.fills.length });
+const posView = (): PositionView | null => {
+  const p = LIVE.positions.get(DEMO_ACCOUNT);
+  return p ? { shares: [...p.shares], paid: [p.paid[0].toString(), p.paid[1].toString()], open: p.open.toString(), claimed: p.claimed } : null;
+};
 /** Demo fight ended: settle the market (null = void). */
 export const demoSettle = (id: number | null, winner: number | null) => { if (id === 1 && LIVE.status === 'live') LIVE.finish(winner); };
 const POS: Record<number, PositionView> = {
-  4: { shares: [NEAR(3), '0'], paid: NEAR(1), claimed: false },
+  4: { shares: [300, 0], paid: [NEAR(2), '0'], open: '0', claimed: false },
 };
 const tx = <T,>(f: () => T) => wait(null).then(f); // wallet round trip, then the call
 
@@ -142,7 +139,7 @@ export const demoMonsters: MonstersApi = {
 const fmtN = (y: string) => Number(BigInt(y) / 10n ** 21n) / 1000;
 
 const mm = (id: number, host: string, guest: string, mh: string, mg: string, status: MatchView['status'], tournament: number, winner: number | null = null): MatchView => ({
-  ...match(id, status, [0, 0], 0), host, guest, stake: '0', winner, monsters: [mh, mg], tournament, started_ms: Date.now() - 2 * HOUR,
+  ...match(id, status, 5000, 0), host, guest, stake: '0', winner, monsters: [mh, mg], tournament, started_ms: Date.now() - 2 * HOUR,
 });
 const ent = (n: number) => ({ account: OTHERS[n].owner, monster: OTHERS[n].id });
 const me = (): { account: string; monster: string } => ({ account: DEMO_ACCOUNT, monster: mineNow()[0]?.id ?? OTHERS[0].id });
@@ -187,17 +184,18 @@ export const demoArena = {
   claimTournament: () => sent('prize added to your balance'),
   cancelTournament: () => sent('tournament cancelled, entry fees refundable'),
   cancelMatch: () => sent('match cancelled, stake refunded'),
-  buy: (id: number, side: number, yocto: string, minOut: string, meta?: { card: number; dir: 'long' | 'short' }) => id === 1 ? tx(() => LIVE.buy(DEMO_ACCOUNT, side, BigInt(yocto), BigInt(minOut), Date.now(), meta)) : sent('position opened'),
-  getLots: (id: number): Promise<LotView[]> => wait(id !== 1 ? [] : (LIVE.lots.get(DEMO_ACCOUNT) ?? []).map((l) => ({ ...l, shares: l.shares.toString(), cost: l.cost.toString() }))),
+  placeOrder: (id: number, side: number, priceBps: number, qty: number) => id === 1 ? tx(() => LIVE.place(DEMO_ACCOUNT, side, priceBps, qty)).then((r) => ({ ...r, cost: r.cost.toString() })) : sent('order placed').then(() => ({ id: null, filled: 0, cost: '0' })),
+  cancelOrder: (id: number, orderId: number) => (id === 1 ? tx(() => LIVE.cancel(DEMO_ACCOUNT, orderId)) : sent('order cancelled')),
+  settle: (_a: Attestation) => sent('result settled on-chain, winnings in your balance'),
+  getBook: (id: number): Promise<Book> => wait(id === 1 ? [LIVE.levels(0), LIVE.levels(1)] : [[], []]),
+  getOrders: (id: number): Promise<OrderView[]> => wait(id === 1 ? LIVE.orders(DEMO_ACCOUNT).map(({ who: _w, ...o }) => o) : []),
+  getFills: (id: number): Promise<FillView[]> => wait(id === 1 ? LIVE.fills.slice(-6).reverse() : []),
   claim: (id: number) => id === 1 ? tx(() => LIVE.claim(DEMO_ACCOUNT)) : sent('winnings added to your balance'),
   expire: () => sent('match released for refund'),
-  getMatch: (id: number) => wait(id === 1 ? liveView() : MATCHES.find((m) => m.id === id) ?? match(id, 'live', [5, 5])),
+  getMatch: (id: number) => wait(id === 1 ? liveView() : MATCHES.find((m) => m.id === id) ?? match(id, 'live')),
   getPosition: (id: number): Promise<PositionView | null> => wait(id === 1 ? posView() : POS[id] ?? null),
-  getPrices: (id: number): Promise<[number, number][]> => wait(id === 1 ? LIVE.history.map(([t, b]) => [t, b]) : [[Date.now() - 60_000, 5000], [Date.now(), MATCHES.find((m) => m.id === id)?.price_bps ?? 5000]]),
-  quoteBuy: (id: number, side: number, yocto: string) => wait((id === 1 ? LIVE : new Market(5n * ONE)).quoteBuy(side, BigInt(yocto)).toString()),
-  config: () => wait({ owner: DEMO_ACCOUNT, min_bet: NEAR(0.01), max_bet: NEAR(100), seed: NEAR(5) }),
-  getFeed: (id: number): Promise<FeedItem[]> => wait(id !== 1 ? [] : LIVE.ledger.map((e, i) => ({ e, i })).filter(({ e }) => e.kind === 'buy' || e.kind === 'payout' || e.kind === 'refund')
-    .slice(-6).reverse().map(({ e, i }) => ({ id: i, who: e.who, kind: e.kind as FeedItem['kind'], side: e.side, near: e.near.toString() }))),
+  getPrices: (id: number): Promise<[number, number][]> => wait(id === 1 ? LIVE.history.map(([t, b]) => [t, b]) : []),
+  config: (): Promise<Limits> => wait({ owner: DEMO_ACCOUNT, fee_bps: 10, max_bet: NEAR(100), unit: NEAR(0.01), treasury: '0' }),
   claimable: (id: number) => wait(id === 1 ? LIVE.due(DEMO_ACCOUNT).toString() : id === 4 ? NEAR(3) : id === 5 ? NEAR(0.3) : '0'),
   listMatches: () => wait(MATCHES.map((m) => (m.id === 1 ? liveView() : m))),
 };

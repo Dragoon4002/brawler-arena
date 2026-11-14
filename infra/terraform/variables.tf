@@ -1,6 +1,7 @@
+# near-games org SCP only allows EC2 in ap-southeast-2
 variable "region" {
   type    = string
-  default = "us-east-1"
+  default = "ap-southeast-2"
 }
 
 variable "name" {
@@ -8,9 +9,10 @@ variable "name" {
   default = "brawler-arena"
 }
 
-variable "instance_type" {
-  type    = string
-  default = "t4g.small"
+variable "instance_types" {
+  type = map(string)
+  # account is on the free-tier plan: t4g.small is the biggest arm64; m7i-flex.large (x86, 8G) the biggest overall
+  default = { server = "t4g.small", clients = "m7i-flex.large" }
 }
 
 variable "ssh_cidr" {
@@ -29,13 +31,7 @@ variable "ssh_public_key" {
   default     = "~/.ssh/id_ed25519.pub"
 }
 
-variable "domain" {
-  description = "Public hostname for the WS server, e.g. ws.example.com"
-  type        = string
-}
-
-variable "route53_zone_id" {
-  description = "If set, creates an A record for domain in this zone"
-  type        = string
-  default     = null
+variable "profile" {
+  type    = string
+  default = "near-games"
 }

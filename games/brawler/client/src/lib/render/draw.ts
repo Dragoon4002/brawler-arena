@@ -1,11 +1,10 @@
 // Canvas renderer: dynamic camera, stage, fighters, hit FX, HUD. Render-only state (particles, shake) lives here.
 import { STAGES, HURT_H, MAX_HP, hitboxOf, type GameState, type SimEvent, type StageId } from '../sim/sim.ts';
 import { paintBackground, paintStage, paintFront } from './stage.ts';
-import { drawMonster, poseFor, type Look } from './rig.ts';
-import { drawHero, hero, heroOf, tintOf } from './cutout.ts';
+import { poseFor, type Look } from './rig.ts';
+import { drawHero, hero, heroOf, heroReady, tintOf } from './cutout.ts';
 import { isBot } from '../bot.ts';
-import { drawSheet, sheet } from './sheet.ts';
-import { paintArtBackground, paintArtStage, paintArtFront } from './artstage.ts';
+import { artReady, paintArtBackground, paintArtStage, paintArtFront } from './artstage.ts';
 import { lookOf, randomDna, type Dna } from '../genes.ts';
 
 export const W = 1280, H = 720;
@@ -25,8 +24,9 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   const squash = [0, 0];
   let showBoxes = false;
   let stageId: StageId = 'ember';
-  // Debug: ?p1=<hero>&p2=<hero> overrides the DNA-derived hero; &style=sheet draws the sprite sheet instead of the cutout rig.
-  const q = new URLSearchParams(location.search), PICK = [q.get('p1'), q.get('p2')], SHEET = q.get('style') === 'sheet';
+  const q = new URLSearchParams(location.search), PICK = [q.get('p1'), q.get('p2')]; // debug: ?p1=<hero>&p2=<hero>
+  const nameOf = (i: number) => PICK[i] ?? HEROES[i];
+  const ready = (id: StageId) => artReady(id) && [0, 1].every((i) => heroReady(nameOf(i)));
   const onKey = (e: KeyboardEvent) => { if (e.code === 'Backquote') showBoxes = !showBoxes; };
   addEventListener('keydown', onKey);
 
@@ -110,11 +110,8 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       ctx.translate(f.x, f.y);
       if (f.invuln > 0 && Math.floor(s.frame / 4) % 2) ctx.globalAlpha = f.state === 'dodge' ? 0.55 : 0.35;
       ctx.scale(f.facing * (1 + squash[i]), 1 - squash[i]);
-      const flash = f.hitlag > 0 && f.state === 'hitstun', name = PICK[i] ?? HEROES[i];
-      const sh = name && SHEET ? sheet(name) : null, h = name && !SHEET ? hero(name) : null;
-      if (sh) drawSheet(ctx, sh, f, s.frame, p.r, flash);
-      else if (h) drawHero(ctx, p, h, flash, TINTS[i]);
-      else drawMonster(ctx, p, LOOKS[i], flash);
+      const flash = f.hitlag > 0 && f.state === 'hitstun', h = hero(nameOf(i));
+      if (h) drawHero(ctx, p, h, flash, TINTS[i]);
       ctx.restore();
       nameTag(f.x, f.y - HURT_H - 30, i);
 
@@ -226,7 +223,14 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     }
   }
 
+  function loading() {
+    ctx.fillStyle = '#140c24'; ctx.fillRect(0, 0, W, H);
+    ctx.font = "40px 'Lilita One', system-ui"; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.fillText(`Loading arena${'.'.repeat(1 + (Math.floor(performance.now() / 400) % 3))}`, W / 2, H / 2 + 14);
+  }
+
   function draw(s: GameState, banner = '', info = '') {
+    if (!ready(s.stage)) return loading();
     if (s.stage !== stageId) { stageId = s.stage; parts.length = 0; }
     updateCamera(s);
     const t = performance.now() / 1000;
@@ -244,7 +248,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   }
 
   return {
-    draw, onEvents,
+    draw, onEvents, ready,
     setPlayers: (names: string[], dnas?: Dna[], accounts?: string[]) => {
       NAMES.splice(0, 2, ...names);
       ACCOUNTS.splice(0, 2, ...(accounts ?? ['', '']));

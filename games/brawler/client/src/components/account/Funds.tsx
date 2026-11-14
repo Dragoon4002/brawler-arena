@@ -3,6 +3,7 @@ import { DEMO } from '@/lib/demo.ts';
 import { errText } from '@/lib/format.ts';
 import { fmt, toYocto, usePlatform, useUnifiedBalance, useWallet } from '@/lib/near.ts';
 import { HubDialog, Ico } from '@/components/ui.tsx';
+import { dryQuote, getTokens, type Quote, type Token } from '@/lib/intents.ts';
 
 export function FundsDialog({ onClose }: { onClose: () => void }) {
   const { signedAccountId, signIn, getBalance } = useWallet();
@@ -53,6 +54,70 @@ export function FundsDialog({ onClose }: { onClose: () => void }) {
           {msg && <p className="note" role="status">{msg}</p>}
         </>
       )}
+      <AnyChain />
     </HubDialog>
+  );
+}
+
+const CHAINS: Record<string, string> = { eth: 'Ethereum', arb: 'Arbitrum', base: 'Base', sol: 'Solana', btc: 'Bitcoin', bsc: 'BNB Chain', pol: 'Polygon', op: 'Optimism', avax: 'Avalanche' };
+const chain = (c: string) => CHAINS[c] ?? c[0].toUpperCase() + c.slice(1);
+const usd = (n: number) => `$${n.toFixed(2)}`;
+const eta = (s: number) => (s < 90 ? `~${s} s` : `~${Math.round(s / 60)} min`);
+
+function AnyChain() {
+  const [tokens, setTokens] = useState<Token[] | null>(null);
+  const [asset, setAsset] = useState('');
+  const [amount, setAmount] = useState('');
+  const [quote, setQuote] = useState<Quote | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const token = tokens?.find((t) => t.assetId === asset);
+  const load = () => { setMsg('Loading tokens…'); getTokens().then((ts) => { setTokens(ts); setAsset(ts[0]?.assetId ?? ''); setMsg(''); }).catch((e) => setMsg(`Tokens failed: ${errText(e)}`)); };
+  const reset = () => { setQuote(null); setMsg(''); };
+
+  const getQuote = async () => {
+    if (!token) return;
+    if (!(Number(amount) > 0)) return setMsg('Enter an amount above 0.');
+    setBusy(true); reset(); setMsg('Fetching quote…');
+    try { setQuote(await dryQuote(token, amount)); setMsg(''); } catch (e) { setMsg(`Quote failed: ${errText(e)}`); } finally { setBusy(false); }
+  };
+
+  return (
+    <details className="anychain" onToggle={(e) => e.currentTarget.open && !tokens && load()}>
+      <summary>Add funds from any chain <small>NEAR Intents</small></summary>
+      <p className="note anychain-warn">Swap any token into NEAR. Quotes are live from mainnet; funding stays off while the game runs on testnet.</p>
+      {tokens && (
+        <div className="anychain-form">
+          <label className="funds-amount">
+            <span>From</span>
+            <select value={asset} onChange={(e) => { setAsset(e.target.value); reset(); }} disabled={busy} aria-label="Source token">
+              {tokens.map((t) => <option key={t.assetId} value={t.assetId}>{t.symbol} on {chain(t.blockchain)}</option>)}
+            </select>
+          </label>
+          <label className="funds-amount">
+            <span>Amount</span>
+            <span className="stake-input"><input type="number" min="0" step="any" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => { setAmount(e.target.value); reset(); }} disabled={busy} aria-label={`Amount in ${token?.symbol ?? 'source token'}`} /><b>{token?.symbol}</b></span>
+          </label>
+        </div>
+      )}
+      {quote && token && (
+        <>
+          <dl className="kv funds-kv">
+            <dt>You send</dt><dd>{quote.amountInFormatted} {token.symbol} ({chain(token.blockchain)}) ≈ {usd(Number(quote.amountInUsd))}</dd>
+            <dt>You receive</dt><dd>~{Number(quote.amountOutFormatted).toFixed(4)} NEAR on NEAR ≈ {usd(Number(quote.amountOutUsd))}</dd>
+            <dt>Fees</dt><dd>≈ {usd(Number(quote.amountInUsd) - Number(quote.amountOutUsd))} incl. spread, 1% max slippage</dd>
+            <dt>ETA</dt><dd>{eta(quote.timeEstimate)} after deposit confirms</dd>
+            <dt>Deposit to</dt><dd>address generated on confirm</dd>
+          </dl>
+        </>
+      )}
+      {msg && <p className="note" role="status">{msg}</p>}
+      {tokens && (
+        <div className="funds-actions">
+          <button type="button" className="btn" disabled={busy || !token} onClick={getQuote}><span><Ico n="coin" />Get quote</span></button>
+          <button type="button" className="btn ghost" disabled title="Mainnet only; this game runs on testnet"><span>Confirm (mainnet)</span></button>
+        </div>
+      )}
+    </details>
   );
 }
