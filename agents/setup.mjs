@@ -5,7 +5,7 @@ import { Account, JsonRpcProvider, KeyPair, nearToYocto, yoctoToNear } from 'nea
 
 const env = process.env;
 const FUNDER = env.FUNDER ?? 'brawler-platform-5c8e2b.testnet';
-const CONTRACT = env.CONTRACT_ID ?? 'brawler-platform-5c8e2b.testnet';
+const CONTRACT = env.CONTRACT_ID ?? 'v2.brawler-platform-5c8e2b.testnet';
 const DIR = env.CREDENTIALS_DIR ?? `${homedir()}/.near-credentials/testnet`;
 const FUND = Number(env.AGENT_FUND ?? 1); // NEAR per agent
 const DEPOSIT = Number(env.AGENT_DEPOSIT ?? FUND - 0.1); // into the platform, rest pays gas

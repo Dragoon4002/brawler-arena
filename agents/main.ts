@@ -10,7 +10,7 @@ import { PERSONAS, heuristic, template, type Budget, type Moment, type Persona, 
 
 const env = process.env;
 const SERVER = env.SERVER_URL ?? 'wss://65-0-237-185.sslip.io';
-const CONTRACT = env.CONTRACT_ID ?? 'brawler-platform-5c8e2b.testnet';
+const CONTRACT = env.CONTRACT_ID ?? 'v2.brawler-platform-5c8e2b.testnet';
 const DRY = env.DRY_RUN === '1';
 const EXPOSURE = Number(env.MAX_EXPOSURE ?? 0.3); // NEAR per agent per match
 const MAX_BET = Number(env.MAX_BET ?? 0.1);

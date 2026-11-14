@@ -16,7 +16,7 @@ docker compose -f infra/compose.yml --profile agents up -d agents
 | env | default | |
 |---|---|---|
 | `SERVER_URL` | `wss://65-0-237-185.sslip.io` | game server WS |
-| `CONTRACT_ID` | `brawler-platform-5c8e2b.testnet` | platform contract |
+| `CONTRACT_ID` | `v2.brawler-platform-5c8e2b.testnet` | platform contract |
 | `NEAR_RPC` | `https://test.rpc.fastnear.com` | |
 | `AGENT_ACCOUNTS` | `{"Momentum":"ai-momentum.<CONTRACT_ID>",...}` | JSON persona -> account id or `{account, key}` |
 | `CREDENTIALS_DIR` | `~/.near-credentials/testnet` | `<account>.json` keys when not inline |

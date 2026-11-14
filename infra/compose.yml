@@ -26,7 +26,7 @@ services:
     build: { context: .., dockerfile: infra/agents.Dockerfile }
     environment:
       SERVER_URL: ${AGENTS_SERVER_URL:-ws://brawler-server:8787}
-      CONTRACT_ID: ${CONTRACT_ID:-brawler-platform-5c8e2b.testnet}
+      CONTRACT_ID: ${CONTRACT_ID:-v2.brawler-platform-5c8e2b.testnet}
       NEAR_RPC: ${NEAR_RPC:-https://test.rpc.fastnear.com}
       AGENT_ACCOUNTS: ${AGENT_ACCOUNTS:-}
       CREDENTIALS_DIR: /creds
