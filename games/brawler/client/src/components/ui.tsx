@@ -9,8 +9,7 @@ import type { StageId } from '@/lib/stages.ts';
 
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-// UI art lives in Vercel Blob (store brawler-arena-ui), not in the repo. Override with NEXT_PUBLIC_ASSET_URL=/ui to use a local public/ui copy.
-const ASSET_URL = process.env.NEXT_PUBLIC_ASSET_URL ?? 'https://oimajowqffhgowbd.public.blob.vercel-storage.com/ui';
+const ASSET_URL = process.env.NEXT_PUBLIC_ASSET_URL ?? '/ui';
 const ASSET_V = 2; // bump after re-uploading art (Blob files are cached for a year)
 export const asset = (name: string) => `${ASSET_URL}/${name}.webp?v=${ASSET_V}`;
 // CSS can't build url() from a variable, so expose the images theme.css uses as --img-<name>.

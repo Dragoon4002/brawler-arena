@@ -304,7 +304,7 @@ function PracticeFight({ stage, again, change }: { stage: StageId; again: () => 
             <p><b>{names[over]}</b> wins by three knockouts.</p>
             <div className="end-actions">
               <button className="btn" onClick={again}><span><Ico n="icon-refresh" />Play again (R)</span></button>
-              <button className="btn alt" onClick={change}><span><Ico n="icon-map" />Change arena</span></button>
+              <button className="btn alt" onClick={change}><span><Ico n="icon-refresh" />Change arena</span></button>
               <a className="btn alt" href="/"><span><Ico n="icon-back" />Back (Esc)</span></a>
             </div>
           </div>
