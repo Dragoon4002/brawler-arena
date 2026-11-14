@@ -58,7 +58,7 @@ pub fn tape_of(v: &Value) -> i32 {
 pub fn players(r: &Room) -> Value {
     r.seats
         .iter()
-        .map(|s| json!({ "name": s.name, "dna": s.dna, "account": s.account }))
+        .map(|s| json!({ "name": s.name, "dna": s.dna, "skills": s.skills, "account": s.account }))
         .collect()
 }
 
@@ -74,7 +74,7 @@ pub fn room_state(r: &Room) -> Value {
     let seats: Vec<Value> = r
         .seats
         .iter()
-        .map(|s| json!({ "name": s.name, "dna": s.dna, "account": s.account, "connected": s.conn.is_some() }))
+        .map(|s| json!({ "name": s.name, "dna": s.dna, "skills": s.skills, "account": s.account, "connected": s.conn.is_some() }))
         .collect();
     json!({
         "t": "roomstate", "code": r.code, "status": r.status.as_str(), "stage": r.stage.name(), "stake": r.stake,

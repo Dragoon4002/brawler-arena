@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { archetype, lookOf, STAT_KEYS, type Dna, type Monster } from '@/lib/genes.ts';
+import { archetype, lookOf, STAT_KEYS, type Dna, type Monster, type Skill } from '@/lib/genes.ts';
+import { skillLabel } from '@/components/monsters/text.ts';
 import { drawMonster, idlePose, type Pose } from '@/lib/render/rig.ts';
 import { drawHero, hero, heroOf, tintOf } from '@/lib/render/cutout.ts';
 import { isBot } from '@/lib/bot.ts';
@@ -19,10 +20,14 @@ export function Logo({ className }: { className?: string }) {
   return <img className={className} src={asset('logo')} alt="Brawler Arena" draggable={false} />;
 }
 
-// Decorative sheet icon (sized by CSS, 1.3em by default). Text next to it carries the meaning.
+// Decorative sheet icon (sized by CSS, 1.3em by default), or a /public path. Text next to it carries the meaning.
 export function Ico({ n, className = 'ico' }: { n: string; className?: string }) {
-  return <img className={className} src={asset(n)} alt="" aria-hidden="true" draggable={false} />;
+  return <img className={className} src={n.startsWith('/') ? n : asset(n)} alt="" aria-hidden="true" draggable={false} />;
 }
+
+export const SkillChip = ({ s }: { s: Skill }) => <span className="chip row-ico skill-chip"><Ico n={`/skills/${s.kind}.svg`} />{skillLabel(s)}</span>;
+export const SkillChips = ({ skills }: { skills?: Skill[] }) =>
+  skills?.length ? <span className="badges" aria-label="Equipped skills">{skills.map((s, i) => <SkillChip key={i} s={s} />)}</span> : null;
 
 export const BotTag = ({ account }: { account?: string }) => (isBot(account) ? <span className="bot-tag" title="Computer opponent">bot</span> : null);
 
@@ -56,18 +61,23 @@ export function Portrait({ dna, size = 200, pose, flip = false, className = 'por
 }
 
 const STAT_LABEL = { str: 'Strength', dex: 'Dexterity', def: 'Defence', spd: 'Speed' } as const;
-export function Stats({ dna }: { dna: Dna }) {
+// `boosted`: effective stats after skills (up to 11), extra pips glow.
+export function Stats({ dna, boosted }: { dna: Dna; boosted?: Record<(typeof STAT_KEYS)[number], number> }) {
+  const n = boosted ? 11 : 9;
   return (
     <div className="stats">
-      {STAT_KEYS.map((k) => (
-        <div className="stat" key={k} style={{ ['--c' as string]: `var(--stat-${k})` }}>
-          <span className="row-ico"><Ico n={`stat-${k}`} />{STAT_LABEL[k]}</span>
-          <span className="pips" role="meter" aria-label={STAT_LABEL[k]} aria-valuemin={3} aria-valuemax={9} aria-valuenow={dna[k]}>
-            {Array.from({ length: 9 }, (_, i) => <span key={i} className={`pip ${i < dna[k] ? 'on' : ''}`} />)}
-          </span>
-          <b>{dna[k]}</b>
-        </div>
-      ))}
+      {STAT_KEYS.map((k) => {
+        const v = boosted?.[k] ?? dna[k];
+        return (
+          <div className="stat" key={k} style={{ ['--c' as string]: `var(--stat-${k})` }}>
+            <span className="row-ico"><Ico n={`stat-${k}`} />{STAT_LABEL[k]}</span>
+            <span className="pips" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }} role="meter" aria-label={STAT_LABEL[k]} aria-valuemin={3} aria-valuemax={n} aria-valuenow={v}>
+              {Array.from({ length: n }, (_, i) => <span key={i} className={`pip ${i < dna[k] ? 'on' : i < v ? 'on bonus' : ''}`} />)}
+            </span>
+            <b className={v > dna[k] ? 'boost' : undefined}>{v}</b>
+          </div>
+        );
+      })}
     </div>
   );
 }

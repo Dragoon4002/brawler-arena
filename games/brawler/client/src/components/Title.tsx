@@ -25,7 +25,7 @@ function HubBtn({ href, label, icon, badge, active, soon }: { href: string; labe
   );
 }
 
-const PANEL_FROM: Record<string, 'left' | 'right' | 'bottom'> = { collection: 'left', breed: 'left', market: 'left', account: 'left', lobby: 'right', tournaments: 'right', leaderboard: 'right', play: 'bottom' };
+const PANEL_FROM: Record<string, 'left' | 'right' | 'bottom'> = { collection: 'left', customize: 'left', breed: 'left', market: 'left', account: 'left', lobby: 'right', tournaments: 'right', leaderboard: 'right', play: 'bottom' };
 
 export function Title({ page, children }: { page?: string; children?: React.ReactNode }) {
   const list = useMemo(monsters, []);
@@ -49,6 +49,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
 
       <nav className="hub-side left" aria-label="Monsters">
         <HubBtn href="/collection" label="Monsters" icon="icon-monster" badge={list.length} active={page === 'collection'} />
+        <HubBtn href="/customize" label="Skills" icon="/skills/Power.svg" active={page === 'customize'} />
         <HubBtn href="/account" label="Account" icon="icon-wallet" active={page === 'account'} />
         <HubBtn href="/breed" label="Breed" icon="icon-breed" soon />
         <HubBtn href="/market" label="Market" icon="coin-stack" soon />

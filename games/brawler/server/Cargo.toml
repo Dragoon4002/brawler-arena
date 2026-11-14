@@ -17,3 +17,4 @@ futures-util = { version = "0.3", default-features = false, features = ["sink"] 
 
 [dev-dependencies]
 tokio-tungstenite = "0.28"
+near-api = "0.8.7"

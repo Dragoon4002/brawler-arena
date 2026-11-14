@@ -2,15 +2,15 @@ import { newGame, step, hash, type GameState } from './sim/sim.ts';
 import { createRenderer } from './render/draw.ts';
 import { readInput } from './input.ts';
 import { Netplay, linkPeer } from './net.ts';
-import { lookOf, sanitize, statsOf, type Dna } from './genes.ts';
+import { applySkills, sanitize, sanitizeSkills, statsOf, type Dna, type Skill } from './genes.ts';
 import { STAGE_IDS, type StageId } from './stages.ts';
 import { music, playEvents } from './audio.ts';
 import { bot } from './bot.ts';
 import type { SignMatch } from './near.ts';
 import { unpack } from './tape.ts';
 
-export interface Player { name: string; dna: Dna; account?: string }
-const toPlayer = (p: any): Player => ({ name: String(p.name ?? 'Rival').slice(0, 24) || 'Rival', dna: sanitize(p.dna), account: typeof p.account === 'string' ? p.account.slice(0, 64) : undefined });
+export interface Player { name: string; dna: Dna; account?: string; skills?: Skill[] }
+const toPlayer = (p: any): Player => ({ name: String(p.name ?? 'Rival').slice(0, 24) || 'Rival', dna: sanitize(p.dna), account: typeof p.account === 'string' ? p.account.slice(0, 64) : undefined, skills: sanitizeSkills(p.skills) });
 export interface Hooks {
   status?: (text: string) => void; // lobby text (room code, connecting…)
   started?: (players: Player[], seat: number) => void;
@@ -24,7 +24,7 @@ export interface Hooks {
   chat?: (line: ChatLine) => void;
   chatlog?: (lines: ChatLine[]) => void;
 }
-export interface Seat { name: string; dna: Dna; account: string; connected: boolean }
+export interface Seat { name: string; dna: Dna; skills?: Skill[]; account: string; connected: boolean }
 export interface RoomState {
   code: string; status: 'waiting' | 'live' | 'done'; stage: StageId; stake: string; matchId: number | null;
   bettable: boolean; pub: boolean; view: boolean; seats: Seat[]; spectators: number;
@@ -34,7 +34,7 @@ export interface PlayerSet { name?: string; dna?: Dna; stage?: StageId }
 
 // Shared by players and spectators: room/chat messages that aren't part of the fight.
 function roomMsg(m: any, hooks: Hooks) {
-  if (m.t === 'roomstate') hooks.roomstate?.({ ...m, stage: STAGE_IDS.includes(m.stage) ? m.stage : 'ember', seats: (m.seats ?? []).map((p: any) => ({ ...p, dna: sanitize(p.dna) })) });
+  if (m.t === 'roomstate') hooks.roomstate?.({ ...m, stage: STAGE_IDS.includes(m.stage) ? m.stage : 'ember', seats: (m.seats ?? []).map((p: any) => ({ ...p, dna: sanitize(p.dna), skills: sanitizeSkills(p.skills) })) });
   else if (m.t === 'chat') hooks.chat?.(m);
   else if (m.t === 'chatlog') hooks.chatlog?.(m.lines ?? []);
   else return false;
@@ -50,7 +50,7 @@ export const SERVER = params.get('server') ?? process.env.NEXT_PUBLIC_SERVER_URL
 
 function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage: StageId, hooks: Hooks, tap?: (inputs: number[], end: boolean) => void) {
   const renderer = createRenderer(canvas);
-  const state: GameState = newGame(players.map((p) => statsOf(p.dna)), stage);
+  const state: GameState = newGame(players.map((p) => applySkills(statsOf(p.dna), p.skills ?? [])), stage);
   let raf = 0;
   let net: Netplay | null = null;
   let banner = '', link = '';

@@ -90,7 +90,76 @@ pub fn stats_of(d: &Dna) -> Stats {
         dex: d.dex as f64,
         def: d.def as f64,
         spd: d.spd as f64,
+        fx: 0,
     }
+}
+
+/// Port of genes.ts skills: Power..Speed bump str/dex/def/spd, the rest are effects (fx bit 1 << (kind - 4)).
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum SkillKind {
+    Power,
+    Agility,
+    Durability,
+    Speed,
+    AirJump,
+    Lifesteal,
+    QuickDodge,
+    SecondWind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Skill {
+    pub kind: SkillKind,
+    pub mag: u8,
+}
+
+/// Untrusted loadout: <= 3, stat mag 1..2, per stat <= +2, total <= +3, <= 2 distinct effects; breakers dropped in order.
+pub fn sanitize_skills(x: &Value) -> Vec<Skill> {
+    let mut out: Vec<Skill> = vec![];
+    let (mut per, mut total, mut fxs) = ([0u8; 4], 0u8, 0);
+    for s in x.as_array().into_iter().flatten() {
+        if out.len() >= 3 {
+            break;
+        }
+        let Some(kind) = s
+            .get("kind")
+            .and_then(Value::as_str)
+            .and_then(|k| serde_json::from_value::<SkillKind>(k.into()).ok())
+        else {
+            continue;
+        };
+        let i = kind as usize;
+        if i >= 4 {
+            if fxs < 2 && !out.iter().any(|o| o.kind == kind) {
+                fxs += 1;
+                out.push(Skill { kind, mag: 1 });
+            }
+            continue;
+        }
+        let Some(v) = num(s.get("mag")) else { continue };
+        let mag = js_max(1., js_min(2., js_round(v))) as u8;
+        if per[i] + mag <= 2 && total + mag <= 3 {
+            per[i] += mag;
+            total += mag;
+            out.push(Skill { kind, mag });
+        }
+    }
+    out
+}
+
+pub fn apply_skills(mut s: Stats, skills: &[Skill]) -> Stats {
+    for k in skills {
+        let i = k.kind as usize;
+        let m = k.mag as f64;
+        match i {
+            0 => s.str = (s.str + m).min(11.),
+            1 => s.dex = (s.dex + m).min(11.),
+            2 => s.def = (s.def + m).min(11.),
+            3 => s.spd = (s.spd + m).min(11.),
+            _ => s.fx |= 1 << (i - 4),
+        }
+    }
+    s
 }
 
 #[cfg(test)]
@@ -111,5 +180,27 @@ mod tests {
         );
         assert_eq!((d.hue, d.accent, d.size), (359, 40, 90));
         assert_eq!(sanitize(&Value::Null), sanitize(&json!({})));
+    }
+
+    #[test]
+    fn skills_match_fixture() {
+        let t: Value = serde_json::from_str(include_str!("../testdata/skills.json")).unwrap();
+        let base = stats_of(&sanitize(&t["base"]));
+        for c in t["cases"].as_array().unwrap() {
+            let sk = sanitize_skills(&c["in"]);
+            assert_eq!(
+                serde_json::to_value(&sk).unwrap(),
+                c["out"],
+                "in {}",
+                c["in"]
+            );
+            let s = apply_skills(base, &sk);
+            assert_eq!(
+                json!({ "str": s.str as u8, "dex": s.dex as u8, "def": s.def as u8, "spd": s.spd as u8, "fx": s.fx }),
+                c["stats"],
+                "in {}",
+                c["in"]
+            );
+        }
     }
 }

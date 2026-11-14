@@ -1,8 +1,9 @@
 import { useNearWallet } from 'near-connect-hooks';
-import { sanitize, type Monster } from './genes.ts';
+import { sanitize, sanitizeSkills, SKILL_KINDS, type Monster, type Skill, type SkillKind } from './genes.ts';
 import { DEMO, demoMonsters } from './demo.ts';
 
 export const MONSTERS_ID: string = process.env.NEXT_PUBLIC_MONSTERS_ID ?? 'brawler-monsters-5c8e2b.testnet';
+export const MARKET_URL: string = process.env.NEXT_PUBLIC_MARKET_URL ?? 'https://market.65-0-237-185.sslip.io';
 const GAS = '30000000000000', GAS_X = '100000000000000';
 const NEAR = (n: number) => (BigInt(Math.round(n * 1000)) * 10n ** 21n).toString();
 
@@ -12,7 +13,11 @@ export interface MonsterView {
   born_ms: number; dna: unknown; record: { w: number; l: number; ko: number }; titles: string[];
   price: string | null; rent_offer: { price_per_day: string; max_days: number } | null;
   rental: { renter: string; until_ms: number } | null; locked_until_ms: number; cooldown_until_ms: number;
+  skills?: { id: number; kind: unknown; mag: number }[];
 }
+export type Rarity = 'Common' | 'Rare' | 'Epic';
+export interface SkillType { id: number; name: string; kind: SkillKind; mag: number; rarity: Rarity; media?: string }
+export interface OwnedSkill extends SkillType { free: number; listed: number }
 export interface HistoryEntry { match_id: number; vs: string | null; won: boolean | null; kos: number; ms: number; tournament: number | null }
 export interface ConfigView { owner: string; arena: string; treasury: string; breed_fee: string; market_fee_bps: number; royalty_bps: number; rent_fee_bps: number }
 
@@ -20,7 +25,19 @@ export type NftMonster = Monster & {
   owner: string; breeder: string; titles: string[]; price?: string;
   rentOffer?: { pricePerDay: string; maxDays: number }; rental?: { renter: string; untilMs: number };
   lockedUntil: number; cooldownUntil: number;
+  skills: Skill[]; skillIds: number[]; // equipped
 };
+
+const toSkillType = (v: any): SkillType | null => {
+  const kind = SKILL_KINDS.find((k) => k === v?.kind);
+  return kind ? { id: +v.id, name: String(v.name ?? kind), kind, mag: +v.mag || 1, rarity: (['Common', 'Rare', 'Epic'] as const).find((r) => r === v.rarity) ?? 'Common', media: v.media } : null;
+};
+// skills_of rows: [skill, free, listed] tuples (U128 strings) or {skill|id, free, listed}.
+export const joinOwned = (rows: any[], types: SkillType[]): OwnedSkill[] => rows.flatMap((r) => {
+  const [id, free, listed] = Array.isArray(r) ? r : [r.skill ?? r.id, r.free, r.listed];
+  const t = types.find((x) => x.id === +id);
+  return t && +free + +(listed ?? 0) > 0 ? [{ ...t, free: +free, listed: +(listed ?? 0) }] : [];
+});
 
 export const toMonster = (v: MonsterView): NftMonster => ({
   id: v.token_id, name: v.name, gen: v.gen, parents: v.parents ?? null, born: v.born_ms,
@@ -30,6 +47,7 @@ export const toMonster = (v: MonsterView): NftMonster => ({
   rentOffer: v.rent_offer ? { pricePerDay: v.rent_offer.price_per_day, maxDays: v.rent_offer.max_days } : undefined,
   rental: v.rental ? { renter: v.rental.renter, untilMs: v.rental.until_ms } : undefined,
   lockedUntil: v.locked_until_ms ?? 0, cooldownUntil: v.cooldown_until_ms ?? 0,
+  skills: sanitizeSkills(v.skills), skillIds: (v.skills ?? []).map((s) => +s.id),
 });
 
 export interface MonstersApi {
@@ -50,6 +68,9 @@ export interface MonstersApi {
   config(): Promise<ConfigView>;
   owed(): Promise<string>; // failed sale/rent payouts waiting for you (yocto)
   withdrawOwed(): Promise<unknown>;
+  skillTypes(): Promise<SkillType[]>;
+  skills(): Promise<OwnedSkill[]>; // your balances (free units; equipped ones sit on the monster)
+  equip(id: string, skillIds: number[]): Promise<unknown>; // replaces the whole loadout
 }
 
 export function useMonsters(): MonstersApi {
@@ -61,6 +82,14 @@ export function useMonsters(): MonstersApi {
     w.viewFunction({ contractId: MONSTERS_ID, method, args }) as Promise<T>;
   const views = async (method: string, args: Record<string, unknown>) => (await view<MonsterView[]>(method, args)).map(toMonster);
   const config = () => view<ConfigView>('config');
+  const skillTypes = async () => {
+    const all: unknown[] = [];
+    for (let from = 0; ; from += 50) {
+      const page = await view<unknown[]>('skill_types', { from, limit: 50 });
+      all.push(...page);
+      if (page.length < 50) return all.map(toSkillType).filter((t): t is SkillType => !!t);
+    }
+  };
   return {
     mine: async () => {
       const me = w.signedAccountId;
@@ -88,5 +117,12 @@ export function useMonsters(): MonstersApi {
     config,
     owed: async () => (w.signedAccountId ? view<string>('owed_of', { account_id: w.signedAccountId }) : '0'),
     withdrawOwed: () => call('withdraw_owed', {}, '0', GAS_X),
+    skillTypes,
+    skills: async () => {
+      if (!w.signedAccountId) return [];
+      const [rows, types] = await Promise.all([view<any[]>('skills_of', { account_id: w.signedAccountId }), skillTypes()]);
+      return joinOwned(rows, types);
+    },
+    equip: (id, skillIds) => call('equip', { token_id: id, skills: skillIds }, '1', GAS_X),
   };
 }
