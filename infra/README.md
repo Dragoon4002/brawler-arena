@@ -13,6 +13,7 @@ make deploy                       # build+ship server and client images, then an
 # or piecewise:
 make push-image                   # server only
 make push-client                  # client only
+make push-agents                  # bots only
 make deploy ANSIBLE_ARGS="-e @infra/ansible/secrets.yml --ask-vault-pass"
 ```
 
