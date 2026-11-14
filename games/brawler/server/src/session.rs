@@ -182,9 +182,12 @@ impl Session {
     async fn host(&mut self, m: &Value) -> Reply {
         let match_id = int_id(&m["matchId"]);
         let account = str_of(&m["account"], 64);
-        if let Some(id) = match_id
-            && self.app.on_chain()
-        {
+        if match_id.is_some() && !self.app.on_chain() {
+            return Err(
+                "This server has no contract configured; cancel the match and create a free room",
+            );
+        }
+        if let Some(id) = match_id {
             let Some(mv) = self
                 .app
                 .get_match(id)

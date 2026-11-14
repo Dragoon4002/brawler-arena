@@ -142,13 +142,17 @@ async fn rematch_restarts_room() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn rematch_rejected_on_chain_room() {
+async fn on_chain_room_rejected_without_contract() {
     let url = serve().await;
     let run = golden();
-    let (a, mut ar, ..) = pair(&url, &run, json!(7)).await;
-    a.send(json!({ "t": "rematch" })).unwrap();
-    assert_eq!(
-        until(&mut ar, "error").await["msg"],
-        "On-chain matches need a new match"
+    let (a, mut ar) = client(&url).await;
+    until(&mut ar, "hello").await;
+    a.send(json!({ "t": "host", "name": "A", "dna": run["dna"][0], "stage": run["stage"], "pub": true, "matchId": 7 }))
+        .unwrap();
+    let msg = until(&mut ar, "error").await["msg"].clone();
+    assert!(
+        msg.as_str()
+            .unwrap()
+            .starts_with("This server has no contract configured")
     );
 }
