@@ -14,7 +14,6 @@ function HubBtn({ href, label, icon, badge, active }: { href: string; label: str
         <span>{label}</span>
         {badge ? <b className="hub-badge">{badge}</b> : null}
       </a>
-      {active && <a className="hub-close" href="#/" aria-label={`Close ${label}`}><Ico n="icon-close" /></a>}
     </div>
   );
 }
@@ -87,7 +86,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
 
       {children && (
         <main key={page} className={`hub-panel from-${PANEL_FROM[page ?? ''] ?? 'bottom'}`}>
-          {!PANEL_FROM[page ?? ''] || page === 'play' ? <a className="hub-close panel-x" href="#/" aria-label="Back to title"><Ico n="icon-close" /></a> : null}
+          <a className="hub-close panel-x" href="#/" aria-label="Close"><Ico n="icon-close" /></a>
           <div className="page">{children}</div>
         </main>
       )}
