@@ -1,26 +1,15 @@
-//! Brawler Arena: staked 1v1 duels with a live spectator market.
-//!
-//! Players: host `create_match` (stake = deposit) -> guest `join_match` (same deposit) -> referee
-//! `report_result` -> winner `claim`s the pot (fee `fee_bps` taken once at settlement).
-//!
-//! Spectators back a fighter by buying their shares on a constant-product AMM while the match is Live.
-//! One A share (fighter 0 wins) plus one B share always equals 1 NEAR, so the pool is always fully
-//! backed. Price of A = b / (a + b). Bets lock until the result: there is no selling. At settlement
-//! each winning share redeems 1 NEAR; a void match refunds every bet (after fee).
-//! The house treasury seeds each bettable match's pool (`seed`) and takes back what the pool holds
-//! at the end; trade fees (`fee_bps`) go to the treasury.
-//!
-//! Storage for matches/positions is paid from the contract balance (min trade covers a position).
-//!
-//! Monsters (NFTs on the `monsters` contract) are optional for matches and required for tournaments.
-//! Joining with one locks it there first (`lock`), and a `#[private]` callback does the actual
-//! create/join/enter, refunding the deposit (and unlocking) if anything changed meanwhile.
-//! Tournaments: entry fees build a pot; 4 or 8 entrants play a single-elimination bracket of
-//! zero-stake Live matches (still bettable), champion `claim_tournament`s pot - fee.
+//! Platform: one NEAR balance per player, shared by every game.
+//! deposit -> balance; stakes, bets, entry fees debit it; payouts/refunds credit it; withdraw sends NEAR out.
+//! Spend calls need 1 yocto: wallet confirm, fn-call keys can't spend.
+//! Games: `register_game(game, referee, assets?)`. Referee settles that game's matches; assets = optional NFT
+//! contract w/ lock/unlock/record_result/add_title (lock first, `#[private]` callback re-credits on fail).
+//! Market: per-match constant-product AMM, A share + B share = 1 NEAR, no selling, winners redeem 1 NEAR/share,
+//! void refunds net bets. House treasury seeds bettable pools, takes fees.
+//! Tournaments: 4|8 entrants, single-elim bracket of zero-stake Live matches, champion claims pot - fee.
 
 use ethnum::U256;
 use near_sdk::json_types::U128;
-use near_sdk::store::{LookupMap, Vector};
+use near_sdk::store::{IterableMap, LookupMap, Vector};
 use near_sdk::{
     AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue, assert_one_yocto, env,
     ext_contract, near, require,
@@ -30,28 +19,29 @@ const BPS: u128 = 10_000;
 const EXPIRY_NS: u64 = 2 * 60 * 60 * 1_000_000_000; // 2 h
 const MAX_LIST: u64 = 50;
 const MAX_RECENT: u32 = 20;
+const MAX_SCAN: usize = 500; // ponytail: game filter scans newest 500; per-game index if games outgrow it
 const MAX_HISTORY: usize = 200; // ponytail: oldest price points drop off; store sampled history if longer charts matter
 const CALLBACK_GAS: Gas = Gas::from_tgas(5);
-// Callers of create/join with a monster should attach >= 100 Tgas; enter_tournament needs ENTER_GAS.
+// create/join w/ monster: attach >= 100 Tgas
 const LOCK_GAS: Gas = Gas::from_tgas(15);
 const ON_LOCK_GAS: Gas = Gas::from_tgas(40);
 const ON_ENTER_GAS: Gas = Gas::from_tgas(100); // the 8th entry creates 4 bettable matches
 const ENTER_GAS: Gas = Gas::from_tgas(150); // lock + on_enter + enter_tournament itself
-// report_result worst case (tournament final): record 20 + unlock 10 + title 10 + unlock 10 = 50 Tgas of the referee's 100.
+// report_result worst case (final): 20 + 10 + 10 + 10 = 50 of referee's 100 Tgas
 const RECORD_GAS: Gas = Gas::from_tgas(20);
 const UNLOCK_GAS: Gas = Gas::from_tgas(10);
 const TITLE_GAS: Gas = Gas::from_tgas(10);
-const MATCH_LOCK_MS: u64 = 5 * 60 * 60 * 1000; // 2 h open expiry + 2 h live expiry + 1 h buffer
-// ponytail: 72 h covers the 24 h entry window + 3 rounds x 2 h expiry; re-lock per round if brackets get slower.
+const MATCH_LOCK_MS: u64 = 5 * 60 * 60 * 1000; // 2 h open + 2 h live + 1 h buffer
+// ponytail: 72 h = 24 h entry + 3 rounds x 2 h; re-lock per round if brackets get slower
 const TOURNEY_LOCK_MS: u64 = 72 * 60 * 60 * 1000;
-const TOURNEY_CANCEL_NS: u64 = 24 * 60 * 60 * 1_000_000_000; // 24 h entry window, then only cancel
+const TOURNEY_CANCEL_NS: u64 = 24 * 60 * 60 * 1_000_000_000; // entry window
 
-/// (monster token id, until_ms we locked it with). Unlock passes both, so a stale unlock can't free someone else's lock.
+/// (token id, until_ms). unlock passes both: stale unlock can't free newer lock.
 type Lock = (String, u64);
 
-#[allow(dead_code)] // trait only feeds the macro
-#[ext_contract(ext_monsters)]
-trait Monsters {
+#[allow(dead_code)] // feeds macro only
+#[ext_contract(ext_assets)]
+trait Assets {
     fn lock(&mut self, token_id: String, account_id: AccountId, until_ms: u64);
     fn unlock(&mut self, locks: Vec<(String, u64)>);
     fn record_result(&mut self, match_id: u64, tokens: [Option<String>; 2], winner: Option<u8>, kos: [u8; 2], tournament: Option<u64>);
@@ -67,6 +57,15 @@ enum Key {
     Bets,
     MyBets,
     Tournaments,
+    Games,
+    Balances,
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct Game {
+    pub referee_id: AccountId,
+    pub assets_id: Option<AccountId>,
 }
 
 #[near(serializers = [borsh, json])]
@@ -81,22 +80,23 @@ pub enum Status {
 #[near(serializers = [borsh])]
 #[derive(Clone)]
 pub struct Match {
+    game: String,
     host: AccountId,
     guest: Option<AccountId>,
     stake: u128,
     bettable: bool,
     status: Status,
     kos: u8,
-    amm: [u128; 2],    // pool's A and B shares
-    seed: u128,        // house liquidity put in at create
-    collateral: u128,  // NEAR backing the market (= every A share = every B share, pool + traders)
+    amm: [u128; 2],   // pool A, B shares
+    seed: u128,       // house liquidity
+    collateral: u128, // NEAR backing market (= all A shares = all B shares)
     bet_count: u32,
     created_ns: u64,
     started_ns: u64,
-    claimed: [bool; 2], // player pot / stake refund claimed, by seat
-    advances: u8,       // tournament: seat that moved on (set when it ended)
+    claimed: [bool; 2], // by seat
+    advances: u8,       // tournament: seat that moved on
     monsters: [Option<Lock>; 2],
-    tournament: Option<(u64, u8, u8)>, // (tournament id, round, slot)
+    tournament: Option<(u64, u8, u8)>, // (id, round, slot)
 }
 
 #[near(serializers = [borsh])]
@@ -111,6 +111,7 @@ pub enum TStatus {
 #[near(serializers = [borsh])]
 #[derive(Clone)]
 pub struct Tournament {
+    game: String,
     size: u8,
     entry_fee: u128,
     pot: u128,
@@ -120,26 +121,25 @@ pub struct Tournament {
     rounds: Vec<Vec<Option<u64>>>,      // match ids
     champion: Option<AccountId>,
     created_ns: u64,
-    claimed: Vec<bool>, // by entrant: champion prize or cancel refund
+    claimed: Vec<bool>, // by entrant
 }
 
-/// Totals per spectator; this is what settles.
+/// Per spectator totals; what settles.
 #[near(serializers = [borsh])]
 #[derive(Clone, Default)]
 pub struct Position {
     shares: [u128; 2],
-    paid: u128, // NEAR that went into the pool (after fees) = the refund on a void match
+    paid: u128, // net of fees = void refund
     claimed: bool,
 }
 
-/// One bet, kept for the "your bets" list and the live bet feed.
 #[near(serializers = [borsh, json])]
 #[derive(Clone)]
 pub struct BetView {
     pub id: u32,
     pub who: AccountId,
     pub side: u8,
-    pub amount: U128, // deposit before fee
+    pub amount: U128, // before fee
     pub shares: U128,
     pub ms: u64,
 }
@@ -147,6 +147,7 @@ pub struct BetView {
 #[near(serializers = [json])]
 pub struct MatchView {
     pub id: u64,
+    pub game: String,
     pub host: AccountId,
     pub guest: Option<AccountId>,
     pub stake: U128,
@@ -155,7 +156,7 @@ pub struct MatchView {
     pub winner: Option<u8>,
     pub kos: u8,
     pub amm: [U128; 2],
-    pub price_bps: u16, // fighter 0's price, 0..10000
+    pub price_bps: u16, // seat 0 price
     pub collateral: U128,
     pub created_ms: u64,
     pub started_ms: u64,
@@ -172,6 +173,7 @@ pub struct EntrantView {
 #[near(serializers = [json])]
 pub struct TournamentView {
     pub id: u64,
+    pub game: String,
     pub size: u8,
     pub entry_fee: U128,
     pub pot: U128,
@@ -181,7 +183,7 @@ pub struct TournamentView {
     pub rounds: Vec<Vec<Option<u64>>>,
     pub champion: Option<AccountId>,
     pub created_ms: u64,
-    pub claimed: Vec<bool>, // by entrant
+    pub claimed: Vec<bool>,
 }
 
 #[near(serializers = [json])]
@@ -194,7 +196,6 @@ pub struct PositionView {
 #[near(serializers = [json])]
 pub struct ConfigView {
     pub owner: AccountId,
-    pub referee: AccountId,
     pub fee_bps: u32,
     pub min_bet: U128,
     pub max_bet: U128,
@@ -206,16 +207,16 @@ pub struct ConfigView {
 #[derive(PanicOnDefault)]
 pub struct Arena {
     owner: AccountId,
-    referee: AccountId,
-    monsters: AccountId,
     fee_bps: u32,
     min_bet: u128,
     max_bet: u128,
     seed: u128,
     treasury: u128,
+    games: IterableMap<String, Game>,
+    balances: LookupMap<AccountId, u128>, // ponytail: storage paid by contract; storage deposit before mainnet
     matches: Vector<Match>, // id = index
     positions: LookupMap<(u64, AccountId), Position>,
-    history: LookupMap<u64, Vec<(u64, u16)>>, // (ms, fighter 0 price bps), one point per trade
+    history: LookupMap<u64, Vec<(u64, u16)>>, // (ms, seat 0 bps) per trade
     bets: LookupMap<(u64, u32), BetView>,      // (match, bet id)
     my_bets: LookupMap<(u64, AccountId), Vec<u32>>,
     tournaments: Vector<Tournament>, // id = index
@@ -229,8 +230,7 @@ fn price_bps(amm: [u128; 2]) -> u16 {
     if amm[0] + amm[1] == 0 { 5000 } else { mul_div(amm[1], BPS, amm[0] + amm[1]) as u16 }
 }
 
-/// Deposit `x` NEAR for `side` shares: mint x pairs, swap the other side back in until a*b holds.
-/// Returns (shares out, new reserves). Rounds against the trader.
+/// x NEAR -> `side` shares: mint x pairs, swap other side back till a*b holds. (out, reserves), rounds vs trader.
 fn amm_buy(r: [u128; 2], side: usize, x: u128) -> (u128, [u128; 2]) {
     let o = 1 - side;
     let k = U256::from(r[0]) * U256::from(r[1]);
@@ -245,16 +245,16 @@ fn amm_buy(r: [u128; 2], side: usize, x: u128) -> (u128, [u128; 2]) {
 #[near]
 impl Arena {
     #[init]
-    pub fn new(owner_id: AccountId, referee_id: AccountId, monsters_id: AccountId) -> Self {
+    pub fn new(owner_id: AccountId) -> Self {
         Self {
             owner: owner_id,
-            referee: referee_id,
-            monsters: monsters_id,
             fee_bps: 10, // 0.1%
             min_bet: NearToken::from_millinear(10).as_yoctonear(),
             max_bet: NearToken::from_near(100).as_yoctonear(),
             seed: NearToken::from_near(5).as_yoctonear(),
             treasury: 0,
+            games: IterableMap::new(Key::Games),
+            balances: LookupMap::new(Key::Balances),
             matches: Vector::new(Key::Matches),
             positions: LookupMap::new(Key::Positions),
             history: LookupMap::new(Key::History),
@@ -264,54 +264,88 @@ impl Arena {
         }
     }
 
+    /* ---------- balance ---------- */
+
+    #[payable]
+    pub fn deposit(&mut self) {
+        let amt = env::attached_deposit().as_yoctonear();
+        require!(amt > 0, "Attach a deposit");
+        self.credit(&env::predecessor_account_id(), amt);
+    }
+
+    pub fn withdraw(&mut self, amount: U128) -> Promise {
+        let who = env::predecessor_account_id();
+        require!(amount.0 > 0, "Bad amount");
+        self.debit(&who, amount.0);
+        Promise::new(who.clone())
+            .transfer(NearToken::from_yoctonear(amount.0))
+            .then(Self::ext(env::current_account_id()).with_static_gas(CALLBACK_GAS).on_withdraw(who, amount))
+    }
+
+    /// Transfer failed -> re-credit.
+    #[private]
+    pub fn on_withdraw(&mut self, account_id: AccountId, amount: U128) -> bool {
+        if promise_ok() {
+            return true;
+        }
+        self.credit(&account_id, amount.0);
+        false
+    }
+
+    pub fn balance_of(&self, account_id: AccountId) -> U128 {
+        U128(self.balances.get(&account_id).copied().unwrap_or(0))
+    }
+
     /* ---------- players ---------- */
 
-    /// With a monster this locks it first and returns `on_create`'s result (`null` = refunded).
+    /// Monster -> lock first, returns `on_create` result (`null` = re-credited).
     #[payable]
-    pub fn create_match(&mut self, bettable: bool, monster_id: Option<String>) -> PromiseOrValue<Option<u64>> {
+    pub fn create_match(&mut self, game: String, stake: U128, bettable: bool, monster_id: Option<String>) -> PromiseOrValue<Option<u64>> {
+        assert_one_yocto();
         let host = env::predecessor_account_id();
-        let stake = env::attached_deposit().as_yoctonear();
+        let g = self.game(&game);
         require!(!bettable || self.treasury >= self.seed, "House can't fund bets right now");
+        self.debit(&host, stake.0);
         let Some(mon) = monster_id else {
-            return PromiseOrValue::Value(Some(self.open_match(host, stake, bettable, None)));
+            return PromiseOrValue::Value(Some(self.open_match(game, host, stake.0, bettable, None)));
         };
         let until = now_ms() + MATCH_LOCK_MS;
-        PromiseOrValue::Promise(self.lock(&mon, &host, until).then(
-            Self::ext(env::current_account_id()).with_static_gas(ON_LOCK_GAS).on_create(host, U128(stake), bettable, mon, until),
+        PromiseOrValue::Promise(lock(&g, &mon, &host, until).then(
+            Self::ext(env::current_account_id()).with_static_gas(ON_LOCK_GAS).on_create(game, host, stake, bettable, mon, until),
         ))
     }
 
-    /// Seed is taken here, not in `create_match`, so a concurrent create can't overdraw the treasury.
+    /// Seed taken here, not in `create_match`: concurrent create can't overdraw treasury.
     #[private]
-    pub fn on_create(&mut self, host: AccountId, stake: U128, bettable: bool, monster_id: String, until_ms: u64) -> Option<u64> {
+    pub fn on_create(&mut self, game: String, host: AccountId, stake: U128, bettable: bool, monster_id: String, until_ms: u64) -> Option<u64> {
         let locked = promise_ok();
         if locked && (!bettable || self.treasury >= self.seed) {
-            return Some(self.open_match(host, stake.0, bettable, Some((monster_id, until_ms))));
+            return Some(self.open_match(game, host, stake.0, bettable, Some((monster_id, until_ms))));
         }
-        self.bounce(host, stake.0, locked.then_some((monster_id, until_ms)));
+        self.bounce(&game, host, stake.0, locked.then_some((monster_id, until_ms)));
         None
     }
 
-    /// With a monster this locks it first and returns `on_join`'s result (false = refunded).
+    /// Monster -> lock first, returns `on_join` result (false = re-credited).
     #[payable]
     pub fn join_match(&mut self, match_id: u64, monster_id: Option<String>) -> PromiseOrValue<bool> {
+        assert_one_yocto();
         let guest = env::predecessor_account_id();
-        let deposit = env::attached_deposit().as_yoctonear();
         let m = self.get_match_internal(match_id);
         require!(m.status == Status::Open, "Match not open");
         require!(guest != m.host, "Host cannot join own match");
-        require!(deposit == m.stake, "Deposit must equal stake");
+        self.debit(&guest, m.stake);
         let Some(mon) = monster_id else {
             self.go_live(match_id, guest, None);
             return PromiseOrValue::Value(true);
         };
         let until = now_ms() + MATCH_LOCK_MS;
-        PromiseOrValue::Promise(self.lock(&mon, &guest, until).then(
-            Self::ext(env::current_account_id()).with_static_gas(ON_LOCK_GAS).on_join(match_id, guest, U128(deposit), mon, until),
+        PromiseOrValue::Promise(lock(&self.game(&m.game), &mon, &guest, until).then(
+            Self::ext(env::current_account_id()).with_static_gas(ON_LOCK_GAS).on_join(match_id, guest, U128(m.stake), mon, until),
         ))
     }
 
-    /// Someone else may have joined (or the host cancelled) while the lock was in flight.
+    /// Someone else may have joined / host cancelled while lock in flight.
     #[private]
     pub fn on_join(&mut self, match_id: u64, guest: AccountId, deposit: U128, monster_id: String, until_ms: u64) -> bool {
         let locked = promise_ok();
@@ -320,11 +354,11 @@ impl Arena {
             self.go_live(match_id, guest, Some((monster_id, until_ms)));
             return true;
         }
-        self.bounce(guest, deposit.0, locked.then_some((monster_id, until_ms)));
+        self.bounce(&m.game, guest, deposit.0, locked.then_some((monster_id, until_ms)));
         false
     }
 
-    /// Host backs out before anyone joins; stake goes straight back.
+    /// Host backs out before join; stake re-credited.
     pub fn cancel_match(&mut self, match_id: u64) {
         let m = self.get_mut(match_id);
         require!(env::predecessor_account_id() == m.host, "Only host");
@@ -338,11 +372,12 @@ impl Arena {
 
     /* ---------- spectators ---------- */
 
-    /// Back `side` with the attached deposit. Locked until the result.
+    /// Back `side` with `amount` from balance. Locked till result.
     #[payable]
-    pub fn buy(&mut self, match_id: u64, side: u8, min_out: U128) -> U128 {
+    pub fn buy(&mut self, match_id: u64, side: u8, amount: U128, min_out: U128) -> U128 {
+        assert_one_yocto();
         let who = env::predecessor_account_id();
-        let amount = env::attached_deposit().as_yoctonear();
+        let amount = amount.0;
         require!(side <= 1, "side must be 0 or 1");
         require!(amount >= self.min_bet, "Bet below minimum");
         require!(amount <= self.max_bet, "Bet above maximum");
@@ -351,6 +386,7 @@ impl Arena {
         let m = self.tradable(match_id, &who);
         let (out, amm) = amm_buy(m.amm, side as usize, x);
         require!(out >= min_out.0, "Price moved, try again");
+        self.debit(&who, amount);
 
         let key = (match_id, who.clone());
         let mut p = self.positions.get(&key).cloned().unwrap_or_default();
@@ -362,8 +398,7 @@ impl Arena {
         m.collateral += x;
         let id = m.bet_count;
         m.bet_count += 1;
-        let ms = env::block_timestamp() / 1_000_000;
-        self.bets.insert((match_id, id), BetView { id, who, side, amount: U128(amount), shares: U128(out), ms });
+        self.bets.insert((match_id, id), BetView { id, who, side, amount: U128(amount), shares: U128(out), ms: now_ms() });
         self.my_bets.entry(key).or_default().push(id);
         self.treasury += fee;
         self.push_price(match_id);
@@ -373,7 +408,8 @@ impl Arena {
     /* ---------- referee ---------- */
 
     pub fn report_kos(&mut self, match_id: u64, kos: u8) {
-        self.only_referee();
+        let game = self.get_match_internal(match_id).game;
+        self.only_referee(&game);
         let m = self.get_mut(match_id);
         require!(m.status == Status::Live, "Match not live");
         if kos > m.kos {
@@ -381,10 +417,10 @@ impl Arena {
         }
     }
 
-    /// `kos[i]` = KOs scored by seat i (monster record only).
+    /// `kos[i]` = KOs by seat i (asset record only).
     pub fn report_result(&mut self, match_id: u64, winner: Option<u8>, kos: Option<[u8; 2]>) {
-        self.only_referee();
         let m = self.get_match_internal(match_id);
+        self.only_referee(&m.game);
         require!(m.status == Status::Live, "Match not live");
         let status = match winner {
             None => Status::Refund,
@@ -395,8 +431,8 @@ impl Arena {
             }
         };
         self.finish(match_id, status);
-        if m.monsters.iter().any(Option::is_some) {
-            ext_monsters::ext(self.monsters.clone())
+        if let (true, Some(a)) = (m.monsters.iter().any(Option::is_some), self.assets(&m.game)) {
+            ext_assets::ext(a)
                 .with_static_gas(RECORD_GAS)
                 .record_result(match_id, m.monsters.clone().map(|l| l.map(|l| l.0)), winner, kos.unwrap_or_default(), m.tournament.map(|t| t.0))
                 .detach();
@@ -404,7 +440,7 @@ impl Arena {
         self.after(match_id);
     }
 
-    /// Anyone may void a match the referee never settled (or nobody joined) after 2 h.
+    /// Anyone voids unsettled (or unjoined) match after 2 h.
     pub fn expire(&mut self, match_id: u64) {
         let now = env::block_timestamp();
         let m = self.get_match_internal(match_id);
@@ -421,12 +457,14 @@ impl Arena {
     /* ---------- tournaments ---------- */
 
     #[payable]
-    pub fn create_tournament(&mut self, size: u8, entry_fee: U128, bettable: bool) -> u64 {
+    pub fn create_tournament(&mut self, game: String, size: u8, entry_fee: U128, bettable: bool) -> u64 {
         self.only_owner();
+        self.game(&game);
         require!(size == 4 || size == 8, "Size must be 4 or 8");
         let rounds = (0..size.trailing_zeros()).map(|r| vec![None; (size >> (r + 1)) as usize]).collect();
         let id = self.tournaments.len() as u64;
         self.tournaments.push(Tournament {
+            game,
             size,
             entry_fee: entry_fee.0,
             pot: 0,
@@ -441,31 +479,31 @@ impl Arena {
         id
     }
 
-    /// Locks the monster for 72 h, then `on_enter` registers (false = refunded).
+    /// Locks monster 72 h, then `on_enter` registers (false = re-credited).
     #[payable]
     pub fn enter_tournament(&mut self, id: u64, monster_id: String) -> Promise {
+        assert_one_yocto();
         let who = env::predecessor_account_id();
-        let fee = env::attached_deposit().as_yoctonear();
         let t = self.get_t(id);
         require!(t.status == TStatus::Open, "Tournament not open");
-        require!(fee == t.entry_fee, "Deposit must equal entry fee");
         require!(env::block_timestamp().saturating_sub(t.created_ns) <= TOURNEY_CANCEL_NS, "Entry closed");
         require!(!t.entrants.iter().any(|e| e.0 == who), "Already entered");
-        // Fail here (runtime refunds the deposit) rather than run out of gas in on_enter after the lock.
+        // fail here, not out of gas in on_enter after lock
         require!(env::prepaid_gas() >= ENTER_GAS, "Attach 150 Tgas");
+        self.debit(&who, t.entry_fee);
         let until = now_ms() + TOURNEY_LOCK_MS;
-        self.lock(&monster_id, &who, until).then(
-            Self::ext(env::current_account_id()).with_static_gas(ON_ENTER_GAS).on_enter(id, who, U128(fee), monster_id, until),
+        lock(&self.game(&t.game), &monster_id, &who, until).then(
+            Self::ext(env::current_account_id()).with_static_gas(ON_ENTER_GAS).on_enter(id, who, U128(t.entry_fee), monster_id, until),
         )
     }
 
-    /// No panics past the lookup: the fee ends up in the pot or bounced.
+    /// No panics past lookup: fee lands in pot or re-credited.
     #[private]
     pub fn on_enter(&mut self, id: u64, account_id: AccountId, fee: U128, monster_id: String, until_ms: u64) -> bool {
         let locked = promise_ok();
         let t = self.get_t(id);
         if !locked || t.status != TStatus::Open || t.entrants.iter().any(|e| e.0 == account_id) {
-            self.bounce(account_id, fee.0, locked.then_some((monster_id, until_ms)));
+            self.bounce(&t.game, account_id, fee.0, locked.then_some((monster_id, until_ms)));
             return false;
         }
         let t = self.tournaments.get_mut(id as u32).unwrap();
@@ -482,7 +520,7 @@ impl Arena {
         true
     }
 
-    /// Champion: pot - fee. Cancelled: each entrant their fee back.
+    /// Champion: pot - fee. Cancelled: fee back. Credits balance.
     pub fn claim_tournament(&mut self, id: u64) -> U128 {
         let who = env::predecessor_account_id();
         let t = self.get_t(id);
@@ -495,45 +533,22 @@ impl Arena {
         };
         require!(due > 0, "Nothing to claim");
         self.tournaments.get_mut(id as u32).unwrap().claimed[i] = true;
-        Promise::new(who)
-            .transfer(NearToken::from_yoctonear(due))
-            .then(Self::ext(env::current_account_id()).with_static_gas(CALLBACK_GAS).on_claim_tournament(id, i as u8))
-            .detach();
+        self.credit(&who, due);
         U128(due)
     }
 
-    #[private]
-    pub fn on_claim_tournament(&mut self, id: u64, entrant: u8) -> bool {
-        if promise_ok() {
-            return true;
-        }
-        self.tournaments.get_mut(id as u32).unwrap().claimed[entrant as usize] = false;
-        false
-    }
-
-    /// Anyone may cancel a tournament that didn't fill within 24 h.
+    /// Anyone cancels a tournament unfilled after 24 h.
     pub fn cancel_tournament(&mut self, id: u64) {
         let t = self.get_t(id);
         require!(t.status == TStatus::Open, "Tournament not open");
         require!(env::block_timestamp().saturating_sub(t.created_ns) > TOURNEY_CANCEL_NS, "Not expired yet");
         self.tournaments.get_mut(id as u32).unwrap().status = TStatus::Cancelled;
-        self.unlock(t.entrants.into_iter().map(|e| e.1).collect());
-    }
-
-    /// A `bounce` refund that didn't land goes to the treasury.
-    // ponytail: owner refunds by hand from the treasury; track per-account credits if this ever happens.
-    #[private]
-    pub fn on_refund(&mut self, amount: U128) -> bool {
-        if promise_ok() {
-            return true;
-        }
-        self.treasury += amount.0;
-        false
+        self.unlock(&t.game, t.entrants.into_iter().map(|e| e.1).collect());
     }
 
     /* ---------- payouts ---------- */
 
-    /// Pays the caller everything they are owed for this match (player pot/stake and/or bets).
+    /// Credits caller all owed for this match (seat pot/stake + bets).
     pub fn claim(&mut self, match_id: u64) -> U128 {
         let who = env::predecessor_account_id();
         let m = self.get_match_internal(match_id);
@@ -542,53 +557,38 @@ impl Arena {
         let settle_amt = self.positions.get(&key).map(|p| position_due(&m, p)).unwrap_or(0);
         let total = seat_amt + settle_amt;
         require!(total > 0, "Nothing to claim");
-
-        let paid_seat = seat.filter(|_| seat_amt > 0);
-        if let Some(s) = paid_seat {
+        if let Some(s) = seat.filter(|_| seat_amt > 0) {
             self.get_mut(match_id).claimed[s] = true;
         }
-        let paid_pos = settle_amt > 0;
-        if paid_pos {
+        if settle_amt > 0 {
             self.positions.get_mut(&key).unwrap().claimed = true;
         }
-        Promise::new(who.clone())
-            .transfer(NearToken::from_yoctonear(total))
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(CALLBACK_GAS)
-                    .on_claim(match_id, who, paid_seat.map(|s| s as u8), paid_pos),
-            )
-            .detach();
+        self.credit(&who, total);
         U128(total)
     }
 
-    /// Restores claimed flags if the transfer failed, so the user can retry.
-    #[private]
-    pub fn on_claim(&mut self, match_id: u64, account_id: AccountId, seat: Option<u8>, position: bool) -> bool {
-        if promise_ok() {
-            return true;
-        }
-        if let Some(s) = seat {
-            self.get_mut(match_id).claimed[s as usize] = false;
-        }
-        if position {
-            if let Some(p) = self.positions.get_mut(&(match_id, account_id)) {
-                p.claimed = false;
-            }
-        }
-        false
+    /* ---------- views ---------- */
+
+    pub fn get_game(&self, game: String) -> Option<Game> {
+        self.games.get(&game).cloned()
     }
 
-    /* ---------- views ---------- */
+    pub fn list_games(&self) -> Vec<(String, Game)> {
+        self.games.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    }
 
     pub fn get_tournament(&self, id: u64) -> Option<TournamentView> {
         self.tournaments.get(id as u32).map(|t| tview(id, t))
     }
 
-    /// Newest first. `from` = how many of the newest to skip.
-    pub fn list_tournaments(&self, from: u64, limit: u64) -> Vec<TournamentView> {
-        let len = self.tournaments.len() as u64;
-        (0..limit.min(MAX_LIST)).map_while(|i| len.checked_sub(from + i + 1)).map(|id| tview(id, &self.tournaments[id as u32])).collect()
+    /// Newest first. `from` = newest ids to skip.
+    pub fn list_tournaments(&self, from: u64, limit: u64, game: Option<String>) -> Vec<TournamentView> {
+        newest(self.tournaments.len(), from)
+            .map(|id| (id, &self.tournaments[id as u32]))
+            .filter(|(_, t)| game.as_ref().is_none_or(|g| *g == t.game))
+            .take(limit.min(MAX_LIST) as usize)
+            .map(|(id, t)| tview(id, t))
+            .collect()
     }
 
     pub fn get_match(&self, match_id: u64) -> Option<MatchView> {
@@ -603,24 +603,24 @@ impl Arena {
         })
     }
 
-    /// One account's bets on a match, oldest first.
+    /// Oldest first.
     pub fn get_bets_of(&self, match_id: u64, account_id: AccountId) -> Vec<BetView> {
         let ids = self.my_bets.get(&(match_id, account_id)).cloned().unwrap_or_default();
         ids.iter().filter_map(|id| self.bets.get(&(match_id, *id)).cloned()).collect()
     }
 
-    /// Latest bets on a match, newest first (for the live feed).
+    /// Newest first (live feed).
     pub fn get_recent_bets(&self, match_id: u64, limit: u32) -> Vec<BetView> {
         let n = self.matches.get(match_id as u32).map(|m| m.bet_count).unwrap_or(0);
         (0..limit.min(MAX_RECENT)).map_while(|i| n.checked_sub(i + 1)).filter_map(|id| self.bets.get(&(match_id, id)).cloned()).collect()
     }
 
-    /// Price points (ms, fighter 0 price bps), oldest first.
+    /// (ms, seat 0 bps), oldest first.
     pub fn get_prices(&self, match_id: u64) -> Vec<(u64, u16)> {
         self.history.get(&match_id).cloned().unwrap_or_default()
     }
 
-    /// Shares a deposit of `amount` would buy right now (after fee).
+    /// Shares `amount` buys now (after fee).
     pub fn quote_buy(&self, match_id: u64, side: u8, amount: U128) -> U128 {
         let m = self.get_match_internal(match_id);
         let x = amount.0 - amount.0 * self.fee_bps as u128 / BPS;
@@ -634,19 +634,19 @@ impl Arena {
         U128(seat + pos)
     }
 
-    /// Newest first. `from` = how many of the newest matches to skip.
-    pub fn list_matches(&self, from: u64, limit: u64) -> Vec<MatchView> {
-        let len = self.matches.len() as u64;
-        (0..limit.min(MAX_LIST))
-            .map_while(|i| len.checked_sub(from + i + 1))
-            .map(|id| view(id, &self.matches[id as u32]))
+    /// Newest first. `from` = newest ids to skip.
+    pub fn list_matches(&self, from: u64, limit: u64, game: Option<String>) -> Vec<MatchView> {
+        newest(self.matches.len(), from)
+            .map(|id| (id, &self.matches[id as u32]))
+            .filter(|(_, m)| game.as_ref().is_none_or(|g| *g == m.game))
+            .take(limit.min(MAX_LIST) as usize)
+            .map(|(id, m)| view(id, m))
             .collect()
     }
 
     pub fn config(&self) -> ConfigView {
         ConfigView {
             owner: self.owner.clone(),
-            referee: self.referee.clone(),
             fee_bps: self.fee_bps,
             min_bet: U128(self.min_bet),
             max_bet: U128(self.max_bet),
@@ -657,10 +657,12 @@ impl Arena {
 
     /* ---------- owner ---------- */
 
+    /// Upsert.
     #[payable]
-    pub fn set_referee(&mut self, referee_id: AccountId) {
+    pub fn register_game(&mut self, game: String, referee_id: AccountId, assets_id: Option<AccountId>) {
         self.only_owner();
-        self.referee = referee_id;
+        require!(!game.is_empty() && game.len() <= 32, "Bad game id");
+        self.games.insert(game, Game { referee_id, assets_id });
     }
 
     #[payable]
@@ -678,7 +680,7 @@ impl Arena {
         self.seed = seed.0;
     }
 
-    /// Owner tops up the treasury that seeds match pools.
+    /// Owner tops up treasury (seeds pools).
     #[payable]
     pub fn fund(&mut self) {
         require!(env::predecessor_account_id() == self.owner, "Only owner");
@@ -695,13 +697,32 @@ impl Arena {
 }
 
 impl Arena {
-    /// Owner actions need 1 yoctoNEAR so a function-call key can't trigger them.
+    /// 1 yocto: fn-call key can't trigger.
     fn only_owner(&self) {
         assert_one_yocto();
         require!(env::predecessor_account_id() == self.owner, "Only owner");
     }
-    fn only_referee(&self) {
-        require!(env::predecessor_account_id() == self.referee, "Only referee");
+    fn only_referee(&self, game: &str) {
+        require!(env::predecessor_account_id() == self.game(game).referee_id, "Only referee");
+    }
+    fn game(&self, game: &str) -> Game {
+        self.games.get(game).cloned().unwrap_or_else(|| env::panic_str("Unknown game"))
+    }
+    /// None if game dropped assets mid-match: locks then just expire.
+    fn assets(&self, game: &str) -> Option<AccountId> {
+        self.games.get(game).and_then(|g| g.assets_id.clone())
+    }
+    fn credit(&mut self, who: &AccountId, amt: u128) {
+        if amt > 0 {
+            *self.balances.entry(who.clone()).or_insert(0) += amt;
+        }
+    }
+    fn debit(&mut self, who: &AccountId, amt: u128) {
+        if amt == 0 {
+            return;
+        }
+        let b = self.balances.get_mut(who).filter(|b| **b >= amt).unwrap_or_else(|| env::panic_str("Insufficient balance"));
+        *b -= amt;
     }
     fn get_mut(&mut self, id: u64) -> &mut Match {
         self.matches.get_mut(id as u32).unwrap_or_else(|| env::panic_str("No such match"))
@@ -714,29 +735,20 @@ impl Arena {
         self.tournaments.get(id as u32).cloned().unwrap_or_else(|| env::panic_str("No such tournament"))
     }
 
-    fn lock(&self, mon: &str, who: &AccountId, until_ms: u64) -> Promise {
-        ext_monsters::ext(self.monsters.clone()).with_static_gas(LOCK_GAS).lock(mon.into(), who.clone(), until_ms)
-    }
-
-    fn unlock(&self, locks: Vec<Lock>) {
-        if !locks.is_empty() {
-            ext_monsters::ext(self.monsters.clone()).with_static_gas(UNLOCK_GAS).unlock(locks).detach();
+    fn unlock(&self, game: &str, locks: Vec<Lock>) {
+        if let (false, Some(a)) = (locks.is_empty(), self.assets(game)) {
+            ext_assets::ext(a).with_static_gas(UNLOCK_GAS).unlock(locks).detach();
         }
     }
 
-    /// Failed lock callback: deposit back, monster unlocked if we did lock it.
-    fn bounce(&self, who: AccountId, amount: u128, locked: Option<Lock>) {
-        if amount > 0 {
-            Promise::new(who)
-                .transfer(NearToken::from_yoctonear(amount))
-                .then(Self::ext(env::current_account_id()).with_static_gas(CALLBACK_GAS).on_refund(U128(amount)))
-                .detach();
-        }
-        self.unlock(locked.into_iter().collect());
+    /// Failed lock callback: re-credit, unlock if we did lock.
+    fn bounce(&mut self, game: &str, who: AccountId, amount: u128, locked: Option<Lock>) {
+        self.credit(&who, amount);
+        self.unlock(game, locked.into_iter().collect());
     }
 
-    /// Seed for a bettable match comes out of the treasury here.
-    fn open_match(&mut self, host: AccountId, stake: u128, bettable: bool, monster: Option<Lock>) -> u64 {
+    /// Bettable seed comes out of treasury here.
+    fn open_match(&mut self, game: String, host: AccountId, stake: u128, bettable: bool, monster: Option<Lock>) -> u64 {
         let seed = if bettable {
             require!(self.treasury >= self.seed, "House can't fund bets right now");
             self.treasury -= self.seed;
@@ -746,6 +758,7 @@ impl Arena {
         };
         let id = self.matches.len() as u64;
         self.matches.push(Match {
+            game,
             host,
             guest: None,
             stake,
@@ -777,29 +790,29 @@ impl Arena {
         }
     }
 
-    /// Zero-stake Live bracket match; bettable only if the house can seed it right now.
+    /// Zero-stake Live bracket match; bettable only if house can seed now.
     fn tourney_match(&mut self, tid: u64, round: u8, slot: u8, a: (AccountId, Lock), b: (AccountId, Lock)) {
-        let bettable = self.tournaments[tid as u32].bettable && self.treasury >= self.seed;
-        let id = self.open_match(a.0, 0, bettable, Some(a.1));
+        let t = &self.tournaments[tid as u32];
+        let (bettable, game) = (t.bettable && self.treasury >= self.seed, t.game.clone());
+        let id = self.open_match(game, a.0, 0, bettable, Some(a.1));
         self.get_mut(id).tournament = Some((tid, round, slot));
         self.go_live(id, b.0, Some(b.1));
         self.tournaments.get_mut(tid as u32).unwrap().rounds[round as usize][slot as usize] = Some(id);
     }
 
-    /// After a match ends: free its monsters, or move the tournament bracket on.
+    /// Match ended: unlock monsters, or advance bracket.
     fn after(&mut self, id: u64) {
         let m = self.get_match_internal(id);
         let Some((tid, round, slot)) = m.tournament else {
-            return self.unlock(m.monsters.into_iter().flatten().collect());
+            return self.unlock(&m.game, m.monsters.into_iter().flatten().collect());
         };
-        // ponytail: a void (or expired) bracket match advances a random seat (random_seed: block producer could bias it);
-        // replay voids if fairness matters.
+        // ponytail: void/expired bracket match advances random seat (producer could bias); replay voids if fairness matters
         let w = match m.status {
             Status::Settled(w) => w as usize,
             _ => (env::random_seed()[0] & 1) as usize,
         };
         self.get_mut(id).advances = w as u8;
-        self.unlock(m.monsters[1 - w].clone().into_iter().collect());
+        self.unlock(&m.game, m.monsters[1 - w].clone().into_iter().collect());
         let t = self.get_t(tid);
         let (r, s) = (round as usize, slot as usize);
         if r + 1 == t.rounds.len() {
@@ -808,8 +821,10 @@ impl Arena {
             let t = self.tournaments.get_mut(tid as u32).unwrap();
             t.status = TStatus::Done;
             t.champion = Some(seat_account(&m, w));
-            ext_monsters::ext(self.monsters.clone()).with_static_gas(TITLE_GAS).add_title(mon.0.clone(), format!("Tournament #{tid} Champion")).detach();
-            return self.unlock(vec![mon]);
+            if let Some(a) = self.assets(&m.game) {
+                ext_assets::ext(a).with_static_gas(TITLE_GAS).add_title(mon.0.clone(), format!("Tournament #{tid} Champion")).detach();
+            }
+            return self.unlock(&m.game, vec![mon]);
         }
         let Some(sib) = t.rounds[r][s ^ 1].map(|i| self.get_match_internal(i)) else { return };
         if matches!(sib.status, Status::Open | Status::Live) {
@@ -822,7 +837,6 @@ impl Arena {
         self.tourney_match(tid, round + 1, (s / 2) as u8, a, b);
     }
 
-    /// Match a spectator `who` may trade on right now.
     fn tradable(&self, id: u64, who: &AccountId) -> Match {
         let m = self.get_match_internal(id);
         require!(m.bettable, "Match not bettable");
@@ -831,8 +845,7 @@ impl Arena {
         m
     }
 
-    /// Ends a match and hands the house its share of the pool.
-    /// Settled(w): the pool's own winning shares. Refund: bets are refunded in full, so the house gets its seed back.
+    /// End match, house takes its pool share: Settled(w) = pool's winning shares, Refund = seed back.
     fn finish(&mut self, id: u64, status: Status) {
         let m = self.get_mut(id);
         m.status = status;
@@ -844,7 +857,7 @@ impl Arena {
     }
 
     fn push_price(&mut self, id: u64) {
-        let p = (env::block_timestamp() / 1_000_000, price_bps(self.get_match_internal(id).amm));
+        let p = (now_ms(), price_bps(self.get_match_internal(id).amm));
         let h = self.history.entry(id).or_default();
         if h.len() >= MAX_HISTORY {
             h.remove(0);
@@ -852,7 +865,7 @@ impl Arena {
         h.push(p);
     }
 
-    /// (seat, unclaimed amount) for a player of this match.
+    /// (seat, unclaimed) for a player.
     fn player_due(&self, m: &Match, who: &AccountId) -> (Option<usize>, u128) {
         let seat = if *who == m.host { Some(0) } else if Some(who) == m.guest.as_ref() { Some(1) } else { None };
         let Some(s) = seat else { return (None, 0) };
@@ -860,7 +873,7 @@ impl Arena {
             return (seat, 0);
         }
         let due = match m.status {
-            Status::Refund => m.stake, // host alone (Open/cancel/expire) or both players
+            Status::Refund => m.stake, // host alone or both
             Status::Settled(w) if w as usize == s => {
                 let pot = 2 * m.stake;
                 pot - pot * self.fee_bps as u128 / BPS
@@ -871,7 +884,17 @@ impl Arena {
     }
 }
 
-/// Promise 0 didn't fail. Transfers return nothing and `lock`'s Dna isn't needed, so anything but Failed is success.
+fn lock(g: &Game, mon: &str, who: &AccountId, until_ms: u64) -> Promise {
+    let a = g.assets_id.clone().unwrap_or_else(|| env::panic_str("Game has no assets"));
+    ext_assets::ext(a).with_static_gas(LOCK_GAS).lock(mon.into(), who.clone(), until_ms)
+}
+
+/// Ids newest first after skipping `from`, capped at MAX_SCAN.
+fn newest(len: u32, from: u64) -> impl Iterator<Item = u64> {
+    (0..(len as u64).saturating_sub(from)).rev().take(MAX_SCAN)
+}
+
+/// Promise 0 not Failed. Transfers return nothing, lock's Dna unused.
 fn promise_ok() -> bool {
     !matches!(env::promise_result_checked(0, 0), Err(PromiseError::Failed))
 }
@@ -893,6 +916,7 @@ fn tview(id: u64, t: &Tournament) -> TournamentView {
     };
     TournamentView {
         id,
+        game: t.game.clone(),
         size: t.size,
         entry_fee: U128(t.entry_fee),
         pot: U128(t.pot),
@@ -906,7 +930,6 @@ fn tview(id: u64, t: &Tournament) -> TournamentView {
     }
 }
 
-/// Settlement payout for a position.
 fn position_due(m: &Match, p: &Position) -> u128 {
     if p.claimed {
         return 0;
@@ -927,6 +950,7 @@ fn view(id: u64, m: &Match) -> MatchView {
     };
     MatchView {
         id,
+        game: m.game.clone(),
         host: m.host.clone(),
         guest: m.guest.clone(),
         stake: U128(m.stake),

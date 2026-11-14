@@ -3,6 +3,8 @@ use near_sdk::test_utils::VMContextBuilder;
 use near_sdk::testing_env;
 
 const N: u128 = 1_000_000_000_000_000_000_000_000; // 1 NEAR
+const SEED: u128 = 5 * N;
+const G: &str = "brawler";
 
 fn acc(s: &str) -> AccountId {
     s.parse().unwrap()
@@ -21,35 +23,65 @@ fn as_at(who: &str, deposit: u128, ts: u64) {
     testing_env!(b.build());
 }
 
-const SEED: u128 = 5 * N;
+fn bal(c: &Arena, who: &str) -> u128 {
+    c.balance_of(acc(who)).0
+}
 
-fn create(c: &mut Arena, bettable: bool) -> u64 {
-    match c.create_match(bettable, None) {
+/// Deposit `amt` into `who`'s balance.
+fn fund(c: &mut Arena, who: &str, amt: u128) {
+    if amt > 0 {
+        as_(who, amt);
+        c.deposit();
+    }
+}
+
+fn create_in(c: &mut Arena, game: &str, host: &str, stake: u128, bettable: bool) -> u64 {
+    fund(c, host, stake);
+    as_(host, 1);
+    match c.create_match(game.into(), U128(stake), bettable, None) {
         PromiseOrValue::Value(v) => v.unwrap(),
         _ => panic!("expected value"),
     }
 }
 
-fn join(c: &mut Arena, id: u64) {
+fn create(c: &mut Arena, host: &str, stake: u128, bettable: bool) -> u64 {
+    create_in(c, G, host, stake, bettable)
+}
+
+fn join(c: &mut Arena, who: &str, id: u64) {
+    fund(c, who, c.get_match(id).unwrap().stake.0);
+    as_(who, 1);
     assert!(matches!(c.join_match(id, None), PromiseOrValue::Value(true)));
 }
 
-/// Fresh contract with a treasury that can seed two matches.
+fn bet(c: &mut Arena, who: &str, side: u8, amt: u128, min_out: u128) -> u128 {
+    fund(c, who, amt);
+    as_(who, 1);
+    c.buy(0, side, U128(amt), U128(min_out)).0
+}
+
+fn bet_at(c: &mut Arena, who: &str, side: u8, amt: u128, ts: u64) -> u128 {
+    fund(c, who, amt);
+    as_at(who, 1, ts);
+    c.buy(0, side, U128(amt), U128(0)).0
+}
+
+/// Fresh contract, game "brawler" (referee "ref", assets "mon"), treasury seeds 2 matches.
 fn setup() -> Arena {
     as_("arena", 0);
-    let mut c = Arena::new(acc("arena"), acc("ref"), acc("mon"));
+    let mut c = Arena::new(acc("arena"));
+    as_("arena", 1);
+    c.register_game(G.into(), acc("ref"), Some(acc("mon")));
     as_("arena", 2 * SEED);
     c.fund();
     c
 }
 
-/// Live bettable match 0 between host and guest with `stake` each.
+/// Live bettable match 0, host vs guest, `stake` each.
 fn live(stake: u128) -> Arena {
     let mut c = setup();
-    as_("host", stake);
-    assert_eq!(create(&mut c, true), 0);
-    as_("guest", stake);
-    join(&mut c, 0);
+    assert_eq!(create(&mut c, "host", stake, true), 0);
+    join(&mut c, "guest", 0);
     c
 }
 
@@ -61,88 +93,120 @@ fn claim_as(c: &mut Arena, who: &str) -> u128 {
 #[test]
 fn escrow_and_join() {
     let mut c = setup();
-    as_("host", N);
-    create(&mut c, false);
-    assert_eq!(c.get_match(0).unwrap().status, "open");
-    as_("guest", N);
-    join(&mut c, 0);
+    create(&mut c, "host", N, false);
+    assert_eq!((c.get_match(0).unwrap().status.as_str(), bal(&c, "host")), ("open", 0));
+    assert_eq!(c.get_match(0).unwrap().game, G);
+    join(&mut c, "guest", 0);
     let m = c.get_match(0).unwrap();
-    assert_eq!(m.status, "live");
-    assert_eq!(m.guest, Some(acc("guest")));
+    assert_eq!((m.status.as_str(), m.guest, bal(&c, "guest")), ("live", Some(acc("guest")), 0));
 }
 
 #[test]
-#[should_panic(expected = "Deposit must equal stake")]
-fn join_wrong_deposit() {
+#[should_panic(expected = "Insufficient balance")]
+fn join_insufficient_balance() {
     let mut c = setup();
-    as_("host", N);
-    create(&mut c, false);
-    as_("guest", N / 2);
-    join(&mut c, 0);
+    create(&mut c, "host", N, false);
+    fund(&mut c, "guest", N / 2);
+    as_("guest", 1);
+    let _ = c.join_match(0, None);
+}
+
+#[test]
+#[should_panic(expected = "Insufficient balance")]
+fn create_insufficient_balance() {
+    let mut c = setup();
+    as_("host", 1);
+    let _ = c.create_match(G.into(), U128(N), false, None);
+}
+
+#[test]
+#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+fn spend_needs_one_yocto() {
+    let mut c = setup();
+    fund(&mut c, "host", N);
+    as_("host", 0);
+    let _ = c.create_match(G.into(), U128(N), false, None);
+}
+
+#[test]
+#[should_panic(expected = "Unknown game")]
+fn unknown_game() {
+    let mut c = setup();
+    create_in(&mut c, "nope", "host", 0, false);
+}
+
+#[test]
+#[should_panic(expected = "Game has no assets")]
+fn monster_needs_assets() {
+    let mut c = setup();
+    as_("arena", 1);
+    c.register_game("plain".into(), acc("ref"), None);
+    as_("host", 1);
+    let _ = c.create_match("plain".into(), U128(0), false, Some("1".into()));
 }
 
 #[test]
 #[should_panic(expected = "Host cannot join own match")]
 fn host_cannot_join() {
     let mut c = setup();
-    as_("host", N);
-    create(&mut c, false);
-    join(&mut c, 0);
+    create(&mut c, "host", N, false);
+    join(&mut c, "host", 0);
 }
 
 #[test]
 #[should_panic(expected = "Players cannot bet on their own match")]
 fn player_cannot_bet() {
     let mut c = live(N);
-    as_("guest", N);
-    c.buy(0, 0, U128(0));
+    bet(&mut c, "guest", 0, N, 0);
 }
 
 #[test]
 #[should_panic(expected = "Bet below minimum")]
 fn bet_min() {
     let mut c = live(N);
-    as_("bob", N / 1000);
-    c.buy(0, 0, U128(0));
+    bet(&mut c, "bob", 0, N / 1000, 0);
 }
 
 #[test]
 #[should_panic(expected = "Bet above maximum")]
 fn bet_max() {
     let mut c = live(N);
-    as_("bob", 101 * N);
-    c.buy(0, 0, U128(0));
+    bet(&mut c, "bob", 0, 101 * N, 0);
+}
+
+#[test]
+#[should_panic(expected = "Insufficient balance")]
+fn bet_needs_balance() {
+    let mut c = live(N);
+    as_("bob", 1);
+    c.buy(0, 0, U128(N), U128(0));
 }
 
 #[test]
 #[should_panic(expected = "Match not bettable")]
 fn unbettable() {
     let mut c = setup();
-    as_("host", 0);
-    create(&mut c, false);
-    as_("guest", 0);
-    join(&mut c, 0);
-    as_("bob", N);
-    c.buy(0, 0, U128(0));
+    create(&mut c, "host", 0, false);
+    join(&mut c, "guest", 0);
+    bet(&mut c, "bob", 0, N, 0);
 }
 
 #[test]
 #[should_panic(expected = "Betting closed")]
 fn no_trading_before_live() {
     let mut c = setup();
-    as_("host", N);
-    create(&mut c, true);
-    as_("bob", N);
-    c.buy(0, 0, U128(0));
+    create(&mut c, "host", N, true);
+    bet(&mut c, "bob", 0, N, 0);
 }
 
 #[test]
 #[should_panic(expected = "House can't fund bets right now")]
 fn bettable_needs_treasury() {
     as_("arena", 0);
-    let mut c = Arena::new(acc("arena"), acc("ref"), acc("mon"));
-    as_("host", N);
-    create(&mut c, true);
+    let mut c = Arena::new(acc("arena"));
+    as_("arena", 1);
+    c.register_game(G.into(), acc("ref"), None);
+    create(&mut c, "host", N, true);
 }
 
 #[test]
@@ -150,12 +214,10 @@ fn long_moves_price_and_quote_matches() {
     let mut c = live(N);
     assert_eq!(c.get_match(0).unwrap().price_bps, 5000);
     let q = c.quote_buy(0, 0, U128(N)).0;
-    as_("bob", N);
-    assert_eq!(c.buy(0, 0, U128(q)).0, q);
+    assert_eq!(bet(&mut c, "bob", 0, N, q), q);
     let up = c.get_match(0).unwrap().price_bps;
     assert!(up > 5000, "long A raises A's price: {up}");
-    as_("cat", 2 * N);
-    c.buy(0, 1, U128(0)); // short A
+    bet(&mut c, "cat", 1, 2 * N, 0); // short A
     assert!(c.get_match(0).unwrap().price_bps < up);
     assert_eq!(c.get_prices(0).len(), 3); // live start + 2 trades
 }
@@ -165,38 +227,48 @@ fn long_moves_price_and_quote_matches() {
 fn slippage_guard() {
     let mut c = live(N);
     let q = c.quote_buy(0, 0, U128(N)).0;
-    as_("cat", N);
-    c.buy(0, 0, U128(0)); // front-run
-    as_("bob", N);
-    c.buy(0, 0, U128(q));
+    bet(&mut c, "cat", 0, N, 0); // front-run
+    bet(&mut c, "bob", 0, N, q);
 }
 
-/// Plays a market, settles with `winner`, claims everyone, checks every yocto is accounted for.
+const ACTORS: [&str; 6] = ["host", "guest", "aa", "bb", "cc", "dd"];
+
+/// balances + treasury: everything the contract owes outside open escrow.
+fn ledger(c: &Arena) -> u128 {
+    ACTORS.iter().map(|w| bal(c, w)).sum::<u128>() + c.config().treasury.0
+}
+
+/// Everyone deposits first; play, settle, claim all; ledger must return to start (dust only, never over).
 fn conserve(winner: Option<u8>) {
     let stake = 3 * N;
-    let mut c = live(stake);
-    let t0 = c.config().treasury.0; // after seeding
-    let mut deposits = 2 * stake;
-    for (who, side, amt) in [("aa", 0, 2 * N), ("bb", 1, 5 * N), ("cc", 0, N + 7), ("aa", 1, N / 3), ("dd", 1, 40 * N)] {
-        as_(who, amt);
-        c.buy(0, side, U128(0));
-        deposits += amt;
+    let mut c = setup();
+    let bets = [("aa", 0, 2 * N), ("bb", 1, 5 * N), ("cc", 0, N + 7), ("aa", 1, N / 3), ("dd", 1, 40 * N)];
+    fund(&mut c, "host", stake);
+    fund(&mut c, "guest", stake);
+    for (who, _, amt) in bets {
+        fund(&mut c, who, amt);
     }
+    let l0 = ledger(&c);
+    as_("host", 1);
+    let _ = c.create_match(G.into(), U128(stake), true, None);
+    as_("guest", 1);
+    let _ = c.join_match(0, None);
+    for (who, side, amt) in bets {
+        as_(who, 1);
+        c.buy(0, side, U128(amt), U128(0));
+    }
+    assert!(ledger(&c) < l0); // escrowed
     as_("ref", 0);
     c.report_result(0, winner, None);
-    let mut paid = 0;
-    for who in ["host", "guest", "aa", "bb", "cc", "dd"] {
-        paid += c.claimable(0, acc(who)).0;
+    for who in ACTORS {
         if c.claimable(0, acc(who)).0 > 0 {
             claim_as(&mut c, who);
         }
         assert_eq!(c.claimable(0, acc(who)).0, 0);
     }
-    let gained = c.config().treasury.0 - t0; // seed back (or not) + fees
-    let in_ = deposits + SEED;
-    let out = paid + gained;
-    assert!(out <= in_, "overpaid by {}", out - in_);
-    assert!(in_ - out < 100, "dust only: {}", in_ - out);
+    let l1 = ledger(&c);
+    assert!(l1 <= l0, "overpaid by {}", l1 - l0);
+    assert!(l0 - l1 < 100, "dust only: {}", l0 - l1);
 }
 
 #[test]
@@ -217,34 +289,33 @@ fn refund_conserves() {
 #[test]
 fn settle_pays_winning_shares() {
     let mut c = live(N);
-    as_("bob", 2 * N);
-    let sh = c.buy(0, 0, U128(0)).0;
-    as_("cat", N);
-    c.buy(0, 1, U128(0));
+    let sh = bet(&mut c, "bob", 0, 2 * N, 0);
+    bet(&mut c, "cat", 1, N, 0);
     as_("ref", 0);
     c.report_result(0, Some(0), None);
     assert_eq!(c.claimable(0, acc("bob")).0, sh);
     assert_eq!(c.claimable(0, acc("cat")).0, 0);
+    claim_as(&mut c, "bob");
+    assert_eq!(bal(&c, "bob"), sh);
 }
 
 #[test]
 fn refund_returns_net_deposit() {
     let mut c = live(N);
-    as_("aa", 3 * N);
-    c.buy(0, 0, U128(0));
+    bet(&mut c, "aa", 0, 3 * N, 0);
     as_("ref", 0);
     c.report_result(0, None, None);
     assert_eq!(claim_as(&mut c, "host"), N);
     assert_eq!(claim_as(&mut c, "guest"), N);
     assert_eq!(claim_as(&mut c, "aa"), 3 * N - 3 * N / 1000); // fee kept
+    assert_eq!((bal(&c, "host"), bal(&c, "guest")), (N, N));
 }
 
 #[test]
 fn history_capped() {
     let mut c = live(0);
     for i in 0..(MAX_HISTORY + 5) {
-        as_at("bob", N / 10, i as u64 * 1_000_000);
-        c.buy(0, (i % 2) as u8, U128(0));
+        bet_at(&mut c, "bob", (i % 2) as u8, N / 10, i as u64 * 1_000_000);
     }
     let h = c.get_prices(0);
     assert_eq!(h.len(), MAX_HISTORY);
@@ -261,26 +332,43 @@ fn double_claim() {
     claim_as(&mut c, "guest");
 }
 
-#[test]
-fn failed_transfer_restores_claim() {
-    let mut c = live(N);
-    as_("ref", 0);
-    c.report_result(0, Some(1), None);
-    claim_as(&mut c, "guest");
-    assert_eq!(c.claimable(0, acc("guest")).0, 0);
-    // callback with a failed promise result
+/// Context for a `#[private]` callback whose promise 0 succeeded or failed.
+fn cb(ok: bool) {
     let mut b = VMContextBuilder::new();
     b.current_account_id(acc("arena")).predecessor_account_id(acc("arena"));
-    testing_env!(b.build(), near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![near_sdk::PromiseResult::Failed]);
-    assert!(!c.on_claim(0, acc("guest"), Some(1), false));
-    assert!(c.claimable(0, acc("guest")).0 > 0);
+    let r = if ok { near_sdk::PromiseResult::Successful(vec![]) } else { near_sdk::PromiseResult::Failed };
+    testing_env!(b.build(), near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![r]);
+}
+
+#[test]
+fn withdraw_and_failed_transfer_recredits() {
+    let mut c = setup();
+    fund(&mut c, "bob", 3 * N);
+    as_("bob", 0);
+    let _ = c.withdraw(U128(2 * N));
+    assert_eq!(bal(&c, "bob"), N);
+    has(&format!("bob<-{}", 2 * N));
+    cb(false);
+    assert!(!c.on_withdraw(acc("bob"), U128(2 * N)));
+    assert_eq!(bal(&c, "bob"), 3 * N);
+    cb(true);
+    assert!(c.on_withdraw(acc("bob"), U128(2 * N)));
+    assert_eq!(bal(&c, "bob"), 3 * N);
+}
+
+#[test]
+#[should_panic(expected = "Insufficient balance")]
+fn withdraw_over_balance() {
+    let mut c = setup();
+    fund(&mut c, "bob", N);
+    as_("bob", 0);
+    let _ = c.withdraw(U128(N + 1));
 }
 
 #[test]
 fn expire_live_and_open() {
     let mut c = live(N);
-    as_("host", N);
-    create(&mut c, true); // id 1, open
+    create(&mut c, "host", N, true); // id 1, open
     as_at("anyone", 0, EXPIRY_NS + 1);
     c.expire(0);
     c.expire(1);
@@ -288,6 +376,7 @@ fn expire_live_and_open() {
     assert_eq!(claim_as(&mut c, "host"), N); // match 0 stake
     as_("host", 0);
     assert_eq!(c.claim(1).0, N);
+    assert_eq!(bal(&c, "host"), 2 * N);
 }
 
 #[test]
@@ -301,24 +390,51 @@ fn expire_too_early() {
 #[test]
 fn cancel_refunds_host() {
     let mut c = setup();
-    as_("host", N);
-    create(&mut c, true);
+    create(&mut c, "host", N, true);
+    as_("host", 0);
     c.cancel_match(0);
     assert_eq!(c.get_match(0).unwrap().status, "refund");
-    assert_eq!(c.claimable(0, acc("host")).0, 0); // already paid
+    assert_eq!(c.claimable(0, acc("host")).0, 0); // already credited
+    assert_eq!(bal(&c, "host"), N);
 }
 
 #[test]
-fn list_newest_first() {
+fn list_newest_first_and_game_filter() {
     let mut c = setup();
-    for _ in 0..3 {
-        as_("host", 0);
-        create(&mut c, false);
+    as_("arena", 1);
+    c.register_game("other".into(), acc("ref2"), None);
+    for g in [G, "other", G] {
+        create_in(&mut c, g, "host", 0, false);
     }
-    let ids: Vec<u64> = c.list_matches(0, 10).iter().map(|m| m.id).collect();
-    assert_eq!(ids, vec![2, 1, 0]);
-    let ids: Vec<u64> = c.list_matches(1, 1).iter().map(|m| m.id).collect();
-    assert_eq!(ids, vec![1]);
+    let ids = |v: Vec<MatchView>| v.iter().map(|m| m.id).collect::<Vec<u64>>();
+    assert_eq!(ids(c.list_matches(0, 10, None)), vec![2, 1, 0]);
+    assert_eq!(ids(c.list_matches(1, 1, None)), vec![1]);
+    assert_eq!(ids(c.list_matches(0, 10, Some(G.into()))), vec![2, 0]);
+    assert_eq!(ids(c.list_matches(1, 10, Some("other".into()))), vec![1]);
+    assert_eq!(c.list_games().len(), 2);
+    assert_eq!(c.get_game("other".into()).unwrap().referee_id, acc("ref2"));
+}
+
+#[test]
+fn per_game_referee() {
+    let mut c = setup();
+    as_("arena", 1);
+    c.register_game("other".into(), acc("ref2"), None);
+    create_in(&mut c, "other", "host", 0, false);
+    join(&mut c, "guest", 0);
+    as_("ref2", 0);
+    c.report_result(0, Some(0), None);
+    assert_eq!(c.get_match(0).unwrap().status, "settled");
+}
+
+#[test]
+#[should_panic(expected = "Only referee")]
+fn other_game_referee_rejected() {
+    let mut c = live(N);
+    as_("arena", 1);
+    c.register_game("other".into(), acc("ref2"), None);
+    as_("ref2", 0);
+    c.report_result(0, Some(0), None);
 }
 
 #[test]
@@ -334,26 +450,29 @@ fn owner_limits_need_one_yocto() {
 fn owner_without_yocto_rejected() {
     let mut c = setup();
     as_("arena", 0);
-    c.set_referee(acc("evil"));
+    c.register_game("evil".into(), acc("evil"), None);
+}
+
+#[test]
+#[should_panic(expected = "Only owner")]
+fn register_game_owner_only() {
+    let mut c = setup();
+    as_("evil", 1);
+    c.register_game(G.into(), acc("evil"), None);
 }
 
 #[test]
 fn bets_are_recorded_one_by_one() {
     let mut c = live(N);
-    as_at("bob", 45 * N / 10, 1_000_000);
-    let a1 = c.buy(0, 0, U128(0)).0;
-    as_at("bob", 25 * N / 10, 2_000_000);
-    let b = c.buy(0, 1, U128(0)).0;
-    as_at("cat", N, 3_000_000);
-    c.buy(0, 1, U128(0));
-    as_at("bob", 15 * N / 10, 4_000_000);
-    let a2 = c.buy(0, 0, U128(0)).0;
+    let a1 = bet_at(&mut c, "bob", 0, 45 * N / 10, 1_000_000);
+    let b = bet_at(&mut c, "bob", 1, 25 * N / 10, 2_000_000);
+    bet_at(&mut c, "cat", 1, N, 3_000_000);
+    let a2 = bet_at(&mut c, "bob", 0, 15 * N / 10, 4_000_000);
     let mine: Vec<(u32, u8, u128, u128, u64)> = c.get_bets_of(0, acc("bob")).iter().map(|x| (x.id, x.side, x.amount.0, x.shares.0, x.ms)).collect();
     assert_eq!(mine, vec![(0, 0, 45 * N / 10, a1, 1), (1, 1, 25 * N / 10, b, 2), (3, 0, 15 * N / 10, a2, 4)]);
     let feed: Vec<u32> = c.get_recent_bets(0, 3).iter().map(|x| x.id).collect();
-    assert_eq!(feed, vec![3, 2, 1]); // newest first, capped by limit
+    assert_eq!(feed, vec![3, 2, 1]);
     assert_eq!(c.get_recent_bets(0, 99).len(), 4);
-    // locked until the result; then A wins pays every A share 1 NEAR
     as_("ref", 0);
     c.report_result(0, Some(0), None);
     assert_eq!(c.claimable(0, acc("bob")).0, a1 + a2);
@@ -362,28 +481,18 @@ fn bets_are_recorded_one_by_one() {
 #[test]
 fn void_refunds_every_bet_after_fee() {
     let mut c = live(N);
-    as_("bob", 2 * N);
-    c.buy(0, 0, U128(0));
-    as_("bob", 3 * N);
-    c.buy(0, 1, U128(0));
+    bet(&mut c, "bob", 0, 2 * N, 0);
+    bet(&mut c, "bob", 1, 3 * N, 0);
     let t0 = c.config().treasury.0;
     as_("ref", 0);
     c.report_result(0, None, None);
     assert_eq!(c.claimable(0, acc("bob")).0, 5 * N - 5 * N / 1000);
-    assert_eq!(c.config().treasury.0 - t0, SEED); // house gets exactly its seed back
+    assert_eq!(c.config().treasury.0 - t0, SEED);
 }
 
 /* ---------- monsters + tournaments ---------- */
 
-/// Context for a `#[private]` callback whose promise 0 succeeded or failed.
-fn cb(ok: bool) {
-    let mut b = VMContextBuilder::new();
-    b.current_account_id(acc("arena")).predecessor_account_id(acc("arena"));
-    let r = if ok { near_sdk::PromiseResult::Successful(vec![]) } else { near_sdk::PromiseResult::Failed };
-    testing_env!(b.build(), near_sdk::test_vm_config(), near_sdk::RuntimeFeesConfig::test(), Default::default(), vec![r]);
-}
-
-/// Receipts the last call created: "receiver.method(args)" or "receiver<-yocto".
+/// Receipts of last call: "receiver.method(args)" or "receiver<-yocto".
 fn calls() -> Vec<String> {
     use near_sdk::mock::MockAction;
     near_sdk::test_utils::get_created_receipts()
@@ -400,28 +509,31 @@ fn calls() -> Vec<String> {
         .collect()
 }
 
-/// Callback that follows every bounce refund.
-fn refund() -> String {
-    format!(r#"arena.on_refund({{"amount":"{N}"}})"#)
-}
-
 fn has(call: &str) -> bool {
     let c = calls();
     c.iter().any(|x| x == call) || panic!("{call} not in {c:?}")
 }
 
+/// create_match w/ monster: stake debited now, match only after lock lands.
+fn create_mon(c: &mut Arena, host: &str, stake: u128, bettable: bool, mon: &str) {
+    fund(c, host, stake);
+    as_(host, 1);
+    assert!(matches!(c.create_match(G.into(), U128(stake), bettable, Some(mon.into())), PromiseOrValue::Promise(_)));
+}
+
 #[test]
 fn monster_match_full_flow() {
     let mut c = setup();
-    as_("host", N);
-    assert!(matches!(c.create_match(false, Some("1".into())), PromiseOrValue::Promise(_)));
+    create_mon(&mut c, "host", N, false, "1");
     assert!(calls().iter().any(|x| x.starts_with(r#"mon.lock({"token_id":"1","account_id":"host","until_ms":18000000}"#)));
-    assert!(c.get_match(0).is_none()); // nothing until the lock lands
+    assert!(c.get_match(0).is_none());
+    assert_eq!(bal(&c, "host"), 0);
     cb(true);
-    assert_eq!(c.on_create(acc("host"), U128(N), false, "1".into(), 7), Some(0));
-    as_("guest", N);
+    assert_eq!(c.on_create(G.into(), acc("host"), U128(N), false, "1".into(), 7), Some(0));
+    fund(&mut c, "guest", N);
+    as_("guest", 1);
     let _ = c.join_match(0, Some("2".into()));
-    assert_eq!(c.get_match(0).unwrap().status, "open");
+    assert_eq!((c.get_match(0).unwrap().status.as_str(), bal(&c, "guest")), ("open", 0));
     cb(true);
     assert!(c.on_join(0, acc("guest"), U128(N), "2".into(), 7));
     let m = c.get_match(0).unwrap();
@@ -433,52 +545,54 @@ fn monster_match_full_flow() {
 }
 
 #[test]
-fn failed_lock_refunds_without_unlock() {
+fn failed_lock_recredits_without_unlock() {
     let mut c = setup();
+    create_mon(&mut c, "host", N, false, "1");
     cb(false);
-    assert_eq!(c.on_create(acc("host"), U128(N), false, "1".into(), 7), None);
-    assert_eq!(calls(), vec![format!("host<-{N}"), refund()]);
+    assert_eq!(c.on_create(G.into(), acc("host"), U128(N), false, "1".into(), 7), None);
+    assert!(calls().is_empty());
     assert!(c.get_match(0).is_none());
+    assert_eq!(bal(&c, "host"), N);
 }
 
 #[test]
 fn seed_taken_only_in_callback() {
     let mut c = setup();
-    as_("host", N);
-    let _ = c.create_match(true, Some("1".into()));
+    create_mon(&mut c, "host", N, true, "1");
     assert_eq!(c.config().treasury.0, 2 * SEED); // untouched while lock in flight
-    create(&mut c, true);
-    create(&mut c, true); // treasury drained meanwhile
+    create(&mut c, "h2", 0, true);
+    create(&mut c, "h2", 0, true); // treasury drained meanwhile
     cb(true);
-    assert_eq!(c.on_create(acc("host"), U128(N), true, "1".into(), 7), None);
-    assert_eq!(calls(), vec![format!("host<-{N}"), refund(), r#"mon.unlock({"locks":[["1",7]]})"#.into()]);
+    assert_eq!(c.on_create(G.into(), acc("host"), U128(N), true, "1".into(), 7), None);
+    assert_eq!(calls(), vec![r#"mon.unlock({"locks":[["1",7]]})"#.to_string()]);
+    assert_eq!(bal(&c, "host"), N);
 }
 
 #[test]
 fn join_callback_after_someone_else_joined() {
     let mut c = setup();
-    as_("host", N);
-    create(&mut c, false);
-    as_("g1", N);
+    create(&mut c, "host", N, false);
+    fund(&mut c, "g1", N);
+    as_("g1", 1);
     let _ = c.join_match(0, Some("7".into()));
-    as_("g2", N);
-    join(&mut c, 0);
+    join(&mut c, "g2", 0);
     cb(true);
     assert!(!c.on_join(0, acc("g1"), U128(N), "7".into(), 7));
-    assert_eq!(calls(), vec![format!("g1<-{N}"), refund(), r#"mon.unlock({"locks":[["7",7]]})"#.into()]);
+    assert_eq!(calls(), vec![r#"mon.unlock({"locks":[["7",7]]})"#.to_string()]);
     assert_eq!(c.get_match(0).unwrap().guest, Some(acc("g2")));
+    assert_eq!(bal(&c, "g1"), N);
 }
 
 #[test]
 fn cancel_and_expire_unlock() {
     let mut c = setup();
     cb(true);
-    c.on_create(acc("host"), U128(0), false, "1".into(), 7);
+    c.on_create(G.into(), acc("host"), U128(0), false, "1".into(), 7);
     as_("host", 0);
     c.cancel_match(0);
     has(r#"mon.unlock({"locks":[["1",7]]})"#);
     cb(true);
-    c.on_create(acc("host"), U128(0), false, "2".into(), 7);
+    c.on_create(G.into(), acc("host"), U128(0), false, "2".into(), 7);
     as_at("anyone", 0, EXPIRY_NS + 1);
     c.expire(1);
     has(r#"mon.unlock({"locks":[["2",7]]})"#);
@@ -487,14 +601,16 @@ fn cancel_and_expire_unlock() {
 fn tourney(size: u8) -> Arena {
     let mut c = setup();
     as_("arena", 1);
-    assert_eq!(c.create_tournament(size, U128(N), true), 0);
+    assert_eq!(c.create_tournament(G.into(), size, U128(N), true), 0);
     c
 }
 
 fn enter(c: &mut Arena, who: &str) -> bool {
-    as_(who, N);
+    fund(c, who, N);
+    as_(who, 1);
     let _ = c.enter_tournament(0, format!("m-{who}"));
     assert!(calls()[0].starts_with(&format!(r#"mon.lock({{"token_id":"m-{who}","account_id":"{who}","until_ms":{}}}"#, 72 * 3_600_000)));
+    assert_eq!(bal(c, who), 0);
     cb(true);
     c.on_enter(0, acc(who), U128(N), format!("m-{who}"), 259200000)
 }
@@ -511,20 +627,18 @@ fn tournament_4_full_run() {
         assert!(enter(&mut c, p));
     }
     let t = c.get_tournament(0).unwrap();
-    assert_eq!((t.status.as_str(), t.pot.0, t.rounds.clone()), ("live", 4 * N, vec![vec![Some(0), Some(1)], vec![None]]));
+    assert_eq!((t.status.as_str(), t.pot.0, t.rounds.clone(), t.game.as_str()), ("live", 4 * N, vec![vec![Some(0), Some(1)], vec![None]], G));
     let m = c.get_match(1).unwrap();
-    assert_eq!((m.host, m.guest, m.stake.0, m.status, m.tournament), (acc("p2"), Some(acc("p3")), 0, "live".into(), Some(0)));
+    assert_eq!((m.host, m.guest, m.stake.0, m.status, m.tournament, m.game), (acc("p2"), Some(acc("p3")), 0, "live".into(), Some(0), G.into()));
     assert_eq!(m.monsters, [Some("m-p2".into()), Some("m-p3".into())]);
     assert!(m.bettable);
-    // spectators can still bet on bracket matches
-    as_("bob", N);
-    c.buy(0, 1, U128(0));
+    bet(&mut c, "bob", 1, N, 0);
     result(&mut c, 0, Some(1));
     has(r#"mon.record_result({"match_id":0,"tokens":["m-p0","m-p1"],"winner":1,"kos":[0,0],"tournament":0})"#);
     assert_eq!(calls()[1], r#"mon.unlock({"locks":[["m-p0",259200000]]})"#); // loser only
-    assert_eq!(c.get_tournament(0).unwrap().rounds[1], vec![None]); // waits for the other semi
+    assert_eq!(c.get_tournament(0).unwrap().rounds[1], vec![None]);
     assert!(claim_as(&mut c, "bob") > N / 2);
-    assert_eq!(c.claimable(0, acc("p1")).0, 0); // players have no stake
+    assert_eq!(c.claimable(0, acc("p1")).0, 0);
     result(&mut c, 1, Some(0));
     let f = c.get_match(2).unwrap();
     assert_eq!((f.host, f.guest, f.monsters), (acc("p1"), Some(acc("p2")), [Some("m-p1".into()), Some("m-p2".into())]));
@@ -538,8 +652,9 @@ fn tournament_4_full_run() {
     let fee = c.config().treasury.0 - t0 - if f.bettable { f.amm[1].0 } else { 0 };
     as_("p2", 0);
     let prize = c.claim_tournament(0).0;
-    assert_eq!(prize + fee, 4 * N); // pot = paid out + fee
+    assert_eq!(prize + fee, 4 * N);
     assert_eq!(fee, 4 * N / 1000);
+    assert_eq!(bal(&c, "p2"), prize);
     assert_eq!(c.get_tournament(0).unwrap().claimed, vec![false, false, true, false]);
 }
 
@@ -566,18 +681,18 @@ fn tournament_8_with_voids() {
     }
     assert_eq!(c.get_tournament(0).unwrap().rounds[0], vec![Some(0), Some(1), Some(2), Some(3)]);
     result(&mut c, 0, Some(1)); // p1
-    result(&mut c, 1, None); // void, test random byte 0 -> seat 0: p2
+    result(&mut c, 1, None); // void, random byte 0 -> seat 0: p2
     has(r#"mon.unlock({"locks":[["m-p3",259200000]]})"#);
     result(&mut c, 3, Some(1)); // p7
     as_at("anyone", 0, EXPIRY_NS + 1);
-    c.expire(2); // expired, random byte 0 -> seat 0: p4
+    c.expire(2); // random byte 0 -> p4
     let r = c.get_tournament(0).unwrap().rounds;
     assert_eq!(r[1], vec![Some(4), Some(5)]);
     let (a, b) = (c.get_match(4).unwrap(), c.get_match(5).unwrap());
     assert_eq!((a.host, a.guest), (acc("p1"), Some(acc("p2"))));
     assert_eq!((b.host, b.guest), (acc("p4"), Some(acc("p7"))));
     result(&mut c, 5, Some(0)); // p4
-    result(&mut c, 4, Some(1)); // p2 (later slot reported first: order still host = even slot)
+    result(&mut c, 4, Some(1)); // p2, later slot first: host still even slot
     let f = c.get_match(6).unwrap();
     assert_eq!((f.host, f.guest, f.tournament), (acc("p2"), Some(acc("p4")), Some(0)));
     result(&mut c, 6, Some(0));
@@ -592,7 +707,8 @@ fn tournament_8_with_voids() {
 fn duplicate_entry_rejected() {
     let mut c = tourney(4);
     enter(&mut c, "p0");
-    as_("p0", N);
+    fund(&mut c, "p0", N);
+    as_("p0", 1);
     let _ = c.enter_tournament(0, "other".into());
 }
 
@@ -600,27 +716,29 @@ fn duplicate_entry_rejected() {
 fn duplicate_or_late_entry_in_flight_bounces() {
     let mut c = tourney(4);
     enter(&mut c, "p0");
-    cb(true); // second entry by p0 passed the upfront check before the first landed
+    cb(true); // 2nd p0 entry passed upfront check before 1st landed
     assert!(!c.on_enter(0, acc("p0"), U128(N), "x".into(), 7));
-    assert_eq!(calls(), vec![format!("p0<-{N}"), refund(), r#"mon.unlock({"locks":[["x",7]]})"#.into()]);
+    assert_eq!(calls(), vec![r#"mon.unlock({"locks":[["x",7]]})"#.to_string()]);
+    assert_eq!(bal(&c, "p0"), N);
     for p in ["p1", "p2", "p3"] {
         enter(&mut c, p);
     }
-    cb(true); // fifth entry landed after it filled
+    cb(true); // 5th entry landed after fill
     assert!(!c.on_enter(0, acc("p4"), U128(N), "y".into(), 7));
-    assert_eq!(calls(), vec![format!("p4<-{N}"), refund(), r#"mon.unlock({"locks":[["y",7]]})"#.into()]);
+    assert_eq!(calls(), vec![r#"mon.unlock({"locks":[["y",7]]})"#.to_string()]);
     let mut c = tourney(4);
-    cb(false); // lock failed: refund, nothing to unlock
+    cb(false); // lock failed: re-credit, nothing to unlock
     assert!(!c.on_enter(0, acc("p9"), U128(N), "z".into(), 7));
-    assert_eq!(calls(), vec![format!("p9<-{N}"), refund()]);
-    assert_eq!(c.get_tournament(0).unwrap().pot.0, 0);
+    assert!(calls().is_empty());
+    assert_eq!((c.get_tournament(0).unwrap().pot.0, bal(&c, "p9")), (0, N));
 }
 
 #[test]
-#[should_panic(expected = "Deposit must equal entry fee")]
-fn entry_fee_exact() {
+#[should_panic(expected = "Insufficient balance")]
+fn entry_needs_balance() {
     let mut c = tourney(4);
-    as_("p0", N / 2);
+    fund(&mut c, "p0", N / 2);
+    as_("p0", 1);
     let _ = c.enter_tournament(0, "1".into());
 }
 
@@ -633,14 +751,11 @@ fn cancel_tournament_refunds() {
     c.cancel_tournament(0);
     has(r#"mon.unlock({"locks":[["m-p0",259200000],["m-p1",259200000]]})"#);
     assert_eq!(c.get_tournament(0).unwrap().status, "cancelled");
-    as_("p0", 0);
-    assert_eq!(c.claim_tournament(0).0, N);
-    cb(false); // transfer failed -> can retry
-    assert!(!c.on_claim_tournament(0, 0));
-    as_("p0", 0);
-    assert_eq!(c.claim_tournament(0).0, N);
-    as_("p1", 0);
-    assert_eq!(c.claim_tournament(0).0, N);
+    for p in ["p0", "p1"] {
+        as_(p, 0);
+        assert_eq!(c.claim_tournament(0).0, N);
+        assert_eq!(bal(&c, p), N);
+    }
     assert_eq!(c.get_tournament(0).unwrap().claimed, vec![true, true]);
 }
 
@@ -657,21 +772,24 @@ fn cancel_tournament_too_early() {
 fn tournament_size() {
     let mut c = setup();
     as_("arena", 1);
-    c.create_tournament(6, U128(N), false);
+    c.create_tournament(G.into(), 6, U128(N), false);
 }
 
 #[test]
 fn list_tournaments_newest_first() {
     let mut c = setup();
-    for _ in 0..3 {
+    as_("arena", 1);
+    c.register_game("other".into(), acc("ref2"), None);
+    for g in [G, "other", G] {
         as_("arena", 1);
-        c.create_tournament(4, U128(N), false);
+        c.create_tournament(g.into(), 4, U128(N), false);
     }
-    let ids: Vec<u64> = c.list_tournaments(1, 5).iter().map(|t| t.id).collect();
-    assert_eq!(ids, vec![1, 0]);
+    let ids = |v: Vec<TournamentView>| v.iter().map(|t| t.id).collect::<Vec<u64>>();
+    assert_eq!(ids(c.list_tournaments(1, 5, None)), vec![1, 0]);
+    assert_eq!(ids(c.list_tournaments(0, 5, Some(G.into()))), vec![2, 0]);
 }
 
-/// Void tournament match with the block's random byte `r`: seat `r & 1` advances, the other is unlocked.
+/// Void tournament match w/ random byte `r`: seat `r & 1` advances, other unlocked.
 fn void_with_seed(r: u8) -> Arena {
     let mut c = tourney(4);
     for p in ["p0", "p1", "p2", "p3"] {
@@ -689,28 +807,16 @@ fn void_advances_random_seat() {
     for (r, adv, out) in [(0, "p0", "p1"), (1, "p1", "p0"), (2, "p0", "p1"), (255, "p1", "p0")] {
         let mut c = void_with_seed(r);
         has(&format!(r#"mon.unlock({{"locks":[["m-{out}",259200000]]}})"#));
-        result(&mut c, 1, Some(0)); // p2; later random seed must not change who advanced
+        result(&mut c, 1, Some(0));
         assert_eq!(c.get_match(2).unwrap().host, acc(adv));
     }
-}
-
-#[test]
-fn failed_refund_goes_to_treasury() {
-    let mut c = setup();
-    let t0 = c.config().treasury.0;
-    cb(false);
-    assert!(!c.on_refund(U128(N)));
-    assert_eq!(c.config().treasury.0, t0 + N);
-    cb(true);
-    assert!(c.on_refund(U128(N)));
-    assert_eq!(c.config().treasury.0, t0 + N);
 }
 
 #[test]
 #[should_panic(expected = "Entry closed")]
 fn entry_window_closes() {
     let mut c = tourney(4);
-    as_at("p0", N, TOURNEY_CANCEL_NS + 1);
+    as_at("p0", 1, TOURNEY_CANCEL_NS + 1);
     let _ = c.enter_tournament(0, "1".into());
 }
 
@@ -718,8 +824,9 @@ fn entry_window_closes() {
 #[should_panic(expected = "Attach 150 Tgas")]
 fn entry_needs_gas() {
     let mut c = tourney(4);
+    fund(&mut c, "p0", N);
     let mut b = VMContextBuilder::new();
-    b.current_account_id(acc("arena")).predecessor_account_id(acc("p0")).attached_deposit(NearToken::from_yoctonear(N)).prepaid_gas(Gas::from_tgas(100));
+    b.current_account_id(acc("arena")).predecessor_account_id(acc("p0")).attached_deposit(NearToken::from_yoctonear(1)).prepaid_gas(Gas::from_tgas(100));
     testing_env!(b.build());
     let _ = c.enter_tournament(0, "1".into());
 }
