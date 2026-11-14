@@ -1,5 +1,7 @@
 # Brawler Arena
 
+![Brawler Arena title screen](docs/screens/title.webp)
+
 **You fight, you win, and you keep it.** Brawler Arena is a real-time 1v1 platform fighter on NEAR testnet. Every fighter is a NEP-171 NFT whose on-chain DNA sets its stats. Every skill is a NEP-245 token you mint, trade and equip. Every staked match, spectator bet and tournament settles in a contract, and every result can be re-checked in your browser. You sign in with Google, with no seed phrase and no extension. NPC merchants with their own wallets keep the skill market liquid.
 
 | | |
@@ -10,6 +12,16 @@
 | Demo video | X post: _link added at submission_ |
 | Tracks | `games` (Games With Real Economies), `nfts` (NFTs That Do Something) |
 | Network | NEAR testnet · License: MIT |
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Staked fight in progress](docs/screens/fight.webp) **Staked 1v1 fight**: rollback netcode, server referee | ![Victory screen with claim](docs/screens/victory.webp) **Victory**: claim the pot, settled on-chain |
+| ![Create a staked room](docs/screens/create-staked-room.webp) **Create a room**: stake, visibility, spectator betting | ![Room lobby with both fighters](docs/screens/room-lobby.webp) **Room lobby**: both stakes and monsters locked on-chain |
+| ![Monster NFTs with DNA stats](docs/screens/monsters.webp) **Monsters**: NEP-171 NFTs, stats from on-chain DNA | ![Skill loadout on a monster](docs/screens/skills-loadout.webp) **Loadout**: equip NEP-245 skills, live stat preview |
+| ![Shop home](docs/screens/shop-home.webp) **Shop**: top skill, hottest monster, live presale | ![Skill item page](docs/screens/shop-skill-item.webp) **Skill page**: token `skill:8`, price history, supply cap, royalty |
+| ![Economy fast-forward](docs/screens/shop-economy.webp) **Economy**: a week of NPC merchant trading in about a minute | ![Replay with fairness check](docs/screens/replay-fairness-check.webp) **Replay**: re-run the tape, check winner and hash against the contract |
 
 ## The problem
 
