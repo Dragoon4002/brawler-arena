@@ -250,7 +250,25 @@ Optional: [ ] NEP-199 payout, [ ] shared Portrait in market, [ ] Caddy-hosted ma
 - **Wasm size/gas**: the crate is about 1.5k lines and adds about 700, fine. The history ring is capped at 64.
 - **Static export routes**: query-param pages only, no `[id]` folders.
 
-## Unresolved questions
+## Decisions (2026-11-14, user) — these override anything above
+
+1. **Market client is new.** Delete the old `market/` workspace (and its references: root `package.json` workspaces, `NEXT_PUBLIC_MARKET_URL` links in the game, README rows). Create a fresh Next.js + Tailwind CSS app with bun (`bun create next-app`, App Router, TypeScript, Tailwind) at `market/`, managed by bun (own `bun.lock`, excluded from the npm workspaces). §4 pages/theme still apply; Tailwind replaces the hand-written CSS (theme tokens go in the Tailwind theme).
+2. **Skills include new effects**, not only stat bumps. Effect skills (mag fixed 1, at most one of each, at most 2 effect skills per loadout), integer math only, mirrored exactly in TS + Rust sims with golden coverage:
+   - `AirJump`: +1 air jump (3 instead of 2).
+   - `Lifesteal`: when your hit lands, heal floor(damage dealt / 5) (damage counter can't go below 0).
+   - `QuickDodge`: dodge cooldown reduced by floor(cooldown / 3).
+   - `SecondWind`: once per stock, when HP first drops to ≤ 50, heal 30.
+   Stat skills (Power/Agility/Durability/Speed, mag 1..2) keep the §1 caps.
+3. **Caps** (kept as planned): 3 slots per monster; stat skills give at most +2 to one stat and +3 total; at most 2 effect skills.
+4. **Creators: owner-approved only** (`add_creator`), as planned.
+5. **Loadout travels with the monster.** On transfer/sale, equipped units stay in the monster's escrow; the new owner gets them equipped and can unequip into their own balance. (Replaces "unequip back to seller" in §1.)
+6. **Starters get free Common skills**: `hatch_starters` also credits 3 random Common stat skills (mag 1) to the player's free balance.
+7. **Prices**: Commons 0.05 NEAR permanent shop; Rare presale 24 h, cap 200, 2 per wallet.
+8. **Hosting: AWS box**, same as the game: `https://market.65-0-237-185.sslip.io` (Caddy site block), shipped as an image like `brawler-client` (`make push-market`).
+9. **Platform**: reuse `v2.brawler-platform-5c8e2b.testnet`; fresh monsters account; `register_game` upsert points `brawler` assets at it; monsters `arena_id` = v2 platform.
+10. Godot: no.
+
+## Unresolved questions (answered above)
 
 - market = extend `market/` hub (xyz.com) or new app? plan says extend
 - skills only Power/Agility/Durability/Speed stat bumps, or want new effects (extra jump, heal)? plan = stat bumps only
