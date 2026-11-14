@@ -3,8 +3,12 @@ FROM rust:1.91-bookworm AS build
 WORKDIR /src
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
+# cargo needs every workspace member present
 COPY games/brawler/sim games/brawler/sim
 COPY games/brawler/server games/brawler/server
+COPY games/ribbon/sim games/ribbon/sim
+COPY games/ribbon/server games/ribbon/server
+COPY games/keyfall/server games/keyfall/server
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
     cargo build --release --locked -p brawler-server && cp target/release/brawler-server /brawler-server

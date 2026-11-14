@@ -2,3 +2,13 @@
 	encode zstd gzip
 	reverse_proxy brawler-server:8787
 }
+
+ribbon.{{ domain }} {
+	encode zstd gzip
+	reverse_proxy ribbon-server:8788
+}
+
+keyfall.{{ domain }} {
+	encode zstd gzip
+	reverse_proxy keyfall-server:8789
+}

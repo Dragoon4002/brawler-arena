@@ -14,6 +14,29 @@ services:
     volumes: [brawler_data:/data]
     restart: unless-stopped
 
+  ribbon-server:
+    image: ribbon-server
+    build: { context: .., dockerfile: infra/ribbon-server.Dockerfile }
+    ports: ["${RIBBON_PORT:-8788}:8788"]
+    environment:
+      NEAR_RPC: ${NEAR_RPC:-https://test.rpc.fastnear.com}
+      CONTRACT_ID: ${CONTRACT_ID:-}
+      REFEREE_ID: ${REFEREE_ID:-}
+      REFEREE_KEY: ${REFEREE_KEY:-}
+    volumes: [ribbon_data:/data]
+    restart: unless-stopped
+
+  keyfall-server:
+    image: keyfall-server
+    build: { context: .., dockerfile: infra/keyfall-server.Dockerfile }
+    ports: ["${KEYFALL_PORT:-8789}:8789"]
+    environment:
+      NEAR_RPC: ${NEAR_RPC:-https://test.rpc.fastnear.com}
+      CONTRACT_ID: ${CONTRACT_ID:-}
+      REFEREE_ID: ${REFEREE_ID:-}
+      REFEREE_KEY: ${REFEREE_KEY:-}
+    restart: unless-stopped
+
   # Bots that join a free room when its host presses "Call bot" (never bot vs bot) + commentator, free rooms only. Env: agents/README.md
   agents:
     image: brawler-agents
@@ -29,3 +52,4 @@ services:
 
 volumes:
   brawler_data:
+  ribbon_data:

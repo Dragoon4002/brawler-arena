@@ -149,6 +149,11 @@ NEP-245 skill tokens (`games/brawler/contract/src/skills.rs`) are written and un
 | `games/brawler/server/` | Rust WebSocket server: relay, lobby, referee, tapes, history |
 | `games/brawler/sim/` | Rust port of the sim, golden-tested against the TS sim |
 | `games/brawler/contract/` | monsters + skills contract (NEP-171 + NEP-245) |
+| `games/ribbon/client/` | Ribbon Rush client (Next.js) |
+| `games/ribbon/server/` | Ribbon Rush Rust WebSocket server: authoritative sim, referee, tapes |
+| `games/ribbon/sim/` | Ribbon Rush Rust sim, golden-tested against the TS twin |
+| `games/keyfall/client/` | Keyfall client (Next.js); `src/lib/game.ts` runs the rules locally for practice |
+| `games/keyfall/server/` | Keyfall Rust WebSocket server: authoritative rules, rooms, referee |
 | `contracts/platform/` | platform contract |
 | `crates/near-svc/` | Rust NEAR RPC, NEP-413 verify, referee tx queue |
 | `packages/platform/` | shared TS wallet + balance hooks |
@@ -166,6 +171,10 @@ make dev                                       # backend in docker, ws :8787 (BR
 cargo run -p brawler-server                    # same, no docker
 npm run dev -w @xyz/brawler                    # http://localhost:3000
 cd market && bun install && bun dev           # market, http://localhost:3000 (?demo for mock data)
+cargo run -p ribbon-server                     # ribbon ws :8788
+npm run dev -w @xyz/ribbon                     # http://localhost:3001 (?demo = local bot, no wallet/server)
+cargo run -p keyfall-server                    # keyfall ws :8789
+npm run dev -w @xyz/keyfall                    # http://localhost:3002 (?demo = practice vs bot, no wallet/server)
 ```
 
 - Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY SETTLE_FALLBACK_S` (default 300). No CONTRACT_ID = free rooms only. Attestations only when the contract's `referee_key` is REFEREE_KEY's public key, else direct `report_result`.
@@ -174,6 +183,24 @@ cd market && bun install && bun dev           # market, http://localhost:3000 (?
 - Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
 - Contracts: `make wasm`; `node scripts/deploy-monsters-v2.mjs --check` prints the balance preflight, without `--check` it deploys, registers the game and seeds skills.
 - New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?, referee_key?)` on platform.
+
+## Ribbon Rush
+
+Second game on the same platform contract (id `ribbon`). Two riders on a grid leave trails; trails fade, the ring closes in, each rider gets one boost per round, best of 3. Registered with no assets contract, so no NFTs and no tournaments; staked and bettable matches work. The server runs the sim authoritatively and its referee reports the winner and tape hash on-chain.
+
+- Server env: `PORT` (8788) `NEAR_RPC CONTRACT_ID REFEREE_ID REFEREE_KEY TAPE_DIR`. Prod: `wss://ribbon.<domain>`.
+- Client env: `NEXT_PUBLIC_SERVER_URL`, `NEXT_PUBLIC_MARKET_URL`. Demo: http://localhost:3001/?demo
+
+## Keyfall
+
+Third game on the platform contract (id `keyfall`): a 1v1 typing duel. Both players get the same seeded stream of words falling down their own lane. Type a word and press Space or Enter to destroy it, and your opponent loses health equal to its length. A word that reaches your base costs you its length. Three wrong submissions in a row stun you for 2 s. Each player starts with 600 HP and the match lasts 5:00. At 0 HP you lose; when time runs out, higher HP wins, then higher WPM, otherwise it's a draw and stakes are refunded.
+
+- The server owns the clock, the word stream, health and WPM. Clients only send the words they type (at most 20 per second), so a client can't fake hits or damage.
+- Staked rooms: the host calls `create_match("keyfall", stake, false, null)` and the guest calls `join_match`. Each seat proves its wallet with a NEP-413 signature of `keyfall:<matchId>` over the server's nonce. Only the referee settles, with `report_result(match_id, winner, null, null)`; a draw is reported as `winner: null`, which refunds both stakes.
+- A disconnected player has 15 s to rejoin (the words keep falling); after that the opponent wins by forfeit.
+- No assets contract, no spectator betting UI, no tournaments yet. Practice vs bot (easy/medium/hard) and `?demo` run the rules in the browser with no wallet or server.
+- Server env: `PORT` (8789) `NEAR_RPC CONTRACT_ID REFEREE_ID REFEREE_KEY`. Prod: `wss://keyfall.<domain>`. Client env: `NEXT_PUBLIC_SERVER_URL`, `NEXT_PUBLIC_MARKET_URL`.
+- Rules and protocol: `tasks/keyfall-spec.md`.
 
 ## Deploy
 

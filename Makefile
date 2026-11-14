@@ -7,6 +7,8 @@ TF := terraform -chdir=infra/terraform
 dev:
 	$(COMPOSE) up --build -d
 	@echo "brawler ws -> ws://localhost:$${BRAWLER_PORT:-8787}"
+	@echo "ribbon ws -> ws://localhost:$${RIBBON_PORT:-8788}"
+	@echo "keyfall ws -> ws://localhost:$${KEYFALL_PORT:-8789}"
 
 down:
 	$(COMPOSE) down
@@ -43,6 +45,8 @@ CLIENTS_DOMAIN = $(call out,domains,clients)
 
 push-image:
 	$(call ship,brawler-server,server,brawler-server)
+	$(call ship,ribbon-server,server,ribbon-server)
+	$(call ship,keyfall-server,server,keyfall-server)
 
 push-agents:
 	$(call ship,agents,server,brawler-agents)

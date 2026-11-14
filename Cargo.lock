@@ -1113,6 +1113,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "keyfall-server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "futures-util",
+ "near-svc",
+ "rand 0.9.5",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1658,6 +1671,29 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
+]
+
+[[package]]
+name = "ribbon-server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "futures-util",
+ "near-svc",
+ "rand 0.9.5",
+ "ribbon-sim",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+]
+
+[[package]]
+name = "ribbon-sim"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
