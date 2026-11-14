@@ -5,17 +5,19 @@ import { short } from '@/lib/format.ts';
 import { useLoad } from '@/hooks/async.ts';
 import { Badges } from '@/components/monsters/Badges.tsx';
 import { Ico, Portrait } from '@/components/ui.tsx';
+import { nick, useChainDetails } from '@/lib/chain.ts';
 
 function MarketCard({ m, rent, me }: { m: NftMonster; rent: boolean; me: string }) {
+  const { on, u } = useChainDetails();
   return (
     <a className="tile" href={`/monster/${m.id}`}>
       <Portrait dna={m.dna} size={180} />
       <div className="tile-head"><h3>{m.name}</h3><span className="chip">Gen {m.gen}</span></div>
       <span className="tile-meta">{m.record.w}W {m.record.l}L · {m.record.ko} KOs</span>
-      <span className="tile-meta" title={m.owner}>{m.owner === me ? 'Yours' : `Owner ${short(m.owner)}`}</span>
+      <span className="tile-meta" title={on ? m.owner : undefined}>{m.owner === me ? 'Yours' : `Owner ${on ? short(m.owner) : nick(m.owner)}`}</span>
       {m.titles.length > 0 && <Badges m={{ ...m, price: undefined }} me={me} />}
       <b className="price row-ico"><Ico n="coin" />
-        {rent && m.rentOffer ? `${fmt(m.rentOffer.pricePerDay)} NEAR / day, up to ${m.rentOffer.maxDays} days` : `${fmt(m.price)} NEAR`}
+        {rent && m.rentOffer ? `${fmt(m.rentOffer.pricePerDay)} ${u} / day, up to ${m.rentOffer.maxDays} days` : `${fmt(m.price)} ${u}`}
       </b>
     </a>
   );

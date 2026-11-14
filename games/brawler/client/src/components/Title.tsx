@@ -5,6 +5,7 @@ import { monsters } from '@/lib/store.ts';
 import { Ico, Logo, TitleArt } from '@/components/ui.tsx';
 import { FundsDialog } from '@/components/account/Funds.tsx';
 import { short } from '@/lib/format.ts';
+import { useChainDetails } from '@/lib/chain.ts';
 
 function HubBtn({ href, label, icon, badge, active }: { href: string; label: string; icon: string; badge?: number; active?: boolean }) {
   return (
@@ -21,6 +22,7 @@ function HubBtn({ href, label, icon, badge, active }: { href: string; label: str
 const PANEL_FROM: Record<string, 'left' | 'right' | 'bottom'> = { collection: 'left', customize: 'left', breed: 'left', market: 'left', account: 'left', lobby: 'right', tournaments: 'right', leaderboard: 'right', play: 'bottom' };
 
 export function Title({ page, children }: { page?: string; children?: React.ReactNode }) {
+  const { on, u } = useChainDetails();
   const list = useMemo(monsters, []);
   const { signedAccountId } = useWallet();
   const { balance } = useUnifiedBalance();
@@ -34,8 +36,8 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
         <div className="hub-counters">
           <span className="hub-count" title="Total wins"><Ico n="trophy" /><i>Wins</i>{wins}</span>
           <span className="hub-count" title="Total knockouts"><Ico n="ko" /><i>KOs</i>{kos}</span>
-          {signedAccountId && <button type="button" className="hub-count" onClick={() => setPop('funds')} title="Unified balance, deposit / withdraw"><Ico n="coin" /><i>Balance</i>{balance === null ? '…' : `${fmt(balance)} NEAR`}</button>}
-          <a className="hub-count wallet" href="/account"><Ico n="icon-wallet" />{signedAccountId ? short(signedAccountId) : 'Connect wallet'}</a>
+          {signedAccountId && <button type="button" className="hub-count" onClick={() => setPop('funds')} title="Unified balance, deposit / withdraw"><Ico n="coin" /><i>Balance</i>{balance === null ? '…' : `${fmt(balance)} ${u}`}</button>}
+          <a className="hub-count wallet" href="/account"><Ico n="icon-wallet" />{signedAccountId ? (on ? short(signedAccountId) : 'Account') : on ? 'Connect wallet' : 'Sign in'}</a>
           {DEMO && <a className="hub-count demo" href="/" target="_self">Demo mode · exit</a>}
         </div>
       </header>

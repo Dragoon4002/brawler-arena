@@ -5,6 +5,7 @@ import { SERVER } from '@/lib/session.ts';
 import { short } from '@/lib/format.ts';
 import { useLoad } from '@/hooks/async.ts';
 import { Ico } from '@/components/ui.tsx';
+import { useChainDetails } from '@/lib/chain.ts';
 
 export interface Fight { at: number; won: boolean | null; mine: string; vs: string; vsAccount?: string; stake: string; kind: 'Friendly' | 'Staked' | 'Tournament'; matchId: number | null; key?: string | null }
 
@@ -69,6 +70,7 @@ export function Stats({ fights }: { fights: Fight[] }) {
 const when = (ms: number) => new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 export function History({ fights, loading }: { fights: Fight[]; loading?: boolean }) {
+  const { u } = useChainDetails();
   const [n, setN] = useState(10);
   return (
     <section className="slab" aria-label="Match history">
@@ -83,7 +85,7 @@ export function History({ fights, loading }: { fights: Fight[]; loading?: boolea
                   <td><span className={`chip row-ico ${f.won ? 'gold' : ''}`}><Ico n={f.won ? 'trophy' : f.won === null ? 'icon-refresh' : 'skull'} />{f.won ? 'Won' : f.won === null ? (f.stake === '0' ? 'No result' : 'Refund') : 'Lost'}</span></td>
                   <td>{f.mine}</td>
                   <td>{f.vsAccount ? <a className="history-vs" href={`/player/${encodeURIComponent(f.vsAccount)}`}><b>{short(f.vsAccount)}</b>{f.vs !== f.vsAccount && <small>{f.vs}</small>}</a> : f.vs}</td>
-                  <td>{fmt(f.stake)} NEAR</td>
+                  <td>{fmt(f.stake)} {u}</td>
                   <td><span className={`chip kind-${f.kind.toLowerCase()}`}>{f.kind}{f.matchId != null ? ` #${f.matchId}` : ''}</span></td>
                   <td className="muted">{when(f.at)}</td>
                   <td>{f.key && <a className="row-ico" href={`/replay/${encodeURIComponent(f.key)}`}><Ico n="icon-play" />Replay</a>}</td>

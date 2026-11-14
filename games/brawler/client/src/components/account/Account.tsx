@@ -10,8 +10,10 @@ import { Claims } from './Claims.tsx';
 import { FundsDialog } from './Funds.tsx';
 import { History, Stats, useFights } from './History.tsx';
 import { short } from '@/lib/format.ts';
+import { nick, setChainDetails, useChainDetails } from '@/lib/chain.ts';
 
 export function Account() {
+  const { on, u } = useChainDetails();
   const { signedAccountId, signIn, signOut, getBalance, loading, network } = useWallet();
   const { balance } = useUnifiedBalance();
   const [bal, setBal] = useState<string>('');
@@ -26,14 +28,14 @@ export function Account() {
   useEffect(() => { if (signedAccountId) api.owed().then(setOwed).catch(() => {}); }, [signedAccountId]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      <div><h1 className="row-ico"><Ico n="icon-wallet" className="ico h" />Account</h1><p className="sub">Your NEAR account owns your monsters. Network: {network}.</p></div>
+      <div><h1 className="row-ico"><Ico n="icon-wallet" className="ico h" />Account</h1><p className="sub">{on ? `Your NEAR account owns your monsters. Network: ${network}.` : 'Your monsters and coins live in your account.'}</p></div>
       <div className="split">
         <section className="slab" style={{ display: 'grid', gap: 14 }}>
           {loading ? <p>Checking wallet…</p> : signedAccountId ? (
             <>
-              <h2 title={signedAccountId}>{short(signedAccountId)}</h2>
-              <dl className="kv"><dt>Game balance</dt><dd className="row-ico"><Ico n="coin-stack" />{balance === null ? 'loading…' : `${fmt(balance)} NEAR`} <button type="button" className="link" onClick={() => setFunds(true)}>Deposit / withdraw</button></dd><dt>Wallet</dt><dd className="row-ico"><Ico n="coin" />{bal ? `${bal} NEAR` : 'loading…'}</dd><dt>Monsters</dt><dd className="row-ico"><Ico n="icon-monster" />{monsters().length}</dd></dl>
-              {owed !== '0' && <button className="btn" onClick={() => api.withdrawOwed().then(() => setOwed('0'))}><span><Ico n="coin" />Withdraw {fmt(owed)} NEAR from failed payouts</span></button>}
+              <h2 title={on ? signedAccountId : undefined}>{on ? short(signedAccountId) : nick(signedAccountId)}</h2>
+              <dl className="kv"><dt>Game balance</dt><dd className="row-ico"><Ico n="coin-stack" />{balance === null ? 'loading…' : `${fmt(balance)} ${u}`} <button type="button" className="link" onClick={() => setFunds(true)}>Deposit / withdraw</button></dd><dt>Wallet</dt><dd className="row-ico"><Ico n="coin" />{bal ? `${bal} ${u}` : 'loading…'}</dd><dt>Monsters</dt><dd className="row-ico"><Ico n="icon-monster" />{monsters().length}</dd></dl>
+              {owed !== '0' && <button className="btn" onClick={() => api.withdrawOwed().then(() => setOwed('0'))}><span><Ico n="coin" />Withdraw {fmt(owed)} {u} from failed payouts</span></button>}
               <button className="btn ghost" onClick={() => signOut()}><span><Ico n="icon-close" />Disconnect</span></button>
             </>
           ) : (
@@ -51,6 +53,7 @@ export function Account() {
       <Claims />
       <History fights={fights} loading={fl} />
       <SoundSettings />
+      <section className="slab" aria-label="On-chain details"><ChainToggle /></section>
     </>
   );
 }
@@ -89,4 +92,9 @@ function SoundSettings() {
       <label className="row"><input type="checkbox" checked={a.muted} onChange={(e) => set({ muted: e.target.checked })} style={{ minHeight: 0 }} /> Mute everything (M in a fight)</label>
     </section>
   );
+}
+
+export function ChainToggle() {
+  const { on } = useChainDetails();
+  return <label className="row"><input type="checkbox" checked={on} onChange={(e) => setChainDetails(e.target.checked)} style={{ minHeight: 0 }} /> On-chain details</label>;
 }

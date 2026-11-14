@@ -4,11 +4,13 @@ import { errText } from '@/lib/format.ts';
 import { fmt, toYocto, usePlatform, useUnifiedBalance, useWallet } from '@/lib/near.ts';
 import { HubDialog, Ico } from '@/components/ui.tsx';
 import { dryQuote, getTokens, type Quote, type Token } from '@/lib/intents.ts';
+import { useChainDetails } from '@/lib/chain.ts';
 
 export function FundsDialog({ onClose }: { onClose: () => void }) {
   const { signedAccountId, signIn, getBalance } = useWallet();
   const { deposit, withdraw } = usePlatform();
   const { balance } = useUnifiedBalance();
+  const { on, u } = useChainDetails();
   const [wallet, setWallet] = useState<bigint | null>(null);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
@@ -21,11 +23,11 @@ export function FundsDialog({ onClose }: { onClose: () => void }) {
     if (!(n > 0)) return setMsg('Enter an amount above 0.');
     let yocto: string;
     try { yocto = toYocto(amount); } catch { return setMsg('Invalid amount.'); }
-    if (kind === 'Withdraw' && BigInt(yocto) > BigInt(balance ?? '0')) return setMsg(`Only ${fmt(balance)} NEAR to withdraw.`);
+    if (kind === 'Withdraw' && BigInt(yocto) > BigInt(balance ?? '0')) return setMsg(`Only ${fmt(balance)} ${u} to withdraw.`);
     setBusy(true); setMsg(`${kind}ing…`);
     try {
       await (kind === 'Deposit' ? deposit : withdraw)(yocto);
-      setMsg(`${kind} of ${n} NEAR done.`); setAmount('');
+      setMsg(`${kind} of ${n} ${u} done.`); setAmount('');
     } catch (e) { setMsg(`${kind} failed: ${errText(e)}`); } finally { setBusy(false); loadWallet(); }
   };
 
@@ -36,14 +38,14 @@ export function FundsDialog({ onClose }: { onClose: () => void }) {
       ) : (
         <>
           <dl className="kv funds-kv">
-            <dt>Game balance</dt><dd className="row-ico"><Ico n="coin-stack" />{balance === null ? 'loading…' : `${fmt(balance)} NEAR`}</dd>
-            <dt>Wallet</dt><dd className="row-ico"><Ico n="coin" />{wallet === null ? 'loading…' : `${fmt(wallet)} NEAR`}</dd>
+            <dt>Game balance</dt><dd className="row-ico"><Ico n="coin-stack" />{balance === null ? 'loading…' : `${fmt(balance)} ${u}`}</dd>
+            <dt>Wallet</dt><dd className="row-ico"><Ico n="coin" />{wallet === null ? 'loading…' : `${fmt(wallet)} ${u}`}</dd>
           </dl>
           {DEMO ? <p className="note">Demo mode: deposits and withdrawals are off.</p> : (
             <>
               <label className="funds-amount">
                 <span>Amount</span>
-                <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} aria-label="Amount in NEAR" /><b>NEAR</b></span>
+                <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} aria-label="Amount in NEAR" /><b>{u}</b></span>
               </label>
               <div className="funds-actions">
                 <button type="button" className="btn" disabled={busy} onClick={() => run('Deposit')}><span><Ico n="coin" />Deposit</span></button>
@@ -54,7 +56,7 @@ export function FundsDialog({ onClose }: { onClose: () => void }) {
           {msg && <p className="note" role="status">{msg}</p>}
         </>
       )}
-      <AnyChain />
+      {on && <AnyChain />}
     </HubDialog>
   );
 }

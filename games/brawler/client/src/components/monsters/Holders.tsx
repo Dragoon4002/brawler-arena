@@ -2,8 +2,10 @@ import { fmt, useWallet } from '@/lib/near.ts';
 import { useMonsters, type NftMonster, type Vault } from '@/lib/nft.ts';
 import { useAct, useLoad } from '@/hooks/async.ts';
 import { Ico, Portrait } from '@/components/ui.tsx';
+import { useChainDetails } from '@/lib/chain.ts';
 
 export function Holders() {
+  const { u } = useChainDetails();
   const api = useMonsters();
   const { signedAccountId, signIn } = useWallet();
   const me = signedAccountId ?? '';
@@ -19,13 +21,13 @@ export function Holders() {
   return (
     <>
       <div><h1 className="row-ico"><Ico n="trophy" />Holders' vault room</h1><p className="sub">Only holders see this. Every monster you own keeps its own earnings; withdraw is checked on-chain against the current owner.</p></div>
-      <section className="slab"><dl className="kv"><dt>Monsters held</dt><dd>{rows.length}</dd><dt>In vaults</dt><dd className="row-ico"><Ico n="coin" />{fmt(total.toString())} NEAR</dd><dt>Earned all time</dt><dd>{fmt(earned.toString())} NEAR</dd></dl></section>
+      <section className="slab"><dl className="kv"><dt>Monsters held</dt><dd>{rows.length}</dd><dt>In vaults</dt><dd className="row-ico"><Ico n="coin" />{fmt(total.toString())} {u}</dd><dt>Earned all time</dt><dd>{fmt(earned.toString())} {u}</dd></dl></section>
       <div className="grid">
         {rows.map(({ m, v }) => (
           <section key={m.id} className="slab" style={{ display: 'grid', gap: 8, justifyItems: 'center' }}>
             <Portrait dna={m.dna} size={140} />
             <a href={`/monster/${m.id}`}><h3>{m.name}</h3></a>
-            <span className="chip gold row-ico"><Ico n="coin" />{fmt(v.balance)} NEAR</span>
+            <span className="chip gold row-ico"><Ico n="coin" />{fmt(v.balance)} {u}</span>
             <button className="btn" disabled={act.busy || !!m.price || v.balance === '0'} onClick={() => act.run(() => api.vaultWithdraw(m.id), `Withdrew ${m.name}'s vault.`)}><span>{m.price ? 'Frozen: listed' : 'Withdraw'}</span></button>
           </section>
         ))}
