@@ -54,23 +54,36 @@ export function CreateRoom({ mon }: { mon: Monster }) {
     } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
   };
 
+  const st = Number(stake) > 0 ? Number(stake) : 0;
   return (
-    <div className="play-form">
-      <label className="stake-field">
-        <span className="row-ico"><Ico n="coin-stack" />Stake</span>
-        <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" value={stake} onChange={(e) => setStake(e.target.value)} aria-describedby="stake-help" /><b>NEAR</b></span>
-      </label>
-      <p id="stake-help" className="note">{Number(stake) > 0 ? `Your opponent matches ${stake} NEAR. Winner takes both, minus 0.1%.` : '0 = friendly match, nothing on-chain.'}</p>
-      <fieldset className="seg" aria-label="Visibility">
-        <legend>Visibility</legend>
-        <label><input type="radio" name="vis" checked={pub} onChange={() => setPub(true)} /><span className="row-ico"><Ico n="icon-room-public" />Public · listed in lobby</span></label>
-        <label><input type="radio" name="vis" checked={!pub} onChange={() => setPub(false)} /><span className="row-ico"><Ico n="icon-room-private" />Private · code only</span></label>
-      </fieldset>
-      {!pub && <label className="toggle"><input type="checkbox" checked={view} onChange={(e) => setView(e.target.checked)} /> Let anyone watch (listed as watch-only)</label>}
-      <label className="toggle"><input type="checkbox" checked={bettable} onChange={(e) => setBettable(e.target.checked)} /> Let spectators bet on this fight</label>
-      <button className="btn big" disabled={busy} onClick={create}><span><Ico n={onChain ? 'coin' : 'icon-check'} />{onChain ? 'Create and stake' : 'Create room'}</span></button>
-      {onChain && <p className="note">Needs a wallet signature{Number(stake) > 0 ? `; ${stake} NEAR is held until the fight ends` : ''}.</p>}
-      {msg && <p className="note" role="status">{msg}</p>}
+    <div className="play-create">
+      <div className="play-form">
+        <label className="stake-field">
+          <span className="row-ico"><Ico n="coin-stack" />Stake</span>
+          <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" value={stake} onChange={(e) => setStake(e.target.value)} aria-describedby="stake-help" /><b>NEAR</b></span>
+        </label>
+        <p id="stake-help" className="note">{st ? `Your opponent matches ${stake} NEAR. Winner takes both, minus 0.1%.` : '0 = friendly match, nothing on-chain.'}</p>
+        <fieldset className="seg" aria-label="Visibility">
+          <legend>Visibility</legend>
+          <label><input type="radio" name="vis" checked={pub} onChange={() => setPub(true)} /><span className="row-ico"><Ico n="icon-room-public" />Public</span></label>
+          <label><input type="radio" name="vis" checked={!pub} onChange={() => setPub(false)} /><span className="row-ico"><Ico n="icon-room-private" />Private</span></label>
+        </fieldset>
+        {!pub && <label className="toggle"><input type="checkbox" checked={view} onChange={(e) => setView(e.target.checked)} /> Let anyone watch</label>}
+        <label className="toggle"><input type="checkbox" checked={bettable} onChange={(e) => setBettable(e.target.checked)} /> Let spectators bet</label>
+      </div>
+      <aside className="ticket" aria-label="Match summary">
+        <h3>Match ticket</h3>
+        <dl>
+          <dt>Fighter</dt><dd>{mon.name}</dd>
+          <dt>Your stake</dt><dd>{st ? `${stake} NEAR` : 'Free'}</dd>
+          <dt>Winner gets</dt><dd className="gold">{st ? `${+(st * 2 * 0.999).toFixed(4)} NEAR` : 'Bragging rights'}</dd>
+          <dt>Room</dt><dd>{pub ? 'Listed in lobby' : view ? 'Code only · watchable' : 'Code only'}</dd>
+          <dt>Spectator bets</dt><dd>{bettable ? 'On' : 'Off'}</dd>
+        </dl>
+        <button className="btn big" disabled={busy} onClick={create}><span><Ico n={onChain ? 'coin' : 'icon-check'} />{onChain ? 'Create and stake' : 'Create room'}</span></button>
+        {onChain && <p className="note">Needs a wallet signature{st ? `; ${stake} NEAR is held until the fight ends` : ''}.</p>}
+        {msg && <p className="note" role="status">{msg}</p>}
+      </aside>
     </div>
   );
 }
