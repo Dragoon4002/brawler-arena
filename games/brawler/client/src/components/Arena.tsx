@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Monster } from '@/lib/genes.ts';
-import { STAGES, type StageId } from '@/lib/stages.ts';
+import type { StageId } from '@/lib/stages.ts';
 import { getAudio, toggleMute } from '@/lib/audio.ts';
-import { fmt, useArena, useSignMatch } from '@/lib/near.ts';
-import { startBotFight, startOnline, type HostOpts, type Player } from '@/lib/session.ts';
+import { DEMO_ROOMS, demoChat } from '@/lib/demo.ts';
+import { useArena, useSignMatch } from '@/lib/near.ts';
+import { startBotFight, startOnline, type ChatLine, type HostOpts, type Player, type RoomState } from '@/lib/session.ts';
 import { monsters, recordResult } from '@/lib/store.ts';
-import { asset, Ico, Portrait, STAGE_ICON } from '@/components/ui.tsx';
+import { usePlayable } from '@/hooks/useMons.ts';
+import { asset, Ico } from '@/components/ui.tsx';
+import { RoomLobby } from '@/components/rooms/RoomLobby.tsx';
 
 export type FightSetup =
   | { kind: 'host'; mon: Monster; stage: StageId; opts: HostOpts }
@@ -17,8 +20,12 @@ export const prepareFight = (s: FightSetup) => { setup = s; location.hash = '#/f
 
 const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna });
 
-// Demo states for #/fight/<state>?demo : waiting | fight | victory | defeat | void
+// Demo states for #/fight/<state>?demo : waiting (host lobby) | challenger (guest lobby) | fight | victory | defeat | void
 const demoSetup = (): FightSetup => ({ kind: 'host', mon: monsters()[0], stage: 'ember', opts: { pub: true, view: true, bettable: true, matchId: 99, stake: '500000000000000000000000', account: '' } });
+const demoRoom = (mon: Monster, seat: number): RoomState => {
+  const me = { name: mon.name, dna: mon.dna, account: 'demo-player.testnet', connected: true }, rival = { ...DEMO_ROOMS[2].players[0], connected: true };
+  return { code: 'DEMO', status: 'waiting', stage: 'ember', stake: '500000000000000000000000', matchId: 99, bettable: true, pub: true, view: true, seats: seat ? [rival, me] : [me, rival], spectators: 3 };
+};
 
 // Re-hosting from the end screen keeps the #/fight hash, so bump a key to remount (the fight effect is mount-only).
 export function Arena({ demo }: { demo?: string }) {
@@ -39,17 +46,28 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
   const [claimMsg, setClaimMsg] = useState('');
   const [settled, setSettled] = useState(false);
   const [muted, setMuted] = useState(getAudio().muted);
+  const [rs, setRs] = useState<RoomState | null>(null);
+  const [chat, setChat] = useState<ChatLine[]>([]);
+  const [closed, setClosed] = useState(''); // room closed before the fight
+  const { free, local } = usePlayable();
   // rematch: asked = we pressed R, wants = opponent did, gone = opponent/socket gone (R hosts a new room)
   const [rm, setRm] = useState({ asked: false, wants: false, gone: false });
   const onR = useRef<(() => void) | null>(null);
-  const ctl = useRef<{ rematch(): void } | null>(null);
-  const s = demo ? demoSetup() : setup;
+  const ctl = useRef<ReturnType<typeof startOnline> | null>(null);
+  const bots = useRef<{ stop(): void } | null>(null);
+  const [s] = useState(() => (demo ? demoSetup() : setup));
+  const [mine, setMine] = useState(s?.mon);
 
   useEffect(() => {
     if (!s) { location.hash = '#/play'; return; }
     if (demo && s.kind === 'host') {
-      setRoom({ code: 'DEMO', matchId: 99, bettable: true, seat: 0 });
-      if (demo === 'waiting') return;
+      const seat = demo === 'challenger' ? 1 : 0;
+      setRoom({ code: 'DEMO', matchId: 99, bettable: true, seat });
+      if (demo === 'waiting' || demo === 'challenger') {
+        const r = demoRoom(s.mon, seat);
+        setRs(r); setChat(demoChat(r.seats[0].name, r.seats[1].name));
+        return () => bots.current?.stop();
+      }
       setLive(true); setSettled(true);
       if (demo !== 'fight') setOver({ winner: demo === 'void' ? null : demo === 'victory' ? 0 : 1, reason: demo === 'void' ? 'both left' : 'ko', seat: 0 });
       const g = startBotFight(canvas.current!, [asPlayer(s.mon), asPlayer(monsters()[1] ?? s.mon)], s.stage);
@@ -69,19 +87,27 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
       started: () => { setLive(true); setOver(null); setRm((x) => ({ ...x, asked: false, wants: false })); },
       rematch: () => setRm((x) => ({ ...x, wants: true })),
       left: () => setRm((x) => ({ ...x, gone: true })),
+      gone: setClosed,
+      roomstate: setRs,
+      chat: (l: ChatLine) => setChat((c) => [...c, l].slice(-200)),
+      chatlog: setChat,
       over: (winner: number | null, reason: string) => setTimeout(() => setOver({ winner, reason, seat }), reason === 'ko' ? 1800 : 0),
-      result: (winner: number, kos: number[], st: number) => recordResult(s.mon.id, winner === st, kos[st], 'online rival', 'online'),
+      result: (winner: number, kos: number[], st: number) => recordResult(monRef.current.id, winner === st, kos[st], 'online rival', 'online'),
     };
     const game = startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : s.kind === 'match' ? { t: 'match', matchId: s.matchId, account: s.account } : { t: 'join', code: s.code, account: s.account, matchId: s.matchId }, asPlayer(s.mon), s.stage, hooks, sign);
     ctl.current = game;
     return () => { removeEventListener('keydown', back); game.stop(); };
   }, []);
 
+  const monRef = useRef(s?.mon as Monster);
+  monRef.current = mine ?? monRef.current;
+  useEffect(() => { if (closed) { const t = setTimeout(() => { location.hash = '#/lobby'; }, 4000); return () => clearTimeout(t); } }, [closed]);
+
   const cancel = async () => {
-    if (room?.matchId != null && s?.kind === 'host') {
+    if (room?.matchId != null && s?.kind === 'host' && !rs?.seats[1]) {
       try { await arena.cancelMatch(room.matchId); } catch { /* user closed wallet; stake can still be reclaimed later */ }
     }
-    location.hash = '#/play';
+    location.hash = '#/lobby';
   };
   useEffect(() => { // wait for the referee's on-chain result before offering the claim
     if (!over || room?.matchId == null) return;
@@ -98,7 +124,31 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
     catch (e) { setClaimMsg((e as Error).message.slice(0, 120)); }
   };
 
+  // Room lobby actions. Demo has no server, so it applies them locally (and Start runs a bot fight).
+  const patch = (p: Partial<RoomState>) => setRs((r) => (r ? { ...r, ...p } : r));
+  const pickMon = (m: Monster) => {
+    setMine(m); ctl.current?.set({ name: m.name, dna: m.dna });
+    if (room) setRs((r) => r && { ...r, seats: r.seats.map((x, i) => (i === room.seat ? { ...x, name: m.name, dna: m.dna } : x)) });
+  };
+  const pickStage = (stage: StageId) => { ctl.current?.set({ stage }); patch({ stage }); };
+  const say = (text: string) => {
+    if (ctl.current) ctl.current.chat(text);
+    else setChat((c) => [...c, { from: mine?.name ?? 'You', seat: room?.seat ?? 0, text, ts: Date.now() }]);
+  };
+  const start = () => {
+    if (ctl.current) return ctl.current.begin();
+    if (!rs) return;
+    setLive(true);
+    bots.current = startBotFight(canvas.current!, rs.seats.map((x) => ({ name: x.name, dna: x.dna })), rs.stage);
+  };
   const hostOpts = s?.kind === 'host' ? s.opts : null;
+  const lobbyRs: RoomState | null = rs ?? (room && s ? { // until the server's first roomstate
+    code: room.code, status: 'waiting', stage: s.stage, stake: hostOpts?.stake ?? '0', matchId: room.matchId, bettable: room.bettable,
+    pub: !!hostOpts?.pub, view: true, seats: room.seat ? [] : [{ name: s.mon.name, dna: s.mon.dna, account: '', connected: true }], spectators: 0,
+  } : null);
+  // Staked rooms lock the on-chain monster from create/join; only casual browser monsters can swap in.
+  const locked = room?.matchId != null && !!s && 'owner' in s.mon;
+  const options = room?.matchId != null ? local : [...free, ...local];
   const canRematch = !!over && !!s && room?.matchId == null; // staked/on-chain: stakes need a new on-chain match
   const gone = rm.gone || over?.reason === 'opponent left' || over?.reason === 'no-show';
   const rematch = () => {
@@ -119,32 +169,19 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
         <Ico n={muted ? 'icon-sound-off' : 'icon-sound-on'} />{muted ? 'Sound off (M)' : 'Sound on (M)'}
       </button>
 
-      {!live && !over && s && (
+      {!live && !over && s && mine && (closed ? (
         <div className="arena-overlay">
-          <div className="slab waiting" role="status">
-            {room ? (
-              <>
-                <img className="title-img" src={asset('title-ready')} alt="Waiting room" />
-                <div className="versus">
-                  <div><Portrait dna={s.mon.dna} size={150} /><b>{s.mon.name}</b></div>
-                  <span className="vs">vs</span>
-                  <div className="ghost-slot" aria-label="Opponent not joined yet"><span>?</span><b>Waiting…</b></div>
-                </div>
-                <p className="sub">Room code</p>
-                <div className="code">{room.code}</div>
-                <div className="row" style={{ justifyContent: 'center' }}>
-                  <span className="chip row-ico"><Ico n={hostOpts?.pub ? 'icon-room-public' : 'icon-room-private'} />{hostOpts?.pub ? 'Public' : 'Private'}</span>
-                  {room.bettable && <span className="chip gold row-ico"><Ico n="icon-bet" />Open for bets</span>}
-                  {hostOpts && hostOpts.stake !== '0' && <span className="chip row-ico"><Ico n="coin" />Stake {fmt(hostOpts.stake)} NEAR</span>}
-                  <span className="chip row-ico"><Ico n={STAGE_ICON[s.stage]} />{STAGES[s.stage].name}</span>
-                </div>
-                <p className="note">{hostOpts?.pub ? 'Listed in the lobby. ' : 'Share the code with your opponent. '}The fight starts when they join.</p>
-              </>
-            ) : <p>{status || 'Loading…'}</p>}
-            <button className="btn ghost" onClick={cancel}><span><Ico n="icon-back" />{room?.matchId != null && s.kind === 'host' ? 'Cancel and refund' : 'Back'}</span></button>
-          </div>
+          <div className="slab" role="alert"><p>{closed} Back to the lobby…</p><a className="btn" href="#/lobby"><span><Ico n="icon-lobby" />Lobby now</span></a></div>
         </div>
-      )}
+      ) : room && lobbyRs ? (
+        <RoomLobby rs={lobbyRs} seat={room.seat} mine={mine} options={options} locked={locked} status={status} chat={chat}
+          leaveLabel={room.matchId != null && s.kind === 'host' && !lobbyRs.seats[1] ? 'Cancel and refund' : 'Leave'}
+          onPick={pickMon} onStage={pickStage} onStart={start} onChat={say} onLeave={cancel} />
+      ) : (
+        <div className="arena-overlay">
+          <div className="slab" role="status"><p>{status || 'Loading…'}</p><button className="btn ghost" onClick={cancel}><span><Ico n="icon-back" />Back</span></button></div>
+        </div>
+      ))}
 
       {over && (
         <div className="arena-overlay">

@@ -1,12 +1,14 @@
 const SCREENS: [string, string, string][] = [
   ['Title', '#/', 'Menu with your monsters'],
-  ['Play', '#/play', 'Pick monster, arena, create or join a room'],
+  ['Play, create', '#/play', 'Stake, visibility, spectator bets'],
+  ['Play, join', '#/play/join', 'Room code box + open rooms with stakes'],
   ['Lobby', '#/lobby', 'Live fights, open seats, watch-only private room'],
   ['Collection', '#/collection', 'Your monsters'],
   ['Monster detail', '#/collection', 'Click any card'],
   ['Breed', '#/breed', 'Pick two, hatch an egg'],
   ['Account', '#/account', 'Wallet, balance, claims, stuck stakes, sound'],
-  ['Waiting room', '#/fight/waiting', 'Host waiting for an opponent'],
+  ['Room lobby, host', '#/fight/waiting', 'Both fighters, monster + arena pickers, chat, Start'],
+  ['Room lobby, challenger', '#/fight/challenger', 'Guest view: waiting for the host to start'],
   ['Fight', '#/fight/fight', 'Two bots fighting, HUD'],
   ['Victory', '#/fight/victory', 'Result with claim'],
   ['Defeat', '#/fight/defeat', 'Result for the loser'],
@@ -14,6 +16,7 @@ const SCREENS: [string, string, string][] = [
   ['Watch and bet', '#/watch/LIVE', 'Live market over the fight: bots trade, you go Long/Short, the result settles it'],
   ['Market simulation', '#/sim', 'Whole market run with the contract math: ledger, payouts, house books'],
   ['Watch, private room', '#/watch/GROV', 'Watch-only private fight'],
+  ['Watch, free room', '#/watch/FREE', 'No market: chat only'],
 ];
 
 export function DemoIndex() {

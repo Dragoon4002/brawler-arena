@@ -35,7 +35,7 @@ function Routes() {
   if (page === '') return <Title />;
   const body = page === 'demo' ? <DemoIndex />
     : page === 'sim' ? <MarketSim />
-    : page === 'play' ? <Play />
+    : page === 'play' ? <Play initial={arg === 'join' ? 'join' : 'create'} />
     : page === 'lobby' ? <Lobby />
     : page === 'collection' ? <Collection />
     : page === 'monster' && arg ? <Detail key={arg} id={arg} />
