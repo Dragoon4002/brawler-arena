@@ -28,7 +28,7 @@ export function usePlatform() {
     w.viewFunction({ contractId: PLATFORM_ID, method, args }) as Promise<T>;
   return {
     w, call, view,
-    balanceOf: async (account: string) => String((await view<string>('balance_of', { account_id: account })) ?? '0'),
+    balanceOf: async (account: string) => String((await view<string>('balance_of', { account_id: account }).catch(() => null)) ?? '0'),
     deposit: (yocto: string) => call('deposit', {}, yocto),
     withdraw: (yocto: string) => call('withdraw', { amount: yocto }),
   };

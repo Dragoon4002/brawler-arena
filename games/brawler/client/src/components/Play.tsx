@@ -45,7 +45,8 @@ export function Play() {
   const a = get(p1);
   return (
     <>
-      <div><h1 className="row-ico"><Ico n="icon-play" className="ico h" />Fight</h1><p className="sub">Pick the monster you will send in, then host a room or join a friend's.</p></div>
+      <div><h1 className="row-ico"><Ico n="icon-play" className="ico h" />Fight</h1><p className="sub">Host a room or join a friend's. Change your monster or the arena below.</p></div>
+      {a && <OnlineStart mon={a} stage={stage} />}
       <Picker groups={groups} value={a?.id ?? ''} onPick={setP1} label="Your monster" />
       {!a && <p className="note">No monsters available.</p>}
       <section className="slab" aria-label="Arena">
@@ -61,7 +62,6 @@ export function Play() {
           ))}
         </div>
       </section>
-      {a && <OnlineStart mon={a} stage={stage} />}
       <p className="note">Move WASD · Jump Space/W · J light · K heavy · L block (mouse: right light, left heavy) · C dodge. Arrows, Z/X and Q also work, and gamepads.</p>
     </>
   );
