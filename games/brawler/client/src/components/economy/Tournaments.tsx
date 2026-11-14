@@ -30,7 +30,7 @@ function CreateTournament({ done }: { done: (id: number) => void }) {
       <h3 className="row-ico"><Ico n="trophy" />Create a tournament</h3>
       <div className="row">
         <label className="row">Players <select value={size} onChange={(e) => setSize(+e.target.value)}><option value={4}>4</option><option value={8}>8</option></select></label>
-        <label className="row">Entry fee <input type="number" min="0" step="0.05" value={fee} onChange={(e) => setFee(e.target.value)} style={{ width: 110 }} aria-label="Entry fee in NEAR" /> {u}</label>
+        <label className="row">Entry fee <input type="number" min="0" step="0.05" value={fee} onChange={(e) => setFee(e.target.value)} style={{ width: 110 }} aria-label={`Entry fee in ${u}`} /> {u}</label>
       </div>
       <label className="toggle"><input type="checkbox" checked={bet} onChange={(e) => setBet(e.target.checked)} /> Let spectators bet on matches</label>
       <button className="btn" disabled={busy || !(Number(fee) >= 0)} onClick={() => run(async () => done(await arena.createTournament(size, toYocto(fee || '0'), bet)), 'Created.')}><span><Ico n="icon-check" />Create</span></button>

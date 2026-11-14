@@ -39,7 +39,7 @@ function Trade({ m, me, reload }: { m: NftMonster; me: string; reload: () => voi
               <><span className="chip gold row-ico"><Ico n="coin" />Listed at {fmt(m.price)} {u}</span>
                 <button className="btn ghost" disabled={act.busy} onClick={() => act.run(() => api.delist(m.id), 'Listing removed.')}><span><Ico n="icon-close" />Delist</span></button></>
             ) : (
-              <><label className="row">Price <input type="number" min="0" step="0.1" value={price} onChange={(e) => setPrice(e.target.value)} aria-label="Sale price in NEAR" style={{ width: 100 }} /> {u}</label>
+              <><label className="row">Price <input type="number" min="0" step="0.1" value={price} onChange={(e) => setPrice(e.target.value)} aria-label={`Sale price in ${u}`} style={{ width: 100 }} /> {u}</label>
                 <button className="btn" disabled={act.busy || held || !(+price > 0)} onClick={() => act.run(() => api.list(m.id, toYocto(price)), 'Listed for sale.')}><span><Ico n="coin" />List for sale</span></button></>
             )}
           </div>
@@ -48,7 +48,7 @@ function Trade({ m, me, reload }: { m: NftMonster; me: string; reload: () => voi
               <><span className="chip gold row-ico"><Ico n="icon-timer" />Rent {fmt(m.rentOffer.pricePerDay)} {u}/day, max {m.rentOffer.maxDays} days</span>
                 <button className="btn ghost" disabled={act.busy} onClick={() => act.run(() => api.cancelRent(m.id), 'Offer cancelled.')}><span><Ico n="icon-close" />Cancel offer</span></button></>
             ) : (
-              <><label className="row">Per day <input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} aria-label="Rent per day in NEAR" style={{ width: 90 }} /> {u}</label>
+              <><label className="row">Per day <input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} aria-label={`Rent per day in ${u}`} style={{ width: 90 }} /> {u}</label>
                 <label className="row">Max days <input type="number" min="1" step="1" value={maxDays} onChange={(e) => setMaxDays(e.target.value)} aria-label="Maximum rental days" style={{ width: 70 }} /></label>
                 <button className="btn alt" disabled={act.busy || held || !(+rate > 0) || !(+maxDays >= 1)} onClick={() => act.run(() => api.offerRent(m.id, toYocto(rate), Math.floor(+maxDays)), 'Rent offer published.')}><span><Ico n="icon-timer" />Offer for rent</span></button></>
             )}
@@ -92,7 +92,7 @@ function VaultPanel({ m, me }: { m: NftMonster; me: string }) {
       </dl>
       <div className="row">
         {owner && <button className="btn" disabled={act.busy || !!m.price || v.balance === '0'} onClick={() => act.run(() => api.vaultWithdraw(m.id), 'Withdrawn to your wallet.')}><span><Ico n="coin" />Withdraw all</span></button>}
-        <label className="row"><input type="number" min="0" step="0.1" value={amt} onChange={(e) => setAmt(e.target.value)} aria-label="Deposit in NEAR" style={{ width: 90 }} /> {u}</label>
+        <label className="row"><input type="number" min="0" step="0.1" value={amt} onChange={(e) => setAmt(e.target.value)} aria-label={`Deposit in ${u}`} style={{ width: 90 }} /> {u}</label>
         <button className="btn ghost" disabled={act.busy || !(+amt > 0)} onClick={() => (me ? act.run(() => api.vaultDeposit(m.id, toYocto(amt)), 'Vault funded.') : signIn())}><span>Fund vault</span></button>
       </div>
       {v.log.length > 0 && (

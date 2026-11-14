@@ -45,7 +45,7 @@ export function FundsDialog({ onClose }: { onClose: () => void }) {
             <>
               <label className="funds-amount">
                 <span>Amount</span>
-                <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} aria-label="Amount in NEAR" /><b>{u}</b></span>
+                <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} aria-label={`Amount in ${u}`} /><b>{u}</b></span>
               </label>
               <div className="funds-actions">
                 <button type="button" className="btn" disabled={busy} onClick={() => run('Deposit')}><span><Ico n="coin" />Deposit</span></button>
