@@ -8,6 +8,7 @@ import { lookOf, sanitize, statsOf, type Dna } from '../genes.ts';
 import { STAGE_IDS, type StageId } from '../stages.ts';
 import { music, playEvents } from '../audio.ts';
 import { bot } from '../demo.ts';
+import type { SignMatch } from '../near.ts';
 
 export interface Player { name: string; dna: Dna }
 export interface Hooks {
@@ -79,7 +80,7 @@ export function startLocal(canvas: HTMLCanvasElement, players: [Player, Player],
 
 // Free-tier hosts sleep when idle and refuse the first connections while waking (~30-60 s), so retry for ~75 s.
 // The host's arena wins; the guest's choice is ignored.
-export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & HostOpts) | { t: 'join'; code: string; account: string }, me: Player, stage: StageId, hooks: Hooks = {}) {
+export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & HostOpts) | { t: 'join'; code: string; account: string; matchId: number | null } | { t: 'match'; matchId: number; account: string }, me: Player, stage: StageId, hooks: Hooks = {}, sign?: SignMatch) {
   let ws: WebSocket | null = null;
   let peer: ReturnType<typeof linkPeer> | null = null;
   let game: ReturnType<typeof loop> | null = null;
@@ -97,12 +98,13 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
     let seat = -1, delay = 4;
     let net: Netplay | null = null;
     let theirStage: StageId = 'ember';
+    let chain: Player[] | null = null; // server-sent seats (chain DNA); must win so our sim matches the referee's
     let theirs: Player | null = null, ready: { send: any; delay: number; label: string } | null = null;
 
     // Fight starts once we know the opponent's monster AND the input channel is up.
     const maybeStart = () => {
       if (!theirs || !ready || game) return;
-      const players = seat === 0 ? [me, theirs] : [theirs, me];
+      const players = chain ?? (seat === 0 ? [me, theirs] : [theirs, me]);
       // Mirror confirmed inputs to the server referee (packed host<<8|guest, 6-frame batches) + 1 s heartbeat.
       let batch: number[] = [], f0 = 0;
       const tap = (ins: number[]) => {
@@ -116,7 +118,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
       hooks.started?.(players, seat);
     };
 
-    sock.onopen = () => { opened = true; sock.send(JSON.stringify({ ...first, name: me.name, dna: me.dna, stage })); };
+    sock.onopen = () => { opened = true; };
     sock.onerror = () => {
       if (opened || ws !== sock || stopped) return;
       if (tries >= 30) return say(`Can't reach server ${SERVER}`);
@@ -124,14 +126,22 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
       setTimeout(() => ws === sock && connect(tries + 1), 2500);
     };
     sock.onclose = () => { if (game) game.setBanner('Connection closed'); };
-    sock.onmessage = (e) => {
+    sock.onmessage = async (e) => {
       const m = JSON.parse(e.data);
       if (m.t === 'ping') sock.send('{"t":"pong"}');
-      else if (m.t === 'room') { code = m.code; say(`Room ${m.code} — share this code. Waiting for opponent…`); hooks.room?.({ code: m.code, matchId: first.t === 'host' ? first.matchId : null, bettable: first.t === 'host' && first.bettable, seat: 0 }); }
+      else if (m.t === 'hello') { // on-chain seats prove the account: wallet signs the server's nonce (NEP-413)
+        let auth;
+        if (first.matchId != null && sign) {
+          say('Sign the login message in your wallet…');
+          try { auth = await sign(first.matchId, m.nonce); } catch { return say('Wallet signature needed to take your seat.'); }
+        }
+        sock.send(JSON.stringify({ ...first, name: me.name, dna: me.dna, stage, auth }));
+      } else if (m.t === 'room') { code = m.code; seat = m.seat ?? 0; say(`Room ${m.code} — share this code. Waiting for opponent…`); hooks.room?.({ code: m.code, matchId: first.t === 'join' ? null : first.matchId, bettable: first.t === 'host' && first.bettable, seat }); }
       else if (m.t === 'error') say(m.msg);
       else if (m.t === 'start') {
         seat = m.seat; delay = m.delay;
-        if (seat === 1) hooks.room?.({ code: first.t === 'join' ? first.code : code, matchId: m.matchId ?? null, bettable: !!m.bettable, seat });
+        if (Array.isArray(m.players) && m.players.length === 2) chain = m.players.map((p: any) => ({ name: String(p.name ?? 'Rival').slice(0, 24) || 'Rival', dna: sanitize(p.dna) }));
+        if (seat === 1 || first.t === 'match') hooks.room?.({ code: first.t === 'join' ? first.code : code, matchId: m.matchId ?? null, bettable: !!m.bettable, seat });
         say('Opponent found — connecting…');
         sock.send(JSON.stringify({ t: 'pick', name: me.name.slice(0, 24), dna: me.dna, stage }));
         peer = linkPeer(sock, seat, delay, FORCE_RELAY, (d) => net?.onMessage(d), (send, d, label) => { ready = { send, delay: d, label }; maybeStart(); });
@@ -166,6 +176,7 @@ export function startSpectate(canvas: HTMLCanvasElement, code: string, hooks: Ho
     if (m.t === 'error') hooks.status?.(m.msg);
     else if (m.t === 'spec') {
       hooks.info?.(m);
+      game?.stop(); queue.length = 0; buffering = true; // fresh spec (room went live with final DNA): rebuild
       const players = m.players.map((p: any) => ({ name: p.name, dna: sanitize(p.dna) }));
       if (players.length < 2) { hooks.status?.('Waiting for a challenger…'); players.push({ name: '???', dna: players[0].dna }); }
       game = loop(canvas, players, -2, STAGE_IDS.includes(m.stage) ? m.stage : 'ember', hooks);

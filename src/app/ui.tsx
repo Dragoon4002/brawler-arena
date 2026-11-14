@@ -69,18 +69,19 @@ export function Stats({ dna }: { dna: Dna }) {
   );
 }
 
-export function MonsterCard({ m, onClick, selected, href }: { m: Monster; onClick?: () => void; selected?: boolean; href?: string }) {
+export function MonsterCard({ m, onClick, selected, href, extra, disabled }: { m: Monster; onClick?: () => void; selected?: boolean; href?: string; extra?: React.ReactNode; disabled?: boolean }) {
   const body = (
     <>
       <Portrait dna={m.dna} size={200} />
       <div className="tile-head"><h3>{m.name}</h3><span className="chip">Gen {m.gen}</span></div>
       <span className="tile-meta row-ico"><Ico n={TYPE_ICON[archetype(m.dna)]} />{archetype(m.dna)}, {m.record.w} wins, {m.record.l} losses</span>
+      {extra}
       <Stats dna={m.dna} />
     </>
   );
   return href
     ? <a className="tile" href={href}>{body}</a>
-    : <button type="button" className="tile" aria-pressed={selected} onClick={onClick}>{body}</button>;
+    : <button type="button" className="tile" aria-pressed={selected} disabled={disabled} onClick={onClick}>{body}</button>;
 }
 
 // Full-bleed animated arena (cover-fit), used as the title backdrop.

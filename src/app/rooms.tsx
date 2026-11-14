@@ -14,6 +14,10 @@ type Arena = ReturnType<typeof useArena>;
 const errText = (e: unknown) => ((e as Error)?.message ?? String(e)).slice(0, 160);
 
 // Pay the on-chain stake if the room needs it, then go fight.
+// On-chain monsters (NftMonster has `owner`) are locked in the match; local demo-store monsters aren't.
+export const BUSY = 'Monster busy or unavailable. Deposit refunded.';
+export const chainId = (m: Monster) => ('owner' in m ? m.id : undefined);
+
 async function joinRoom(arena: Arena, code: string, mon: Monster, say: (t: string) => void) {
   say('Looking up room…');
   const r = await peekRoom(code);
@@ -24,9 +28,9 @@ async function joinRoom(arena: Arena, code: string, mon: Monster, say: (t: strin
     if (!arena.account) { say('Connect your NEAR wallet to join a staked or bettable room.'); return arena.signIn(); }
     if (r.players[0]?.account === arena.account) return say('You are the host of that room.');
     say(r.stake === '0' ? 'Confirm the join in your wallet…' : `Confirm the ${fmt(r.stake)} NEAR stake in your wallet…`);
-    await arena.joinMatch(r.matchId, r.stake);
+    if ((await arena.joinMatch(r.matchId, r.stake, chainId(mon))) !== true && !DEMO) return say(BUSY); // demo returns null
   }
-  prepareFight({ kind: 'join', mon, code: r.code, stage: r.stage, account: arena.account ?? '' });
+  prepareFight({ kind: 'join', mon, code: r.code, stage: r.stage, account: arena.account ?? '', matchId: r.matchId });
 }
 
 /* ---------- Play screen: online start ---------- */
@@ -50,7 +54,8 @@ export function OnlineStart({ mon, stage }: { mon: Monster; stage: StageId }) {
         if (!arena.ready) throw new Error('Betting contract not configured on this build.');
         if (!arena.account) { setMsg('Connect your NEAR wallet first.'); await arena.signIn(); return; }
         setMsg('Confirm in your wallet…');
-        matchId = await arena.createMatch(bettable, stakeY);
+        matchId = await arena.createMatch(bettable, stakeY, chainId(mon));
+        if (typeof matchId !== 'number' || !Number.isInteger(matchId)) { setMsg(BUSY); return; }
       }
       prepareFight({ kind: 'host', mon, stage, opts: { pub, view: pub || view, bettable, matchId, stake: stakeY, account: arena.account ?? '' } });
     } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }

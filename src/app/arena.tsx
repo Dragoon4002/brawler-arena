@@ -6,13 +6,14 @@ import { recordResult } from '../store.ts';
 import type { Monster } from '../genes.ts';
 import { STAGES, type StageId } from '../stages.ts';
 import { getAudio, toggleMute } from '../audio.ts';
-import { fmt, useArena } from '../near.ts';
+import { fmt, useArena, useSignMatch } from '../near.ts';
 import { asset, Ico, Portrait, STAGE_ICON } from './ui.tsx';
 
 export type FightSetup =
   | { kind: 'local'; mons: [Monster, Monster]; stage: StageId }
   | { kind: 'host'; mon: Monster; stage: StageId; opts: HostOpts }
-  | { kind: 'join'; mon: Monster; code: string; stage: StageId; account: string };
+  | { kind: 'join'; mon: Monster; code: string; stage: StageId; account: string; matchId: number | null }
+  | { kind: 'match'; mon: Monster; stage: StageId; matchId: number; account: string }; // on-chain (tournament) match via relay `match` msg
 
 let setup: FightSetup | null = null;
 export const prepareFight = (s: FightSetup) => { setup = s; location.hash = '#/fight'; };
@@ -25,6 +26,7 @@ const demoSetup = (): FightSetup => ({ kind: 'host', mon: monsters()[0], stage: 
 export function Arena({ demo }: { demo?: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const arena = useArena();
+  const sign = useSignMatch();
   const [status, setStatus] = useState('');
   const [live, setLive] = useState(false);
   const [room, setRoom] = useState<{ code: string; matchId: number | null; bettable: boolean; seat: number } | null>(null);
@@ -62,7 +64,7 @@ export function Arena({ demo }: { demo?: string }) {
     };
     const game = s.kind === 'local'
       ? startLocal(canvas.current!, [asPlayer(s.mons[0]), asPlayer(s.mons[1])], s.stage, hooks)
-      : startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : { t: 'join', code: s.code, account: s.account }, asPlayer(s.mon), s.stage, hooks);
+      : startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : s.kind === 'match' ? { t: 'match', matchId: s.matchId, account: s.account } : { t: 'join', code: s.code, account: s.account, matchId: s.matchId }, asPlayer(s.mon), s.stage, hooks, sign);
     return () => { removeEventListener('keydown', back); game.stop(); };
   }, []);
 
@@ -95,7 +97,7 @@ export function Arena({ demo }: { demo?: string }) {
         <Ico n={muted ? 'icon-sound-off' : 'icon-sound-on'} />{muted ? 'Sound off (M)' : 'Sound on (M)'}
       </button>
 
-      {!live && s && s.kind !== 'local' && (
+      {!live && !over && s && s.kind !== 'local' && (
         <div className="arena-overlay">
           <div className="slab waiting" role="status">
             {room ? (
@@ -127,7 +129,7 @@ export function Arena({ demo }: { demo?: string }) {
           <div className="slab waiting" role="status">
             <img className="title-img" src={asset(over.winner === null ? 'title-void' : over.winner === over.seat ? 'title-victory' : 'title-defeat')} alt={over.winner === null ? 'Match void' : over.winner === over.seat ? 'Victory' : 'Defeat'} />
             <p>{over.winner === null ? `No result (${over.reason}). Stakes and bets are refunded.` : over.reason === 'ko' ? 'Three knockouts.' : `Won by ${over.reason}.`}</p>
-            {room?.matchId != null && (over.winner === over.seat || over.winner === null) && (
+            {room?.matchId != null && s?.kind !== 'match' && (over.winner === over.seat || over.winner === null) && (
               <>
                 {!settled && <p className="note">Posting the result on-chain…</p>}
                 <button className="btn big" disabled={!settled} onClick={claim}><span><Ico n="icon-claim" />{over.winner === null ? 'Claim refund' : 'Claim winnings'}</span></button>

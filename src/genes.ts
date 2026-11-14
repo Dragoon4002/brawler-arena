@@ -71,7 +71,7 @@ export function nameFor(seed: number) {
 
 const hueMix = (a: number, b: number, k: number) => {
   const d = ((b - a + 540) % 360) - 180; // shortest arc
-  return Math.round((a + d * k + 360) % 360);
+  return Math.round((a + d * k + 360) % 360) % 360;
 };
 
 // Each gene comes from one parent (stats may blend), hues drift, 20% chance of one mutated gene.

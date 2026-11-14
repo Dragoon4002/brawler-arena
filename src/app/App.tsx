@@ -6,6 +6,7 @@ import { MarketSim } from './sim.tsx';
 import { Title, Play, Collection, Detail, Breed, Account } from './screens.tsx';
 import { Arena } from './arena.tsx';
 import { Lobby, Watch } from './rooms.tsx';
+import { Market, Season, TournamentPage, Tournaments } from './economy.tsx';
 
 export const NETWORK = 'testnet' as const;
 
@@ -29,11 +30,15 @@ function Routes() {
     : page === 'play' ? <Play />
     : page === 'lobby' ? <Lobby />
     : page === 'collection' ? <Collection />
-    : page === 'monster' && arg ? <Detail id={arg} />
+    : page === 'monster' && arg ? <Detail key={arg} id={arg} />
     : page === 'breed' ? <Breed />
+    : page === 'market' ? <Market />
+    : page === 'season' ? <Season />
+    : page === 'tournaments' ? <Tournaments />
+    : page === 'tournament' && arg ? <TournamentPage id={+arg} />
     : page === 'account' ? <Account />
     : null; // unknown route -> plain title
-  return <Title page={page === 'monster' ? 'collection' : page}>{body}</Title>;
+  return <Title page={page === 'monster' ? 'collection' : page === 'tournament' ? 'tournaments' : page}>{body}</Title>;
 }
 
 export function App() {

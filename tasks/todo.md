@@ -30,3 +30,19 @@
 - Playwright: max/min/empty validation msgs, Long/Short/Close msgs on clicked card.
 - draw.ts canvas now fits parent (ResizeObserver) so watch column doesn't overlap.
 - Pending: deploy v2 + fund treasury + referee FC key + testnet run (needs user OK).
+
+# Economy: NFTs, provenance, market, breeding, rentals, seasons + tournaments (spec: tasks/economy-spec.md)
+- [x] W1 monsters contract (opus)
+- [x] W1 arena: monster hooks + tournaments (opus)
+- [x] W1 data layer near.ts/nft.ts/demo (sonnet)
+- [x] W1 referee/relay: chain DNA, per-seat KOs, tournament rooms (sonnet)
+- [x] W2 UI screens (sonnet)
+- [x] W3 review (opus) + cargo test x2, tsc, npm test, demo check
+- [x] Review fixes: random void advance, lock lengths 5h/72h + 24h entry window, owed map, O(1) season end, tournament-only season wins, NEP-413 seat auth, 5 min no-show forfeit
+- [ ] Deploy monsters + arena v3 to testnet (fresh accounts), set MONSTERS_ID/VITE_MONSTERS_ID (ask first)
+
+## Review (economy)
+- arena cargo test 46/46, monsters 44/44, both wasm 0 warnings. tsc clean, npm test 30/30, vite build ok, server boots.
+- Demo screenshots of all new routes at 1280x800 + 390x844 (scratchpad).
+- Not tested: real wallet signing, live cross-contract calls, end-to-end tournament on testnet.
+- Known/deferred: relay reconnect mid-match; bettable 0-stake spam drains treasury seed (pre-existing); random_seed bias by block producers (testnet ok).
