@@ -20,7 +20,8 @@ Brawler: real-time 2D platform fighter, two monsters knock each other off a floa
 ```sh
 npm install && npm test && npm run build      # all TS workspaces
 cargo test --workspace                         # rust sim + server
-cargo run -p brawler-server                    # ws on :8787 (PORT)
+make dev                                       # backend in docker, ws :8787 (BRAWLER_PORT)
+cargo run -p brawler-server                    # same, no docker
 npm run dev -w @xyz/brawler                    # http://localhost:5173
 npm run dev -w @xyz/market
 ```

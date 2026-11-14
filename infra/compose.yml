@@ -1,0 +1,12 @@
+# env from shell or infra/.env. no CONTRACT_ID = free rooms only
+services:
+  brawler-server:
+    build: { context: .., dockerfile: infra/brawler-server.Dockerfile }
+    ports: ["${BRAWLER_PORT:-8787}:8787"]
+    environment:
+      NEAR_RPC: ${NEAR_RPC:-https://test.rpc.fastnear.com}
+      CONTRACT_ID: ${CONTRACT_ID:-}
+      MONSTERS_ID: ${MONSTERS_ID:-}
+      REFEREE_ID: ${REFEREE_ID:-}
+      REFEREE_KEY: ${REFEREE_KEY:-}
+    restart: unless-stopped
