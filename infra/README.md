@@ -4,7 +4,9 @@ One t4g.small (arm64) box runs the game server and bots; Caddy on 443 terminates
 
 Vercel env:
 - game client: `NEXT_PUBLIC_SERVER_URL=wss://<domain>`, `NEXT_PUBLIC_MARKET_URL=<market url>`
-- market: `NEXT_PUBLIC_DEMO=1` until the skills contract is live, `NEXT_PUBLIC_BRAWLER_URL=<game url>`
+- market: `NEXT_PUBLIC_BRAWLER_URL=<game url>`
+
+Server chain env (ansible defaults, override via env/secrets): `CONTRACT_ID=v3.brawler-platform-5c8e2b.testnet`, `MONSTERS_ID=v2.brawler-monsters-5c8e2b.testnet`, `REFEREE_ID=referee.v2.brawler-platform-5c8e2b.testnet`.
 
 ## Deploy
 

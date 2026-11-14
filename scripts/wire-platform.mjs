@@ -10,7 +10,7 @@ const env = process.env;
 const P = env.PLATFORM_ID ?? 'v3.brawler-platform-5c8e2b.testnet';
 const OWNER = env.OWNER_ID ?? 'brawler-platform-5c8e2b.testnet';
 const REF = env.REFEREE_ID ?? 'referee.v2.brawler-platform-5c8e2b.testnet';
-const M = env.MONSTERS_ID ?? 'brawler-monsters-5c8e2b.testnet';
+const M = env.MONSTERS_ID ?? 'v2.brawler-monsters-5c8e2b.testnet';
 const rpc = new JsonRpcProvider({ url: env.NEAR_RPC ?? 'https://test.rpc.fastnear.com' });
 const cred = (id) => JSON.parse(fs.readFileSync(`${os.homedir()}/.near-credentials/testnet/${id}.json`));
 const local = (id) => new Account(id, rpc, cred(id).private_key);

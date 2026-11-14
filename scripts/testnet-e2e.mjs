@@ -9,10 +9,10 @@ import os from 'node:os';
 
 const env = process.env;
 const P = env.PLATFORM_ID ?? 'v3.brawler-platform-5c8e2b.testnet';
-const M = env.MONSTERS_ID ?? 'brawler-monsters-5c8e2b.testnet';
+const M = env.MONSTERS_ID ?? 'v2.brawler-monsters-5c8e2b.testnet';
 const OWNER = env.OWNER_ID ?? 'brawler-platform-5c8e2b.testnet';
 const REF = env.REFEREE_ID ?? 'referee.v2.brawler-platform-5c8e2b.testnet';
-const FUNDER = env.FUNDER_ID ?? M;
+const FUNDER = env.FUNDER_ID ?? 'brawler-monsters-5c8e2b.testnet';
 const rpc = new JsonRpcProvider({ url: env.NEAR_RPC ?? 'https://test.rpc.fastnear.com' });
 const CREDS = `${os.homedir()}/.near-credentials/testnet`;
 const key = (id) => JSON.parse(fs.readFileSync(`${CREDS}/${id}.json`)).private_key;
@@ -137,14 +137,14 @@ await tx('offer_rent', b, M, 'offer_rent', { token_id: mb[0], price_per_day: Y(0
 await tx('rent 1 day', c, M, 'rent', { token_id: mb[0], days: 1 }, Y(0.01));
 assert.equal((await view(M, 'get_monster', { token_id: mb[0] })).rental.renter, c.accountId);
 // seller account gone at sale time -> payout parks in owed; recreate it, withdraw
-const e = await mk('e', 0.2);
+const e = await mk('e', 0.4);
 const me = await hatch(e);
 await tx('list (seller e)', e, M, 'list', { token_id: me[0], price: Y(0.05) }, '1');
 await drop(e);
 await tx('buy from deleted seller (payout fails, expected)', c, M, 'buy', { token_id: me[0] }, Y(0.05));
 const owed = BigInt(await view(M, 'owed_of', { account_id: e.accountId }));
 assert.ok(owed > 0n, 'failed payout owed');
-const e2 = await mk('e', 0.1);
+const e2 = await mk('e', 0.2);
 assert.equal(await tx('withdraw_owed', e2, M, 'withdraw_owed', {}), owed.toString());
 
 // 4-player tournament: settle, void decided by KOs, final, champion claims

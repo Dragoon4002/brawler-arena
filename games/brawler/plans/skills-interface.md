@@ -1,6 +1,6 @@
 # Skills contract interface (monsters contract, final)
 
-Contract: `v2.brawler-monsters-5c8e2b.testnet` once deployed (`scripts/deploy-monsters-v2.mjs`). All existing monster methods are unchanged.
+Contract: `v2.brawler-monsters-5c8e2b.testnet` (deployed via `scripts/deploy-monsters-v2.mjs`). All existing monster methods are unchanged.
 
 ## Conventions
 - Skill id `u32` (JSON number) in all custom methods. NEP-245 token id = `"skill:<id>"` (string).

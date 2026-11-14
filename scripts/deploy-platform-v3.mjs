@@ -53,7 +53,7 @@ const r = await owner.signAndSendTransaction({
   actions: [
     actions.createAccount(),
     actions.transfer(init),
-    actions.addKey(kp.getPublicKey(), actions.fullAccessKey()),
+    actions.addFullAccessKey(kp.getPublicKey()),
     actions.deployContract(code),
     actions.functionCall('new', { owner_id: OWNER }, 30n * 10n ** 12n, 0n),
   ],

@@ -4,7 +4,7 @@ import { nearToYocto, yoctoToNear } from 'near-api-js';
 
 export { NearProvider, useNearWallet };
 export const NETWORK = 'testnet' as const;
-export const PLATFORM_ID: string = process.env.NEXT_PUBLIC_PLATFORM_ID ?? 'v2.brawler-platform-5c8e2b.testnet';
+export const PLATFORM_ID: string = process.env.NEXT_PUBLIC_PLATFORM_ID ?? 'v3.brawler-platform-5c8e2b.testnet';
 export const MARKET_URL: string = process.env.NEXT_PUBLIC_MARKET_URL ?? 'https://market.65-0-237-185.sslip.io';
 export const GAS = '30000000000000';
 

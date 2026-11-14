@@ -56,14 +56,12 @@ Practice and watching need no wallet. Anything that moves NEAR needs a NEAR **te
 
 | Contract | Account | What it does |
 |---|---|---|
-| Platform | [`v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v2.brawler-platform-5c8e2b.testnet) | balances, staked matches, spectator market, tournaments, per-game referee |
-| Monsters (live) | [`brawler-monsters-5c8e2b.testnet`](https://testnet.nearblocks.io/address/brawler-monsters-5c8e2b.testnet) | monster NFTs: hatch, breed, list/buy, rent, match locks |
-| Monsters + skills | `<monsters+skills account>` (TBD: deploy pending) | same monsters plus NEP-245 skills (presales, skill market, `equip`) from `games/brawler/contract`; replaces the row above when live |
+| Platform | [`v3.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v3.brawler-platform-5c8e2b.testnet) | balances, staked matches, signed settle, order-book spectator market, tournaments, per-game referee |
+| Monsters + skills | [`v2.brawler-monsters-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v2.brawler-monsters-5c8e2b.testnet) | monster NFTs (hatch, breed, list/buy, rent, match locks) plus NEP-245 skills (presales, skill market, `equip`) from `games/brawler/contract` |
 | Referee | [`referee.v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/referee.v2.brawler-platform-5c8e2b.testnet) | the game server's key; signs results (v3) / reports them (v2) |
 | Platform owner | [`brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/brawler-platform-5c8e2b.testnet) | registers games, owns the monsters contract, creator of the "Arena Basics" skills |
 
-Platform v3 code (gasless settle, order-book market) is in this repo, not yet deployed: switch steps in `contracts/DEPLOYMENTS.md`.
-Superseded: platform v1 at `brawler-platform-5c8e2b.testnet`. Until the skills contract is live, the market app runs with `NEXT_PUBLIC_DEMO=1` and skill steps (7, 8) work in demo mode only. Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DEPLOYMENTS.md). Skills interface: [`games/brawler/plans/skills-interface.md`](games/brawler/plans/skills-interface.md).
+Superseded: platform v1 `brawler-platform-5c8e2b.testnet`, platform v2 `v2.brawler-platform-5c8e2b.testnet`, monsters v1 `brawler-monsters-5c8e2b.testnet`. Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DEPLOYMENTS.md). Skills interface: [`games/brawler/plans/skills-interface.md`](games/brawler/plans/skills-interface.md).
 
 ## What's on-chain
 

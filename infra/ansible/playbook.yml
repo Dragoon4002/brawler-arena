@@ -7,9 +7,9 @@
     app_dir: /opt/brawler-arena
     compose: docker compose -f infra/compose.yml -f infra/compose.prod.yml
     # override with -e @secrets.yml (ansible-vault encrypted) or export in shell
-    contract_id: "{{ lookup('env', 'CONTRACT_ID') }}"
-    monsters_id: "{{ lookup('env', 'MONSTERS_ID') }}"
-    referee_id: "{{ lookup('env', 'REFEREE_ID') }}"
+    contract_id: "{{ lookup('env', 'CONTRACT_ID') | default('v3.brawler-platform-5c8e2b.testnet', true) }}"
+    monsters_id: "{{ lookup('env', 'MONSTERS_ID') | default('v2.brawler-monsters-5c8e2b.testnet', true) }}"
+    referee_id: "{{ lookup('env', 'REFEREE_ID') | default('referee.v2.brawler-platform-5c8e2b.testnet', true) }}"
     referee_key: "{{ lookup('env', 'REFEREE_KEY') }}"
     deb_arch: "{{ 'arm64' if ansible_facts.architecture == 'aarch64' else 'amd64' }}"
 
