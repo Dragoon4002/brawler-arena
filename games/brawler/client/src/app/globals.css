@@ -175,17 +175,23 @@ button.hub-count, .link { cursor: pointer; }
 .hub-close:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; border-radius: 10px; }
 @keyframes pop-in { from { transform: scale(0); } to { transform: none; } }
 .hub-panel {
-  position: absolute; z-index: 1; top: 116px; bottom: 20px; left: 150px; right: 150px; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  position: absolute; z-index: 1; top: 116px; bottom: 24px; left: max(170px, 50% - 600px); right: max(170px, 50% - 600px);
+  scrollbar-width: thin; scrollbar-color: var(--panel-2) transparent; scrollbar-gutter: stable; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   background: var(--grain), rgb(28 20 50 / 0.94); border: 4px solid var(--ink); border-radius: 18px;
   box-shadow: 0 8px 0 var(--ink), inset 0 3px 0 var(--bevel-hi);
   animation: panel-open 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) both;
 }
 .hub-panel > .page { padding: 20px 24px 40px; }
+.hub-panel::-webkit-scrollbar { width: 10px; }
+.hub-panel::-webkit-scrollbar-track { background: transparent; margin: 14px 0; }
+.hub-panel::-webkit-scrollbar-thumb { background: var(--panel-2); border: 2px solid transparent; border-radius: 99px; background-clip: padding-box; }
+.hub-panel::-webkit-scrollbar-thumb:hover { background-color: var(--muted); }
 .hub-panel.from-left { --clip-from: inset(0 100% 0 0 round 18px); }
 .hub-panel.from-right { --clip-from: inset(0 0 0 100% round 18px); }
 .hub-panel.from-bottom { --clip-from: inset(100% 0 0 0 round 18px); }
 @keyframes panel-open { from { clip-path: var(--clip-from); } to { clip-path: inset(0 0 0 0 round 18px); } }
-.panel-x { position: sticky; top: 12px; float: right; margin: 12px 12px 0 0; z-index: 2; }
+.panel-x { position: sticky; top: 12px; margin: 12px 12px -56px auto; z-index: 2; }
+.hub-panel > .page > :first-child { padding-right: 56px; }
 .hub-count.demo { background: var(--gold); color: var(--ink); border-color: var(--ink); }
 
 .hub-dialog { width: min(760px, 100% - 32px); max-height: calc(100dvh - 32px); padding: 20px; color: var(--cream); background: var(--grain), var(--panel); border: 4px solid var(--ink); border-radius: 18px; box-shadow: 0 8px 0 var(--ink), inset 0 3px 0 var(--bevel-hi); }
@@ -367,18 +373,27 @@ input[type='range'], input[type='checkbox'] { accent-color: var(--ember); border
 .tab[aria-selected='true']:hover { color: var(--ink); }
 .tab:focus-visible, .chat-log:focus-visible, .seg label:has(:focus-visible), .side-pick label:has(:focus-visible) { outline: 3px solid var(--gold); outline-offset: 3px; }
 .tab-panel { border-top-left-radius: 0; display: grid; gap: 20px; }
-.play-create { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; align-items: start; }
-.play-mon { display: grid; justify-items: center; gap: 4px; text-align: center; padding: 12px; background: var(--grain), var(--panel-2); border: var(--outline); border-radius: 14px; }
-.play-mon b { font-family: var(--font-display); font-weight: 400; font-size: 24px; }
+.play-body { display: grid; grid-template-columns: 232px minmax(0, 1fr); gap: 28px; align-items: start; }
+.play-mon { display: grid; justify-items: center; gap: 2px; text-align: center; padding: 14px 12px; background: var(--grain), var(--panel-2); border: var(--outline); border-radius: 14px; }
+.play-mon b { font-family: var(--font-display); font-weight: 400; font-size: 24px; margin-top: 6px; }
 .play-mon .portrait { background: radial-gradient(circle at 50% 70%, var(--panel), var(--sky-0)); border-radius: 10px; border: 2px solid var(--ink); }
-.play-form { display: grid; gap: 14px; justify-items: start; }
+.roster { width: 100%; margin-top: 12px; padding-top: 10px; border-top: 2px dashed rgb(185 169 207 / 0.25); text-align: left; }
+.roster-title { margin: 0 0 8px; font-size: 12px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.roster-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.roster-pick { display: grid; place-items: center; padding: 3px; cursor: pointer; background: var(--panel); border: 2px solid var(--ink); border-radius: 10px; transition: transform 0.12s ease; }
+.roster-pick .portrait { border: 0; }
+.roster-pick:hover { transform: translateY(-2px); }
+.roster-pick[aria-pressed='true'] { outline: 3px solid var(--ember); outline-offset: -1px; }
+.roster-pick:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+.play-keys { margin: 16px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
+.play-form { display: grid; gap: 18px; justify-items: start; padding-top: 4px; }
 .stake-field { display: grid; gap: 6px; font-family: var(--font-display); font-size: 20px; }
 .stake-input { display: inline-flex; align-items: center; gap: 10px; }
 .stake-input input { width: 160px; font-family: var(--font-display); font-size: 26px; color: var(--gold); }
 .stake-input b { font-weight: 400; color: var(--gold); }
 .play-form .note { margin: 0; }
 .seg { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; }
-.seg legend { padding: 0; margin-bottom: 6px; font-family: var(--font-display); font-size: 18px; }
+.seg legend { padding: 0; margin-bottom: 8px; font-family: var(--font-display); font-size: 20px; }
 .seg label { display: inline-flex; cursor: pointer; padding: 8px 14px; border-radius: 99px; background: var(--panel-2); border: 2px solid var(--ink); font-weight: 700; }
 .seg label:has(:checked) { background: var(--gold); color: var(--ink); }
 .seg input, .side-pick input { position: absolute; opacity: 0; width: 1px; height: 1px; }
@@ -495,7 +510,8 @@ kbd { font: 700 12px var(--font-body); padding: 1px 6px; border-radius: 5px; bac
   .watch { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'top' 'stage' 'side'; grid-template-rows: auto auto auto; align-content: start; padding: 8px; }
 }
 @media (max-width: 640px) {
-  .play-create { grid-template-columns: minmax(0, 1fr); }
+  .play-body { grid-template-columns: minmax(0, 1fr); }
+  .roster-grid { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); }
   .tab { padding: 8px 18px 10px; font-size: 20px; }
   .room { padding: 10px; }
   .room-top { grid-template-columns: auto 1fr; }
@@ -525,3 +541,5 @@ kbd { font: 700 12px var(--font-body); padding: 1px 6px; border-radius: 5px; bac
   .bet-pop { font-size: 12px; padding: 4px 10px; }
 }
 @media (prefers-reduced-motion: reduce) { .room-wait { animation: none; } .odds-bar > span { transition: none; } }
+input[type='number'] { appearance: textfield; -moz-appearance: textfield; }
+input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }

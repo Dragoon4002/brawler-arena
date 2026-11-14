@@ -5,25 +5,25 @@ import { RoomList } from '@/components/rooms/Lobby.tsx';
 import { CreateRoom, JoinByCode } from '@/components/rooms/OnlineStart.tsx';
 import { Ico, Portrait } from '@/components/ui.tsx';
 
-function Picker({ groups, value, onPick, label }: { groups: [string, Monster[]][]; value: string; onPick: (id: string) => void; label: string }) {
+function Fighter({ mon, groups, onPick }: { mon: Monster; groups: [string, Monster[]][]; onPick: (id: string) => void }) {
   return (
-    <section className="slab" aria-label={label}>
-      <h3>{label}</h3>
+    <aside className="play-mon" aria-label="Your monster">
+      <Portrait dna={mon.dna} size={150} />
+      <b>{mon.name}</b>
+      <span className="tile-meta">{archetype(mon.dna)}</span>
       {groups.map(([title, list]) => list.length > 0 && (
-        <div key={title}>
-          <p className="sub" style={{ marginTop: 14 }}>{title}</p>
-          <div className="grid" style={{ marginTop: 8, gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 150px), 1fr))' }}>
+        <div key={title} className="roster">
+          <p className="roster-title">{title}</p>
+          <div className="roster-grid">
             {list.map((m) => (
-              <button key={m.id} type="button" className="tile" aria-pressed={m.id === value} onClick={() => onPick(m.id)}>
-                <Portrait dna={m.dna} size={130} />
-                <b>{m.name}</b>
-                <span className="tile-meta">{archetype(m.dna)}</span>
+              <button key={m.id} type="button" className="roster-pick" aria-pressed={m.id === mon.id} title={`${m.name} · ${archetype(m.dna)}`} onClick={() => onPick(m.id)}>
+                <Portrait dna={m.dna} size={56} />
               </button>
             ))}
           </div>
         </div>
       ))}
-    </section>
+    </aside>
   );
 }
 
@@ -32,7 +32,7 @@ type Tab = (typeof TABS)[number][0];
 
 export function Play({ initial = 'create', invite }: { initial?: Tab; invite?: string }) {
   const { free, local, all } = usePlayable();
-  const groups: [string, Monster[]][] = [['On-chain monsters (locked in staked/bettable matches)', free], ['Browser monsters (casual only)', local]];
+  const groups: [string, Monster[]][] = [['On-chain · stakeable', free], ['Browser · casual only', local]];
   const [p1, setP1] = useState('');
   const [tab, setTab] = useState<Tab>(initial);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -55,26 +55,21 @@ export function Play({ initial = 'create', invite }: { initial?: Tab; invite?: s
         ))}
       </div>
       <section className="slab tab-panel" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {!a ? <p className="note">No monsters available.</p> : tab === 'create' ? (
-          <div className="play-create">
-            <div className="play-mon">
-              <Portrait dna={a.dna} size={170} />
-              <b>{a.name}</b>
-              <span className="tile-meta">{archetype(a.dna)} · pick below</span>
-            </div>
-            <CreateRoom mon={a} />
-          </div>
-        ) : (
-          <div className="play-join">
-            <h3 className="row-ico"><Ico n="icon-room-private" />Have a code?</h3>
-            <JoinByCode mon={a} invite={invite} />
-            <p className="note">Joining with <b>{a.name}</b>. Staked rooms ask your wallet to match the host's stake before you enter.</p>
-            <RoomList mon={a} />
+        {!a ? <p className="note">No monsters available.</p> : (
+          <div className="play-body">
+            <Fighter mon={a} groups={groups} onPick={setP1} />
+            {tab === 'create' ? <CreateRoom mon={a} /> : (
+              <div className="play-join">
+                <h3 className="row-ico"><Ico n="icon-room-private" />Have a code?</h3>
+                <JoinByCode mon={a} invite={invite} />
+                <p className="note">Staked rooms ask your wallet to match the host's stake before you enter.</p>
+                <RoomList mon={a} />
+              </div>
+            )}
           </div>
         )}
       </section>
-      <Picker groups={groups} value={a?.id ?? ''} onPick={setP1} label="Your monster" />
-      <p className="note">Move WASD · Jump Space/W · J light · K heavy · L block (mouse: right light, left heavy) · C dodge. Arrows, Z/X and Q also work, and gamepads.</p>
+      <p className="play-keys">WASD move · Space/W jump · J light · K heavy · L block · C dodge · mouse: right light, left heavy</p>
     </>
   );
 }
