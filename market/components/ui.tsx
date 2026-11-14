@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { BRAWLER_URL, change24, fmt, KIND_LABEL, useAssets, type Dna, type Kind, type Point, type Rarity, type Skill } from "@/lib/assets";
+import { SignIn } from "@/components/signin";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -63,7 +64,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {a.account ? (
               <button onClick={a.signOut} title="Disconnect" className="flex max-w-36 items-center gap-2 rounded-full border-3 border-ink bg-panel py-1 pl-1.5 pr-3 font-bold shadow-drop-sm sm:max-w-56">
                 <span className="size-6 shrink-0 rounded-full border-2 border-ink bg-gradient-to-br from-gold to-ember" />
-                <span className="truncate text-sm">{a.account}</span>
+                <span className="truncate text-sm">{/^[0-9a-f]{64}$/.test(a.account) ? `${a.account.slice(0, 3)}...${a.account.slice(-3)}` : a.account}</span>
                 {a.demo && <span className="hidden rounded bg-gold px-1 text-[10px] font-extrabold text-ink sm:inline">DEMO</span>}
               </button>
             ) : <Btn onClick={a.signIn} small>Connect</Btn>}
@@ -72,6 +73,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </header>
       <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6 sm:pt-10">{children}</main>
       <Toaster />
+      <SignIn />
     </>
   );
 }

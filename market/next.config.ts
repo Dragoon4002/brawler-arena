@@ -4,6 +4,7 @@ import type { NextConfig } from "next";
 const root = path.resolve(process.cwd(), ".."); // market imports agents/pricing.ts
 
 export default {
+  basePath: process.env.MARKET_BASE_PATH || "",
   output: "standalone",
   outputFileTracingRoot: root,
   reactCompiler: true,

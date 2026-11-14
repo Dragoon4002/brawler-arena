@@ -8,4 +8,8 @@ export default {
     source: `/${d}/:path*`,
     headers: [{ key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' }],
   })),
+  rewrites: async () => {
+    const o = process.env.MARKET_DEV_ORIGIN; // local: serve the market at /shop on this origin (shares the NEAR Auth login)
+    return o ? [{ source: '/shop', destination: `${o}/shop` }, { source: '/shop/:path*', destination: `${o}/shop/:path*` }] : [];
+  },
 } satisfies NextConfig;
