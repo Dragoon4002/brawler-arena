@@ -13,5 +13,11 @@ services:
     volumes: [brawler_data:/data]
     restart: unless-stopped
 
+  brawler-client:
+    image: brawler-client
+    build: { context: .., dockerfile: infra/brawler-client.Dockerfile }
+    ports: ["${CLIENT_PORT:-3000}:3000"]
+    restart: unless-stopped
+
 volumes:
   brawler_data:
