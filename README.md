@@ -145,6 +145,17 @@ Each monster is a NEP-171/177/181 NFT that does more than hold an image:
 
 ### Not built (honest scope)
 
+Games track:
+
+- **Investing in a broke merchant** is not built. A broke merchant reopens when sales refill its cash.
+- **Merchants are rule-based agents** (`agents/pricing.ts`) on purpose, so their prices are readable and reproducible. No LLM.
+- **The fast-forward is an off-chain simulation** with simulated players, built on the same pricing file. The live merchants trade on testnet.
+- **There is no gathering loop.** Skills enter through presale mints and leave through trades. Match drops and skill wear are designed in `games/brawler/plans/tracks.md` but not built.
+- **NEP-245 is partial.** Transfers, batch transfers, balance and supply views and events are in; `mt_transfer_call` and approvals are not.
+- **NEAR Intents is mainnet-only**, so on testnet the app shows a live quote with funding disabled.
+
+NFTs track:
+
 - The track's reference idea, **one sub-account wallet per NFT** (a vault that moves with the token), is designed in `games/brawler/plans/tracks.md` but **not implemented**. Earnings go to the owner's account.
 - **No holder-gated page.** Holder-only actions (equip, list, rent, breed) are gated on-chain by ownership checks instead.
 
