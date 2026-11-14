@@ -3,6 +3,7 @@ import { NearProvider, NETWORK } from '@xyz/platform';
 import { DEMO } from '@/lib/demo.ts';
 import { go, route } from '@/lib/nav.ts';
 import { Account } from '@/components/account/Account.tsx';
+import { SocialProvider } from '@/components/account/Social.tsx';
 import { Arena, Practice } from '@/components/Arena.tsx';
 import { DemoIndex } from '@/components/demo/DemoIndex.tsx';
 import { MarketSim } from '@/components/demo/MarketSim.tsx';
@@ -73,8 +74,10 @@ function Routes() {
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <NearProvider config={{ network: NETWORK }}>
-      <div className="backdrop" />
-      {children}
+      <SocialProvider>
+        <div className="backdrop" />
+        {children}
+      </SocialProvider>
     </NearProvider>
   );
 }

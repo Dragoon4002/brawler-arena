@@ -39,7 +39,7 @@ export function Account() {
             <>
               <h2>Connect a wallet</h2>
               <p className="sub">Sign in once. Stakes and bets use your game balance.</p>
-              <button className="btn" onClick={() => signIn()}><span><Ico n="icon-wallet" />Connect NEAR wallet</span></button>
+              <button className="btn" onClick={() => signIn()}><span><Ico n="icon-wallet" />Sign in</span></button>
             </>
           )}
         </section>
