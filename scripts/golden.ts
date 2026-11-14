@@ -56,7 +56,7 @@ for (let n = 0; n < 9 + SKILLS.length; n++) {
   if (n === 9) dna[0] = { ...dna[0], str: 9, dex: 3, def: 5, spd: 5 };
   const skills = SKILLS[n - 9];
   const s = newGame(dna.map((d, i) => applySkills(statsOf(d), sanitizeSkills(skills?.[i]))), stage);
-  let seed = 1000 + n;
+  let seed = 1003 + n;
   const rnd = () => (seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) >>> 16 & 255;
   const tape: number[] = [], hashes: number[] = [];
   while (s.winner < 0 && tape.length < 12000) {

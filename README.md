@@ -85,6 +85,7 @@ Superseded: platform v1 at `brawler-platform-5c8e2b.testnet`. Until the skills c
 - **Prediction markets per fight:** each bettable match (staked or free) gets a binary order book: shares of "A wins" / "B wins", 0.01 NEAR face value. Every fill pairs two real traders, no house money, so colluding fighters have nothing to drain.
 - **NFT gameplay assets:** monster stats come from on-chain DNA, and the NFT is locked while it fights, so it can't be sold mid-match.
 - **Assets the game reads:** the server reads DNA and equipped skills from `get_monster` at match start. Client-claimed stats are never trusted.
+- **What moves with a monster on transfer:** the NFT carries its DNA, record, titles and fight history; the new owner gets all of it. A monster that is locked in a match or rented out can't be transferred, listed or bred, so the seller can't sell it mid-fight or while a renter holds it. A transfer clears any sale listing and rent offer, so the old owner can't collect on it afterwards. In-contract sales pay 5% royalty to the breeder (gen > 0) and 2.5% to the treasury (`games/brawler/contract/README.md`).
 - **One balance across games:** the platform registers games with their own referee; Brawler is the first.
 - **Wallet only when money moves:** Practice vs bot and watching need no wallet.
 
@@ -110,6 +111,36 @@ Libraries and tools used (Q-005):
 - Monsters: hatch starters (with 3 starter skill units), breed, sell, rent.
 - Skills: equip up to 3 on a monster; buy, sell and publish them on the market app.
 - Bots: press "Call bot" in a free room and a bot joins, marked with a "bot" chip (`agents/`).
+
+## Try it (judges)
+
+1. Open https://65-0-237-185.sslip.io and press "Practice vs bot". You fight a bot right away, no wallet needed.
+2. Connect a NEAR testnet wallet and host a free room, then press "Call bot" and a bot joins. For a staked room, join as the guest from a second browser with another wallet (bots only play free rooms). The stake moves into the platform contract (`create_match` / `join_match`).
+3. Open the lobby in another browser and watch the room. Buy a side in the live prediction market and watch the AMM price chart move.
+4. Finish the fight. The referee calls `report_result`, the pot goes to the winner's in-contract balance, and spectators `claim`.
+5. Open `/replay/<match id>`. Your browser re-runs the input tape, recomputes its SHA-256 and checks both the hash and the winner against the contract.
+6. Go to Monsters: hatch starters, breed two of them, list one for sale or rent. Each one's record and titles update on-chain after it fights.
+
+## Hackathon
+
+Built at NEAR HACKATHON (2026-11-01 to 2026-11-14). The first commit is 2026-11-11; all code was written during the hackathon. There is no pre-hackathon baseline and no other project by the same team.
+
+| Track | What fits |
+|---|---|
+| `games` | Player-owned markets (monster sales and rentals, a prediction market per fight), staked matches, tournaments; AMM prices move with demand, no dev patch. |
+| `nfts` | NEP-171/177/181 monsters with dynamic on-chain state (DNA, win/loss record, titles, fight history), breeder royalties on resale, rentals, and a lock while the monster fights. |
+| `open` | Provably fair real-time fights: a deterministic sim plus the on-chain tape hash, re-checkable in any browser. |
+
+NEP-245 skill tokens (`games/brawler/contract/src/skills.rs`) are written and unit-tested, but they are not deployed to the testnet monsters contract.
+
+### Built with
+
+- **NEAR:** `near-sdk`, `near-contract-standards` (NEP-171/177/181), `near-api` (Rust), `near-api-js`, `@hot-labs/near-connect` + `near-connect-hooks` (wallet, NEP-413 sign-in).
+- **Client:** Next.js, React. Market app: Next.js, Tailwind, bun.
+- **Server:** Rust `axum`, `tokio`, `tokio-tungstenite`, `serde`.
+- **Tooling:** Godot (experimental port in `games/brawler/godot/`), Remotion (moveset video), Blender + Python (sprites), Terraform, Ansible, Docker, Caddy.
+- **AI:** most code was written with Claude Code (Anthropic) as the coding agent, under human direction and review.
+- No game templates or boilerplate were used.
 
 ## Repo
 
@@ -184,3 +215,7 @@ Hold a direction with an attack to pick the move (neutral, side or down; ground 
 - **`src/lib/render/`**: procedural bone rig with keyframed poses, a fit-both camera, hit sparks, screen shake and KO beams. Reads sim state only.
 - **`src/lib/net.ts`**: rollback netplay. The local sim predicts the opponent's input up to 10 frames ahead and re-simulates when real input arrives; clients compare state hashes every second.
 - **Server**: relays inputs, records the confirmed tape, re-simulates it as referee, signs the result + tape hash for on-chain `settle` (fallback: reports it), and serves history and tapes.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
