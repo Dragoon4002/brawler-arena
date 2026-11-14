@@ -392,14 +392,26 @@ input[type='range'], input[type='checkbox'] { accent-color: var(--ember); border
 .roster-pick[aria-pressed='true'] { outline: 3px solid var(--ember); outline-offset: -1px; }
 .roster-pick:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
 .play-keys { margin: 16px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
-.play-create { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 24px; align-items: start; }
-.play-form { display: grid; gap: 18px; padding-top: 4px; }
-.play-form .stake-input input { flex: 1; width: auto; min-width: 0; }
+.tab-panel { container: play / inline-size; }
+.play-create { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.play-create > * { min-width: 0; }
+@container play (min-width: 1000px) { .play-create { grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); } }
+@container play (max-width: 720px) {
+  .play-body { grid-template-columns: minmax(0, 1fr); }
+  .play-mon { grid-template-columns: 96px minmax(0, 1fr); column-gap: 14px; justify-items: start; align-items: center; text-align: left; }
+  .play-mon .portrait { grid-row: 1 / span 2; }
+  .play-mon b { margin-top: 0; align-self: end; }
+  .play-mon .tile-meta { align-self: start; }
+  .play-mon .roster { grid-column: 1 / -1; margin-top: 4px; }
+  .roster-grid { grid-template-columns: repeat(auto-fill, minmax(56px, 72px)); }
+}
+.play-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding-top: 4px; }
+.play-form .stake-input input { flex: 1; width: 0; }
 .play-form .stake-input { display: flex; }
 .stake-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: -8px; }
 .stake-presets .chip { cursor: pointer; font-weight: 700; }
 .stake-presets .chip[aria-pressed='true'] { background: var(--gold); color: var(--ink); }
-.play-form .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.play-form .seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .play-form .seg legend { grid-column: 1 / -1; }
 .play-form .seg label { display: grid; gap: 2px; padding: 10px 14px; border-radius: 12px; }
 .play-form .seg label:has(:checked) small { color: rgb(12 8 22 / 0.7); }
@@ -409,14 +421,14 @@ input[type='range'], input[type='checkbox'] { accent-color: var(--ember); border
 .ticket dt { color: var(--muted); font-size: 14px; }
 .ticket dd { margin: 0; text-align: right; font-weight: 800; }
 .ticket dd.gold { color: var(--gold); font-family: var(--font-display); font-weight: 400; font-size: 20px; }
-.ticket .btn { width: 100%; }
+.ticket .btn { width: 100%; white-space: nowrap; font-size: 24px; }
 .ticket .note { margin: 0; }
 .stake-field { display: grid; gap: 6px; font-family: var(--font-display); font-size: 20px; }
 .stake-input { display: inline-flex; align-items: center; gap: 10px; }
 .stake-input input { width: 160px; font-family: var(--font-display); font-size: 26px; color: var(--gold); }
 .stake-input b { font-weight: 400; color: var(--gold); }
 .play-form .note { margin: 0; }
-.seg { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; }
+.seg { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; min-inline-size: 0; }
 .seg legend { padding: 0; margin-bottom: 8px; font-family: var(--font-display); font-size: 20px; }
 .seg label { display: inline-flex; cursor: pointer; padding: 8px 14px; border-radius: 99px; background: var(--panel-2); border: 2px solid var(--ink); font-weight: 700; }
 .seg label:has(:checked) { background: var(--gold); color: var(--ink); }
@@ -534,8 +546,6 @@ kbd { font: 700 12px var(--font-body); padding: 1px 6px; border-radius: 5px; bac
   .watch { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'top' 'stage' 'side'; grid-template-rows: auto auto auto; align-content: start; padding: 8px; }
 }
 @media (max-width: 640px) {
-  .play-body { grid-template-columns: minmax(0, 1fr); }
-  .roster-grid { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); }
   .tab { padding: 8px 18px 10px; font-size: 20px; }
   .room { padding: 10px; }
   .room-top { grid-template-columns: auto 1fr; }
