@@ -111,16 +111,17 @@ export function linkPeer(
     ready(send, delay, p2p ? 'P2P' : 'RELAY');
   };
 
-  const measure = () => { // host: 3 app-level pings over the channel, worst RTT -> delay (covers jitter seen at connect)
+  const measure = () => { // host: 10 app-level pings over the channel, worst RTT -> delay (covers jitter seen at connect)
+    let sent = 0;
     const iv = setInterval(() => {
       if (done) return clearInterval(iv);
-      if (pongs.length < 3) return dc!.send(JSON.stringify({ t: 'p', s: performance.now() }));
+      if (sent < 10) { sent++; return dc!.send(JSON.stringify({ t: 'p', s: performance.now() })); }
       clearInterval(iv);
-      const rtt = Math.max(...pongs);
-      const delay = Math.min(15, Math.max(2, Math.ceil(rtt / 2 / FRAME_MS) + 2));
+      const rtt = Math.max(0, ...pongs);
+      const delay = Math.min(15, Math.max(4, Math.ceil(rtt / 2 / FRAME_MS) + 3));
       rsend({ t: 'go', p2p: true, delay });
       finish(true, delay);
-    }, 100);
+    }, 50);
   };
 
   const wire = (ch: RTCDataChannel) => {

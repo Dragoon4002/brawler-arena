@@ -41,9 +41,9 @@ pub async fn begin(app: Arc<App>, at: RoomRef, chain_match: Option<ChainMatch>) 
     }
 }
 
-/// Frames of input delay: covers A -> relay -> B latency + 2 frames jitter. Same for both seats.
+/// Frames of input delay: covers A -> relay -> B latency + 3 frames jitter. Same for both seats.
 fn input_delay(rtt_a: f64, rtt_b: f64) -> u32 {
-    (((rtt_a + rtt_b) / 2. / (1000. / 60.)).ceil() + 2.).clamp(3., 15.) as u32
+    (((rtt_a + rtt_b) / 2. / (1000. / 60.)).ceil() + 3.).clamp(4., 15.) as u32
 }
 
 fn go_live(
@@ -93,11 +93,11 @@ fn go_live(
     Some(([host, guest], start_msg(r)))
 }
 
-/// Worst of 3 app-level pings, ms (proxies answer protocol pings, read ~0). 300 if no answer in 3 s.
+/// Worst of 6 app-level pings, ms (proxies answer protocol pings, read ~0). 300 if no answer in 3 s.
 async fn rtt(c: &Conn) -> f64 {
     let mut worst = 0f64;
     let pings = async {
-        for _ in 0..3 {
+        for _ in 0..6 {
             let t = Instant::now();
             c.send(&json!({ "t": "ping" }));
             c.pong.notified().await;

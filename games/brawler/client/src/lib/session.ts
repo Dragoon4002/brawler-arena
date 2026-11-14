@@ -66,13 +66,19 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
 
   const DT = 1000 / 60;
   let acc = 0, last = performance.now();
-  function frame(now: number) {
+  function pump(now: number) {
     acc = Math.min(acc + now - last, 250); last = now;
     while (acc >= DT) {
       acc -= DT;
       if (net && !banner) net.tick(readInput, advance, () => hash(state));
       else if (spectate) spectate(advance, state);
     }
+  }
+  // rAF pauses in background/occluded windows, which froze the sim and stalled the opponent. Worker timers keep running.
+  const clock = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 8)'])));
+  clock.onmessage = () => pump(performance.now());
+  function frame(now: number) {
+    pump(now);
     const b = banner || (state.winner >= 0 ? '' : net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
     renderer.draw(state, b, link);
     raf = requestAnimationFrame(frame);
@@ -85,7 +91,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
     attach(n: Netplay, label: string) { net = n; link = label; },
     feed(fn: (advance: (inputs: number[]) => void, s: GameState) => void) { spectate = fn; },
     setBanner(t: string) { banner = t; },
-    stop() { cancelAnimationFrame(raf); renderer.destroy(); music(null); },
+    stop() { cancelAnimationFrame(raf); clock.terminate(); renderer.destroy(); music(null); },
   };
 }
 
