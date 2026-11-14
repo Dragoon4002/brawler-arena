@@ -5,5 +5,5 @@ dist
 
 # art sources + sliced UI images (hosted externally, see VITE_ASSET_URL)
 /assets/
-/public/ui/
+/games/brawler/client/public/ui/
 .env*

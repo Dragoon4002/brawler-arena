@@ -1,11 +1,11 @@
 # Arena contract
 
-Staked 1v1 duels with live pari-mutuel betting. Source: `arena/src/lib.rs`, tests: `arena/src/tests.rs`.
+Staked 1v1 duels with live pari-mutuel betting. Source: `platform/src/lib.rs`, tests: `platform/src/tests.rs`.
 
 Testnet: arena `brawler-arena-v3-ed5da3.testnet` (self-owned, treasury), monsters `brawler-monsters-ed5da3.testnet` (self-owned), referee `brawler-ref-ed5da3.testnet`.
 
 ```sh
-cd arena
+cd platform
 cargo test                              # 42 unit tests
 cargo near build non-reproducible-wasm  # -> target/near/arena.wasm
 ```

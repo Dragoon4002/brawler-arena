@@ -2,9 +2,9 @@
 // and reports KOs + the winner to the arena contract. Disabled (log only) when env isn't set.
 import { Account, JsonRpcProvider, type KeyPairString, type Provider } from 'near-api-js';
 import { verifyMessage } from 'near-api-js/nep413';
-import { newGame, step, type GameState } from '../src/sim/sim.ts';
-import { sanitize, statsOf, type Dna } from '../src/genes.ts';
-import type { StageId } from '../src/stages.ts';
+import { newGame, step, type GameState } from '../client/src/sim/sim.ts';
+import { sanitize, statsOf, type Dna } from '../client/src/genes.ts';
+import type { StageId } from '../client/src/stages.ts';
 
 const NETWORK_RPC = process.env.NEAR_RPC ?? 'https://test.rpc.fastnear.com';
 export const CONTRACT_ID = process.env.CONTRACT_ID ?? '';

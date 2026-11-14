@@ -1,14 +1,17 @@
 # Brawler Arena
 
+Layout: `games/brawler/{client,relay,contract}`, `contracts/platform` (arena), see `tasks/todo.md` for multi-game plan.
+
 A real-time 2D platform fighter: two monsters on a floating stage, knocking each other off it. This is the base battle loop for a NEAR-based arena game. NFT monsters and their stats get plugged in later through `src/sim/sim.ts` → `Stats`.
 
 ## Run
 
 ```sh
-npm install
+npm install                    # root: npm workspaces
+cd games/brawler/client
 npm run dev       # game at http://localhost:5173
 npm run server    # online relay at ws://localhost:8787 (only needed for online play)
-npm test          # simulation tests
+npm test
 ```
 
 - **Local versus:** click *Local Versus*.

@@ -17,8 +17,8 @@
 // Also serves the built game from dist/ so one process = whole deploy.
 import { WebSocketServer, type WebSocket } from 'ws';
 import { Referee, monsterDna, view, verifyAuth, CONTRACT_ID, MONSTERS_ID } from './referee.ts';
-import { sanitize, type Dna } from '../src/genes.ts';
-import { STAGE_IDS, type StageId } from '../src/stages.ts';
+import { sanitize, type Dna } from '../client/src/genes.ts';
+import { STAGE_IDS, type StageId } from '../client/src/stages.ts';
 import { randomBytes, randomInt } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -40,7 +40,7 @@ interface Room {
 }
 const rooms = new Map<string, Room>();
 const lobbySubs = new Set<WebSocket>();
-const DIST = join(import.meta.dirname, '..', 'dist');
+const DIST = join(import.meta.dirname, '..', 'client', 'dist');
 const TYPES: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
 const http = createServer(async (req, res) => {

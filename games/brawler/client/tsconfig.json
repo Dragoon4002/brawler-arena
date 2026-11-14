@@ -20,7 +20,7 @@
   },
   "include": [
     "src",
-    "server",
+    "../relay",
     "vite.config.ts"
   ]
 }
