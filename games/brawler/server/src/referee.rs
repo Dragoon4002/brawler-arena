@@ -6,7 +6,17 @@ use brawler_sim::{
 };
 use near_svc::Near;
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
+
+/// Fairness proof: sha256(utf8(stage) ++ 0x00 ++ each confirmed frame `host << 16 | guest` as u32 LE), lowercase hex.
+pub fn tape_hash(stage: &str, frames: impl IntoIterator<Item = u32>) -> String {
+    let mut h = Sha256::new();
+    h.update(stage.as_bytes());
+    h.update([0]);
+    frames.into_iter().for_each(|f| h.update(f.to_le_bytes()));
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+}
 
 pub struct Referee {
     pub state: GameState,
@@ -47,22 +57,28 @@ impl Referee {
                     .call(id, "report_kos", json!({ "match_id": id, "kos": kos }), 30);
             }
         }
-        if self.state.winner >= 0 {
-            self.result(Some(self.state.winner));
-        }
         self.state.winner
     }
 
     /// kos[i] = KOs scored BY seat i = 3 - opponent stocks.
-    pub fn result(&self, winner: Option<i32>) {
+    pub fn result(&self, winner: Option<i32>, tape_hash: &str) {
         let Some(id) = self.match_id else { return };
         let [a, b] = &self.state.fighters;
         let kos = [3 - b.stocks as u8, 3 - a.stocks as u8];
         self.near.call(
             id,
             "report_result",
-            json!({ "match_id": id, "winner": winner, "kos": kos }),
+            json!({ "match_id": id, "winner": winner, "kos": kos, "tape_hash": tape_hash }),
             100,
         );
     }
+}
+
+#[test]
+fn tape_hash_vector() {
+    // same vector in client src/lib/tape.test.ts
+    assert_eq!(
+        tape_hash("grove", [0, 131073, 33488896, 511]),
+        "91912f4e425ec1507030483e503bb4c7a7d60c2abd476ce4447ca3b226b1a57c"
+    );
 }

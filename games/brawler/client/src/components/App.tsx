@@ -17,6 +17,7 @@ import { Detail } from '@/components/monsters/Detail.tsx';
 import { Play } from '@/components/Play.tsx';
 import { Lobby } from '@/components/rooms/Lobby.tsx';
 import { Watch } from '@/components/rooms/Watch.tsx';
+import { Replay } from '@/components/rooms/Replay.tsx';
 import { Title } from '@/components/Title.tsx';
 
 // old bookmarks used #/path
@@ -48,6 +49,7 @@ function Routes() {
   if (page === 'fight') return <Arena key={arg} demo={DEMO ? arg : undefined} />;
   if (page === 'practice') return <Practice />;
   if (page === 'watch' && arg) return <Watch key={arg} code={arg} />;
+  if (page === 'replay' && arg) return <Replay key={arg} tapeKey={decodeURIComponent(arg)} />;
   if (page === '') return <Title />;
   const body = page === 'demo' ? <DemoIndex />
     : page === 'sim' ? <MarketSim />

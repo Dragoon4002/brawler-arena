@@ -63,7 +63,13 @@ async fn serve() -> String {
     ));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("ws://{}", listener.local_addr().unwrap());
-    let app = brawler_server::App::new(near, String::new());
+    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("brawler-test-{}-{n}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let history = dir.join("h.jsonl").to_string_lossy().into_owned();
+    let app = brawler_server::App::with_history(near, String::new(), history);
     tokio::spawn(async move {
         axum::serve(listener, brawler_server::router(app))
             .await
@@ -141,6 +147,26 @@ async fn free_room_to_ko() {
     assert_eq!(h[0]["players"][1]["account"], "b.testnet");
     assert_eq!(h[0]["winner"], run["winner"]);
     assert_eq!(h[0]["stake"], "5");
+    let key = h[0]["key"].as_str().unwrap();
+    assert!(key.starts_with('r'));
+    let tape = http_get(&url, &format!("/tape/{key}")).await;
+    assert_eq!(tape["frames"], run["tape"]);
+    assert_eq!(tape["stage"], run["stage"]);
+    assert_eq!(tape["winner"], run["winner"]);
+    assert_eq!(tape["reason"], "ko");
+    assert_eq!(tape["players"][1]["dna"], run["dna"][1]);
+    let frames = run["tape"].as_array().unwrap().iter();
+    let hash = brawler_server::referee::tape_hash(
+        run["stage"].as_str().unwrap(),
+        frames.map(|f| f.as_u64().unwrap() as u32),
+    );
+    assert_eq!(tape["tape_hash"], hash);
+    assert_eq!(
+        http_status(&url, "/tape/nope").await,
+        404,
+        "missing tape is a 404"
+    );
+    assert_eq!(http_status(&url, "/tape/..%2Fh").await, 404);
     assert!(
         http_get(&url, "/history/nobody.testnet")
             .await
@@ -151,6 +177,16 @@ async fn free_room_to_ko() {
 }
 
 async fn http_get(ws_url: &str, path: &str) -> Value {
+    let buf = http_raw(ws_url, path).await;
+    serde_json::from_str(buf.split("\r\n\r\n").nth(1).unwrap()).unwrap()
+}
+
+async fn http_status(ws_url: &str, path: &str) -> u16 {
+    let buf = http_raw(ws_url, path).await;
+    buf.split(' ').nth(1).unwrap().parse().unwrap()
+}
+
+async fn http_raw(ws_url: &str, path: &str) -> String {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     let host = ws_url.trim_start_matches("ws://");
     let mut s = tokio::net::TcpStream::connect(host).await.unwrap();
@@ -161,7 +197,58 @@ async fn http_get(ws_url: &str, path: &str) -> Value {
     .unwrap();
     let mut buf = String::new();
     s.read_to_string(&mut buf).await.unwrap();
-    serde_json::from_str(buf.split("\r\n\r\n").nth(1).unwrap()).unwrap()
+    buf
+}
+
+fn send_tape(tx: &Tx, tape: &[Value], from: usize, to: usize) {
+    for f0 in (from..to).step_by(100) {
+        let ins = &tape[f0..to.min(f0 + 100)];
+        tx.send(json!({ "t": "tape", "f0": f0, "ins": ins }))
+            .unwrap();
+    }
+}
+
+// Guest drops mid-fight, same account rejoins: host flushes + resyncs, guest resumes from the host's tape, KO counts.
+#[tokio::test(flavor = "multi_thread")]
+async fn rejoin_resumes_fight() {
+    let url = serve().await;
+    let run = golden();
+    let tape = run["tape"].as_array().unwrap().clone();
+    let (a, mut ar, b, br, code) = pair(&url, &run, Value::Null).await;
+    send_tape(&a, &tape, 0, 300);
+    send_tape(&b, &tape, 0, 200); // guest's last batches never reached the server
+    b.send(json!({ "t": "__close" })).unwrap();
+    until(&mut ar, "left").await;
+    drop(br);
+    let (c, mut cr) = client(&url).await;
+    until(&mut cr, "hello").await;
+    c.send(json!({ "t": "rejoin", "code": code, "account": "a.testnet" }))
+        .unwrap();
+    assert_eq!(
+        err(&mut cr).await,
+        "Opponent is gone",
+        "a's own seat is live"
+    );
+    c.send(json!({ "t": "rejoin", "code": "ZZZZ", "account": "b.testnet" }))
+        .unwrap();
+    assert_eq!(err(&mut cr).await, "No live fight to rejoin");
+    c.send(json!({ "t": "rejoin", "code": code, "account": "b.testnet" }))
+        .unwrap();
+    until(&mut ar, "rejoin").await;
+    a.send(json!({ "t": "resync" })).unwrap();
+    let r = until(&mut cr, "resume").await;
+    assert_eq!(r["seat"], 1);
+    assert_eq!(r["stage"], run["stage"]);
+    assert_eq!(r["players"][0]["dna"], run["dna"][0]);
+    assert_eq!(r["frames"].as_array().unwrap()[..], tape[..300]);
+    send_tape(&a, &tape, 300, tape.len());
+    send_tape(&c, &tape, 300, tape.len());
+    let over = until(&mut cr, "over").await;
+    assert_eq!(
+        (over["reason"].as_str(), &over["winner"]),
+        (Some("ko"), &run["winner"])
+    );
+    assert_eq!(until(&mut ar, "over").await["winner"], run["winner"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]

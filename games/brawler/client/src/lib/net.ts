@@ -33,9 +33,18 @@ export class Netplay {
   // Only a real hold-up shows: the prediction window ran out and stayed out for 250 ms.
   get lagging() { return this.stallTicks >= 15; }
 
-  constructor(send: Send, seat: number, delay = 4) {
+  // start > 0: resumed after a reconnect at confirmed frame `start`; the peer already has its own inputs from there.
+  constructor(send: Send, seat: number, delay = 4, start = 0) {
     this.send = send; this.seat = seat; this.delay = delay;
-    for (let f = 0; f < delay; f++) { this.local.set(f, 0); this.remote.set(f, 0); }
+    this.frame = this.head = this.peerNeed = this.peerFrame = start;
+    for (let f = start; f < start + delay; f++) { this.local.set(f, 0); if (!start) this.remote.set(f, 0); }
+  }
+
+  // Peer reconnected and resumes at our confirmed frame: drop its stale unconfirmed inputs, resend ours from here.
+  resync(send: Send) {
+    this.send = send;
+    for (const f of [...this.remote.keys()]) if (f >= this.frame) this.remote.delete(f);
+    this.peerNeed = this.peerFrame = this.frame; this.peerAdv = 0; this.lastRx = 0;
   }
 
   onMessage(m: { t: string; f: number; b?: unknown; a?: number; h?: number; fr?: number; v?: number; s?: number; e?: number; d?: number }) {

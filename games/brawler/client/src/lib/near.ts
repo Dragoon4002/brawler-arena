@@ -16,6 +16,7 @@ export interface MatchView {
   amm: [string, string]; price_bps: number; collateral: string; // price_bps = fighter 0's price, 0..10000
   created_ms: number; started_ms: number;
   monsters: [string | null, string | null]; tournament: number | null;
+  tape_hash?: string | null; // sha256 of the referee's input tape (see lib/tape.ts)
 }
 export interface TournamentView {
   id: number; game: string; size: number; entry_fee: string; pot: string; bettable: boolean; status: 'open' | 'live' | 'done' | 'cancelled';
@@ -39,7 +40,8 @@ export function useArena() {
   const p = usePlatform();
   if (DEMO) return demoArena;
   const { call, view } = p;
-  const account = p.w.signedAccountId;
+  // dev-only ?as=<account>: play without a wallet (browser tests); compiled out of production builds
+  const account = (process.env.NODE_ENV === 'development' && new URLSearchParams(location.search).get('as')) || p.w.signedAccountId;
   // throw before wallet opens if balance short
   const need = async (yocto: string) => {
     if (BigInt(yocto) === 0n || !account) return;

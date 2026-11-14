@@ -19,7 +19,7 @@ pub struct Seat {
     pub dna: Dna,
     pub account: String,
     pub seen: Instant,
-    /// Confirmed inputs mirrored by this player, packed host<<8|guest.
+    /// Confirmed inputs mirrored by this player, packed host<<16|guest.
     pub tape: Vec<i32>,
 }
 

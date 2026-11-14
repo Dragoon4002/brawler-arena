@@ -148,26 +148,40 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
     }
     r.status = Status::Done;
     r.winner = winner;
+    let frames = r.frames.iter().map(|[h, g]| ((h << 16) | g) as u32);
+    let tape_hash = crate::referee::tape_hash(r.stage.name(), frames.clone());
     if let [a, b] = &r.seats[..] {
+        let at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as u64);
+        let key = r
+            .match_id
+            .map_or_else(|| format!("r{at}-{}", r.uid), |id| id.to_string());
         let p = |s: &crate::room::Seat| crate::history::Player {
             account: s.account.clone(),
             name: s.name.clone(),
         };
+        // ponytail: sync file write under the room lock (~100 KB); move off-lock if finishes pile up
+        app.history.save_tape(
+            &key,
+            &json!({
+                "key": key, "match_id": r.match_id, "stage": r.stage.name(), "stake": r.stake, "winner": winner,
+                "reason": reason, "tape_hash": tape_hash, "at": at, "frames": frames.collect::<Vec<_>>(),
+                "players": r.seats.iter().map(|s| json!({ "name": s.name, "account": s.account, "dna": s.dna })).collect::<Vec<_>>(),
+            }),
+        );
         app.history.push(crate::history::Rec {
-            at: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_or(0, |d| d.as_millis() as u64),
+            at,
             match_id: r.match_id,
             stake: r.stake.clone(),
             winner,
             reason: reason.into(),
             players: [p(a), p(b)],
+            key: Some(key),
         });
     }
-    if reason != "ko"
-        && let Some(rf) = &r.referee
-    {
-        rf.result(winner);
+    if let Some(rf) = &r.referee {
+        rf.result(winner, &tape_hash);
     }
     broadcast(
         r.players().chain(r.spectators.values()),
@@ -183,6 +197,32 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
             st.rooms.remove(&at.code);
         }
     });
+}
+
+/// Paid guest left the waiting room: refund it and reopen the match; contract refuses (market traded) -> void it.
+pub async fn unjoin(app: Arc<App>, at: RoomRef, id: u64) {
+    let near = &app.near;
+    if !near.can_sign()
+        || near
+            .call_now(id, "unjoin", json!({ "match_id": id }), 30)
+            .await
+    {
+        return;
+    }
+    let args = json!({ "match_id": id, "winner": null, "kos": null, "tape_hash": null });
+    near.call(id, "report_result", args, 100);
+    let mut st = app.lock();
+    if at
+        .get_mut(&mut st.rooms)
+        .is_some_and(|r| r.status == Status::Waiting)
+    {
+        let r = st.rooms.remove(&at.code).expect("just found");
+        for c in r.everyone() {
+            c.error("Match voided (guest left after bets): stakes refunded");
+            c.send(&json!({ "t": "left" }));
+        }
+        st.lobby.push(&app);
+    }
 }
 
 pub fn tick(app: &Arc<App>) {
