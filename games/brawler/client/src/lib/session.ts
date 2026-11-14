@@ -93,7 +93,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
   function frame(now: number) {
     pump(now);
     const b = banner || (state.winner >= 0 ? '' : net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
-    renderer.draw(view(), b, link);
+    renderer.draw(view(), b, net ? `${link} · ${net.stats()}` : link);
     raf = requestAnimationFrame(frame);
   }
   raf = requestAnimationFrame(frame);

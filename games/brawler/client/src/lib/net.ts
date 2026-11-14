@@ -20,6 +20,12 @@ export class Netplay {
   private peerFrame = 0; // peer's head, as of its last packet
   private peerAdv = 0; // peer's (its head - our head as it last saw it)
   private sinceSkip = 0;
+  private lastRx = 0;
+  private peerS = 0;
+  private peerSAt = 0;
+  rtt = 0;
+  maxGap = 0; // longest silence between peer packets, ms
+  freezes = 0; // times the banner showed
   private send: Send;
   readonly seat: number;
   readonly delay: number;
@@ -32,8 +38,13 @@ export class Netplay {
     for (let f = 0; f < delay; f++) { this.local.set(f, 0); this.remote.set(f, 0); }
   }
 
-  onMessage(m: { t: string; f: number; b?: unknown; a?: number; h?: number; fr?: number; v?: number }) {
+  onMessage(m: { t: string; f: number; b?: unknown; a?: number; h?: number; fr?: number; v?: number; s?: number; e?: number; d?: number }) {
     if (m.t === 'in' && Array.isArray(m.b) && Number.isInteger(m.f)) {
+      const now = performance.now();
+      if (this.lastRx) this.maxGap = Math.max(this.maxGap, Math.round(now - this.lastRx));
+      this.lastRx = now;
+      if (Number.isFinite(m.s)) { this.peerS = m.s!; this.peerSAt = now; }
+      if (Number.isFinite(m.e) && m.e! > 0) { const x = now - m.e! - (m.d ?? 0); this.rtt = Math.round(this.rtt ? this.rtt * 0.9 + x * 0.1 : x); }
       m.b.slice(0, 64).forEach((b, i) => { if (m.f + i >= this.frame) this.remote.set(m.f + i, Number(b) & 511); });
       if (Number.isInteger(m.a) && m.a! > this.peerNeed) this.peerNeed = m.a!;
       if (Number.isInteger(m.fr) && m.fr! > this.peerFrame) this.peerFrame = m.fr!;
@@ -65,6 +76,8 @@ export class Netplay {
     }
   }
 
+  stats() { return `ping ${this.rtt}ms · worst gap ${this.maxGap}ms · freezes ${this.freezes}`; }
+
   private pair(f: number, r: number) { const l = this.local.get(f)!; return this.seat === 0 ? [l, r] : [r, l]; }
 
   // Inputs for the predicted frames frame..head-1 (peer input known if it already arrived, else its last one).
@@ -82,7 +95,13 @@ export class Netplay {
     // (invisible) until both share the margin. Timing only, sim stays deterministic.
     const adv = this.head - this.peerFrame;
     this.confirmAll(confirm, hashNow);
-    if (this.head - this.frame >= MAX_PRED) { this.stalled = true; this.stallTicks++; }
+    if (this.head - this.frame >= MAX_PRED) {
+      this.stalled = true;
+      if (++this.stallTicks === 15) {
+        this.freezes++;
+        console.warn('netplay freeze', { rtt: this.rtt, sinceLastPacket: Math.round(performance.now() - this.lastRx), frame: this.frame, head: this.head, peerHead: this.peerFrame, delay: this.delay });
+      }
+    }
     else {
       this.stalled = false; this.stallTicks = 0;
       if ((adv - this.peerAdv) / 2 > 1 && ++this.sinceSkip >= 10) this.sinceSkip = 0;
@@ -94,7 +113,8 @@ export class Netplay {
     while (this.remote.has(need)) need++;
     const b: number[] = [];
     for (let f = this.peerNeed; this.local.has(f) && b.length < 64; f++) b.push(this.local.get(f)!);
-    this.send({ t: 'in', f: this.peerNeed, b, a: need, fr: this.head, v: adv });
+    const now = performance.now();
+    this.send({ t: 'in', f: this.peerNeed, b, a: need, fr: this.head, v: adv, s: now, e: this.peerS, d: this.peerS ? now - this.peerSAt : 0 });
   }
 }
 
