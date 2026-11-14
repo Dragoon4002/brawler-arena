@@ -212,9 +212,9 @@ Deploy log and end-to-end transactions: [`contracts/DEPLOYMENTS.md`](contracts/D
 |---|---|---|---|
 | Monsters + skills contract | `cd games/brawler/contract && cargo test` | NEP-171/245, royalties, rentals, vaults, drops, wear, locks, transfer threat model | 67 passed |
 | Platform contract | `cd contracts/platform && cargo test` | signed settle, replay protection, conservation of funds, order book, tournaments, locks | 62 passed |
-| Sim parity | `cargo test --workspace` | Rust referee matches the TS sim frame for frame (golden vectors) | |
+| Sim parity | `cargo test --workspace` | Rust referee matches the TS sim frame for frame (golden vectors), plus server match tests | 20 passed |
 | Merchants and bots | `cd agents && npm test` | pricing rules, broke-merchant closing, bot brain | 7 passed |
-| Client | `npm test -w @xyz/brawler` | sim, netcode, tapes, market, NFT views, Intents quotes, NEAR Auth helpers | 45 passed |
+| Client | `npm test -w @xyz/brawler` | sim, netcode, tapes, market, NFT views, Intents quotes, NEAR Auth helpers | 46 passed |
 
 ## Built during the hackathon (disclosure)
 
