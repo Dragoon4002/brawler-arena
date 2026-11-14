@@ -27,7 +27,7 @@ npm run dev -w @xyz/market
 ```
 
 - Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY`. No CONTRACT_ID = free rooms only.
-- Room lobby: a staked guest who leaves before the host presses Start frees the seat, but their stake stays in the on-chain match (no refund flow yet).
+- Room lobby: a staked guest who leaves before the host presses Start frees the seat; referee `unjoin` refunds their stake and reopens the match (rejected once bets exist).
 - Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (required in prod), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_BRAWLER_URL`.
 - Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
 - New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?)` on platform.
@@ -40,7 +40,7 @@ Single EC2 (rooms are in-memory, so exactly one instance) + Caddy for TLS. Needs
 cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars   # set ssh_cidr, domain, route53_zone_id?
 make deploy-infra                     # EC2 + EIP + SG (+ Route53 A record)
 # no route53_zone_id? point an A record for <domain> at `terraform -chdir=infra/terraform output -raw public_ip`
-export CONTRACT_ID=... MONSTERS_ID=... REFEREE_ID=... REFEREE_KEY=...   # or ansible-vault secrets.yml via ANSIBLE_ARGS
+export CONTRACT_ID=v2.brawler-platform-5c8e2b.testnet MONSTERS_ID=brawler-monsters-5c8e2b.testnet REFEREE_ID=referee.v2.brawler-platform-5c8e2b.testnet REFEREE_KEY=...   # or ansible-vault secrets.yml via ANSIBLE_ARGS
 make deploy                           # docker + repo (repo_version, default main) + compose up
 ```
 

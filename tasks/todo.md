@@ -21,7 +21,7 @@
 - [x] Watch: FighterCard x2 + PriceChart, Claims -> positions
 - [x] CSS: canvas + cards column / phone stack
 - [x] tsc, npm test, demo screenshots + playwright flow
-- [ ] Deploy v2 (ask first) + testnet run
+- [x] Deploy v2 + testnet run (v2.brawler-platform-5c8e2b.testnet, see contracts/DEPLOYMENTS.md; buy-only AMM, no sell)
 
 ## Review (perp)
 - cargo test 28/28 (conservation settle A / B / refund within 100 yocto dust, slippage, guards, history cap, failed sell -> owed), wasm builds, 0 warnings.

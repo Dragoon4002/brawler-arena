@@ -24,15 +24,15 @@ Init `new(owner_id)`, fresh deploy (no migration from arena v3).
   `add_title(token_id, title)`. Brawler -> monsters contract. No assets -> monster ids rejected.
 
 ## Match flow
-1. Host `create_match(game, stake, bettable, monster_id?)`. Monster: lock first (attach >= 100 Tgas), `on_create` opens or re-credits.
+1. Host `create_match(game, stake, bettable, monster_id?)`. Bettable needs stake >= min_bet; house seed = min(seed, stake), returned at settle/void. Monster: lock first (attach >= 100 Tgas), `on_create` opens or re-credits.
 2. Guest `join_match(match_id, monster_id?)`: debits same stake, Live.
 3. Spectators `buy(match_id, side, amount, min_out)` while Live. A share + B share = 1 NEAR; price A = b / (a + b). No selling.
-4. Referee `report_kos`, then `report_result(match_id, winner | null, kos?)`.
+4. Referee `report_kos`, then `report_result(match_id, winner | null, kos?, tape_hash?)` (tape_hash = 64-char lowercase sha256 hex, in MatchView). Guest joined but fight never started: referee `unjoin(match_id)` refunds guest, reopens (rejected once bets exist: void instead).
 5. `claim(match_id)`: winner 2×stake − 0.1%; winning shares 1 NEAR each; void/`cancel_match`/`expire` (2 h) -> stakes + net bets back.
 
 ## Tournaments
 - Owner `create_tournament(game, size 4|8, entry_fee, bettable)`. `enter_tournament(id, monster_id)` (1 yocto, >= 150 Tgas),
-  24 h entry window, monster locked 72 h. Full -> bracket of zero-stake Live matches; void -> random seat advances.
+  24 h entry window, monster locked 72 h. Full -> bracket of zero-stake Live matches; void/expired -> seat with more reported KOs advances, tie -> seat 0 (lower entrant index).
 - `claim_tournament(id)`: champion pot − 0.1%; `cancel_tournament(id)` after 24 h unfilled -> fees back.
 - Views `get_tournament`, `list_tournaments(from, limit, game?)`, `list_matches(from, limit, game?)` (newest first, filter scans newest 500).
 
