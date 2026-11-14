@@ -1,0 +1,6 @@
+**
+!agents/**
+agents/node_modules
+!games/brawler/client/src/lib/sim/**
+!games/brawler/client/src/lib/genes.ts
+!games/brawler/client/src/lib/stages.ts
