@@ -149,19 +149,14 @@ export function SkillArt({ kind, rarity, size = 48, mag }: { kind: Kind; rarity:
   );
 }
 
+// Same hero pick and tint as the game (games/brawler/client/src/lib/render/cutout.ts heroOf/tintOf).
+const HEROES = ["bramdra", "makvel", "grodrasu", "lortor", "torfen"];
 export function MonsterArt({ dna, size = 48 }: { dna: Dna; size?: number }) {
-  const h = dna.hue, a = dna.accent;
+  const h = dna.hue, hero = HEROES[Math.round(h / 72) % 5];
+  const tint = `hue-rotate(${(h * 5 + dna.accent) % 360}deg) saturate(${0.85 + (dna.pattern ?? 0) * 0.2})`;
   return (
     <span className="grid shrink-0 place-items-center overflow-hidden rounded-[28%] border-3 border-ink" style={{ width: size, height: size, background: `radial-gradient(circle at 50% 30%, hsl(${h} 45% 34%), hsl(${h} 50% 14%))` }}>
-      <svg viewBox="0 0 40 40" className="w-[86%] translate-y-[8%]" stroke="#0c0816" strokeWidth="1.6" strokeLinejoin="round">
-        <path d="M11 12 8 3l8 6zM29 12l3-9-8 6z" fill={`hsl(${a} 55% 88%)`} />
-        <ellipse cx="20" cy="24" rx="14" ry="13" fill={`hsl(${h} 58% 56%)`} />
-        <ellipse cx="20" cy="29" rx="8.5" ry="7" fill={`hsl(${h} 70% 86%)`} strokeWidth="0" />
-        <circle cx="14.5" cy="20" r="3.2" fill="#fff" /><circle cx="25.5" cy="20" r="3.2" fill="#fff" />
-        <circle cx="15.3" cy="20.6" r="1.6" fill="#1b1426" stroke="none" /><circle cx="24.7" cy="20.6" r="1.6" fill="#1b1426" stroke="none" />
-        <path d="M17 26q3 2.5 6 0" fill="none" />
-        <circle cx="9" cy="27" r="2" fill={`hsl(${a} 70% 42%)`} stroke="none" /><circle cx="31" cy="27" r="2" fill={`hsl(${a} 70% 42%)`} stroke="none" />
-      </svg>
+      <img src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/heroes/${hero}.webp`} alt="" className="h-[88%] w-[88%] object-contain" style={{ filter: tint }} />
     </span>
   );
 }

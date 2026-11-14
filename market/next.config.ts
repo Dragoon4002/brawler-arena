@@ -5,6 +5,7 @@ const root = path.resolve(process.cwd(), ".."); // market imports agents/pricing
 
 export default {
   basePath: process.env.MARKET_BASE_PATH || "",
+  env: { NEXT_PUBLIC_BASE_PATH: process.env.MARKET_BASE_PATH || "" },
   output: "standalone",
   outputFileTracingRoot: root,
   reactCompiler: true,

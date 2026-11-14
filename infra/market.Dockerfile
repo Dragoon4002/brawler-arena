@@ -18,6 +18,7 @@ WORKDIR /app
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1
 COPY --from=build /repo/market/.next/standalone ./
 COPY --from=build /repo/market/.next/static market/.next/static
+COPY --from=build /repo/market/public market/public
 USER node
 EXPOSE 3000
 CMD ["node", "market/server.js"]

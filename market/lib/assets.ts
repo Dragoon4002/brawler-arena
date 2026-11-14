@@ -32,7 +32,7 @@ export interface Presale {
   cap_total: number | null; per_wallet: number | null; sold: number; allowlist: boolean; ended: boolean;
 }
 export interface SkillListing { seller: string; skill: number; qty: number; price_each: string }
-export interface Dna { str: number; dex: number; def: number; spd: number; hue: number; accent: number }
+export interface Dna { str: number; dex: number; def: number; spd: number; hue: number; accent: number; pattern?: number }
 export interface Monster {
   token_id: string; owner_id: string; name: string; gen: number; dna: Dna;
   record: { w: number; l: number; ko: number }; price: string | null; locked_until_ms: number;
