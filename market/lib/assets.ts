@@ -3,7 +3,7 @@ import { useNearWallet } from "near-connect-hooks";
 import { nearToYocto, yoctoToNear } from "near-api-js";
 import { demoApi } from "./demo";
 
-export const ASSETS_ID = process.env.NEXT_PUBLIC_ASSETS_ID || "brawler-monsters-5c8e2b.testnet";
+export const ASSETS_ID = process.env.NEXT_PUBLIC_ASSETS_ID || "v2.brawler-monsters-5c8e2b.testnet";
 export const BRAWLER_URL = process.env.NEXT_PUBLIC_BRAWLER_URL || "https://65-0-237-185.sslip.io";
 export const DEMO =
   process.env.NEXT_PUBLIC_DEMO === "1" ||
@@ -119,14 +119,14 @@ export function useAssets(): Api {
     owed: () => (me ? view<string>("owed_of", { account_id: me }) : Promise.resolve("0")),
     buySkill: (l, qty) => call("buy_skill", { seller: l.seller, skill: l.skill, qty }, BigInt(l.price_each) * BigInt(qty) + STORAGE, GAS_X),
     listSkill: (skill, qty, priceEach) => call("list_skill", { skill, qty, price_each: priceEach }, STORAGE),
-    cancelSkillListing: (skill) => call("cancel_skill_listing", { skill }),
+    cancelSkillListing: (skill) => call("cancel_skill_listing", { skill }, "0"),
     buyPresale: (p, qty) => call("buy_presale", { id: p.id, qty }, BigInt(p.price) * BigInt(qty) + STORAGE, GAS_X),
     buyMonster: (m) => call("buy", { token_id: m.token_id }, m.price ?? "0", GAS_X),
     listMonster: (id, price) => call("list", { token_id: id, price }),
-    delistMonster: (id) => call("delist", { token_id: id }),
+    delistMonster: (id) => call("delist", { token_id: id }, "0"),
     createCollection: (c) => call("create_collection", c, STORAGE),
     createSkill: (s) => call("create_skill", { ...s }, STORAGE),
-    createPresale: (p) => call("create_presale", { ...p }, STORAGE),
+    createPresale: (p) => call("create_presale", { ...p }, STORAGE + nearToYocto("0.002") * BigInt(p.allowlist?.length ?? 0)),
     withdrawOwed: () => call("withdraw_owed", {}, "0", GAS_X),
   };
 }

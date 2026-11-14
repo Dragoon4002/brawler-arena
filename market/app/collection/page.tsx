@@ -89,7 +89,7 @@ export default function CollectionPage() {
         <div className="mt-5 flex flex-wrap gap-5 text-sm font-extrabold">
           <span><span className="block text-muted">Skills</span><span className="font-display text-2xl">{skills.length}</span></span>
           <span><span className="block text-muted">Minted</span><span className="font-display text-2xl">{skills.reduce((x, s) => x + Number(s.minted), 0).toLocaleString()}</span></span>
-          <span><span className="block text-muted">Live presales</span><span className="font-display text-2xl">{ps.filter((p) => !p.ended && p.start_ms <= Date.now()).length}</span></span>
+          <span><span className="block text-muted">Live presales</span><span className="font-display text-2xl">{ps.filter((p) => !p.ended && p.start_ms <= Date.now() && (!p.end_ms || p.end_ms > Date.now())).length}</span></span>
         </div>
       </div>
       <h2 className="mb-4 text-3xl">Presales</h2>
