@@ -1,8 +1,8 @@
 import { useNearWallet } from 'near-connect-hooks';
-import { fmt, MARKET_URL, PLATFORM_ID, toYocto, useBalance, usePlatform } from '@xyz/platform';
+import { fmt, PLATFORM_ID, toYocto, useBalance, usePlatform } from '@xyz/platform';
 import { DEMO, DEMO_ACCOUNT, DEMO_BALANCE, demoArena } from './demo.ts';
 
-export { fmt, toYocto, MARKET_URL };
+export { fmt, toYocto, usePlatform };
 export const CONTRACT_ID = PLATFORM_ID;
 export const GAME = 'brawler';
 const GAS = '30000000000000';
@@ -33,7 +33,7 @@ export interface Limits { owner: string; min_bet: string; max_bet: string; seed:
 export const slip = (yocto: string) => ((BigInt(yocto) * 97n) / 100n).toString();
 
 export const lowBalance = (have: string | null, need: string) =>
-  `Not enough balance (${fmt(have ?? '0')} of ${fmt(need)} NEAR). Top up at ${MARKET_URL}`;
+  `Not enough balance (${fmt(have ?? '0')} of ${fmt(need)} NEAR). Top up in Account.`;
 
 export function useArena() {
   const p = usePlatform();

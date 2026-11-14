@@ -77,9 +77,9 @@ function History({ rows }: { rows: HistoryEntry[] }) {
       {rows.map((h) => (
         <li key={h.match_id}>
           <span className={`chip row-ico ${h.won ? 'gold' : h.won === false ? 'warn' : ''}`}><Ico n={h.won ? 'trophy' : h.won === false ? 'skull' : 'icon-refresh'} />{h.won ? 'Won' : h.won === false ? 'Lost' : 'Void'}</span>
-          <span>vs {h.vs ? <a href={`#/monster/${h.vs}`}>{vs[h.vs]?.name ?? `#${h.vs}`}</a> : 'unknown'}</span>
+          <span>vs {h.vs ? <a href={`/monster/${h.vs}`}>{vs[h.vs]?.name ?? `#${h.vs}`}</a> : 'unknown'}</span>
           <span className="row-ico"><Ico n="ko" />{h.kos}</span>
-          {h.tournament != null && <a className="chip row-ico" href={`#/tournament/${h.tournament}`}><Ico n="trophy" />Tournament #{h.tournament}</a>}
+          {h.tournament != null && <a className="chip row-ico" href={`/tournament/${h.tournament}`}><Ico n="trophy" />Tournament #{h.tournament}</a>}
           <small>{when(h.ms)}</small>
         </li>
       ))}
@@ -95,10 +95,10 @@ export function Detail({ id }: { id: string }) {
   const m = data?.m;
   const parents = useMons(m?.parents ?? []);
   if (!data) return <p>{err || 'Loading monster…'}</p>;
-  if (!m) return <div className="slab"><h2>Monster not found</h2><a className="btn ghost" href="#/collection"><span><Ico n="icon-back" />Back</span></a></div>;
+  if (!m) return <div className="slab"><h2>Monster not found</h2><a className="btn ghost" href="/collection"><span><Ico n="icon-back" />Back</span></a></div>;
   return (
     <>
-      <a className="navlink row-ico" href="#/collection"><Ico n="icon-back" />Back to collection</a>
+      <a className="navlink row-ico" href="/collection"><Ico n="icon-back" />Back to collection</a>
       <div className="split">
         <div className="slab" style={{ display: 'grid', justifyItems: 'center', gap: 12 }}>
           <Portrait dna={m.dna} size={340} />
@@ -129,11 +129,11 @@ export function Detail({ id }: { id: string }) {
           <section className="slab">
             <h2 className="row-ico"><Ico n="egg-gold" />Lineage</h2>
             <p className="sub">{m.parents ? 'Parents' : 'A wild first-generation monster.'}</p>
-            <div className="row" style={{ marginTop: 10 }}>{(m.parents ?? []).map((p) => <a key={p} className="chip" href={`#/monster/${p}`}>{parents[p]?.name ?? `#${p}`}</a>)}</div>
+            <div className="row" style={{ marginTop: 10 }}>{(m.parents ?? []).map((p) => <a key={p} className="chip" href={`/monster/${p}`}>{parents[p]?.name ?? `#${p}`}</a>)}</div>
           </section>
           <div className="row">
-            <a className="btn" href="#/play"><span><Ico n="icon-play" />Fight</span></a>
-            <a className="btn alt" href="#/breed"><span><Ico n="icon-breed" />Breed</span></a>
+            <a className="btn" href="/play"><span><Ico n="icon-play" />Fight</span></a>
+            <a className="btn alt" href="/breed"><span><Ico n="icon-breed" />Breed</span></a>
           </div>
         </div>
       </div>

@@ -2,7 +2,7 @@ import { useNearWallet } from 'near-connect-hooks';
 import { sanitize, type Monster } from './genes.ts';
 import { DEMO, demoMonsters } from './demo.ts';
 
-export const MONSTERS_ID: string = process.env.NEXT_PUBLIC_MONSTERS_ID ?? 'brawler-monsters-ed5da3.testnet';
+export const MONSTERS_ID: string = process.env.NEXT_PUBLIC_MONSTERS_ID ?? 'brawler-monsters-5c8e2b.testnet';
 const GAS = '30000000000000', GAS_X = '100000000000000';
 const NEAR = (n: number) => (BigInt(Math.round(n * 1000)) * 10n ** 21n).toString();
 
@@ -14,7 +14,6 @@ export interface MonsterView {
   rental: { renter: string; until_ms: number } | null; locked_until_ms: number; cooldown_until_ms: number;
 }
 export interface HistoryEntry { match_id: number; vs: string | null; won: boolean | null; kos: number; ms: number; tournament: number | null }
-export interface SeasonView { id: number; name: string; ends_ms: number; active: boolean }
 export interface ConfigView { owner: string; arena: string; treasury: string; breed_fee: string; market_fee_bps: number; royalty_bps: number; rent_fee_bps: number }
 
 export type NftMonster = Monster & {
@@ -48,8 +47,6 @@ export interface MonstersApi {
   rent(id: string, days: number, totalYocto: string): Promise<unknown>;
   listings(): Promise<NftMonster[]>;
   rentOffers(): Promise<NftMonster[]>;
-  season(): Promise<SeasonView | null>;
-  leaderboard(): Promise<[string, number][]>;
   config(): Promise<ConfigView>;
   owed(): Promise<string>; // failed sale/rent payouts waiting for you (yocto)
   withdrawOwed(): Promise<unknown>;
@@ -88,8 +85,6 @@ export function useMonsters(): MonstersApi {
     rent: (id, days, total) => call('rent', { token_id: id, days }, total, GAS_X),
     listings: () => views('listings', { from: 0, limit: 50 }),
     rentOffers: () => views('rent_offers', { from: 0, limit: 50 }),
-    season: () => view<SeasonView | null>('get_season'),
-    leaderboard: () => view<[string, number][]>('get_leaderboard', { limit: 20 }),
     config,
     owed: async () => (w.signedAccountId ? view<string>('owed_of', { account_id: w.signedAccountId }) : '0'),
     withdrawOwed: () => call('withdraw_owed', {}, '0', GAS_X),

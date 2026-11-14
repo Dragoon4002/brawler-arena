@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { yoctoToNear } from 'near-api-js';
 import { getAudio, setAudio } from '@/lib/audio.ts';
-import { fmt, MARKET_URL, useUnifiedBalance, useWallet } from '@/lib/near.ts';
+import { fmt, useUnifiedBalance, useWallet } from '@/lib/near.ts';
 import { useMonsters } from '@/lib/nft.ts';
 import { history, monster, monsters } from '@/lib/store.ts';
 import { Ico } from '@/components/ui.tsx';
 import { Claims } from './Claims.tsx';
+import { FundsDialog } from './Funds.tsx';
 
 export function Account() {
   const { signedAccountId, signIn, signOut, getBalance, loading, network } = useWallet();
@@ -19,6 +20,7 @@ export function Account() {
   const wins = log.filter((l) => l.won).length;
   const api = useMonsters();
   const [owed, setOwed] = useState('0');
+  const [funds, setFunds] = useState(false);
   useEffect(() => { if (signedAccountId) api.owed().then(setOwed).catch(() => {}); }, [signedAccountId]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
@@ -28,7 +30,7 @@ export function Account() {
           {loading ? <p>Checking wallet…</p> : signedAccountId ? (
             <>
               <h2 style={{ overflowWrap: 'anywhere' }}>{signedAccountId}</h2>
-              <dl className="kv"><dt>Game balance</dt><dd className="row-ico"><Ico n="coin-stack" />{balance === null ? 'loading…' : `${fmt(balance)} NEAR`} <a href={MARKET_URL}>Deposit / withdraw</a></dd><dt>Wallet</dt><dd className="row-ico"><Ico n="coin" />{bal ? `${bal} NEAR` : 'loading…'}</dd><dt>Monsters</dt><dd className="row-ico"><Ico n="icon-monster" />{monsters().length}</dd></dl>
+              <dl className="kv"><dt>Game balance</dt><dd className="row-ico"><Ico n="coin-stack" />{balance === null ? 'loading…' : `${fmt(balance)} NEAR`} <button type="button" className="link" onClick={() => setFunds(true)}>Deposit / withdraw</button></dd><dt>Wallet</dt><dd className="row-ico"><Ico n="coin" />{bal ? `${bal} NEAR` : 'loading…'}</dd><dt>Monsters</dt><dd className="row-ico"><Ico n="icon-monster" />{monsters().length}</dd></dl>
               {owed !== '0' && <button className="btn" onClick={() => api.withdrawOwed().then(() => setOwed('0'))}><span><Ico n="coin" />Withdraw {fmt(owed)} NEAR from failed payouts</span></button>}
               <button className="btn ghost" onClick={() => signOut()}><span><Ico n="icon-close" />Disconnect</span></button>
             </>
@@ -53,6 +55,7 @@ export function Account() {
           </ul>
         </section>
       </div>
+      {funds && <FundsDialog onClose={() => setFunds(false)} />}
       <Claims />
       <SoundSettings />
     </>

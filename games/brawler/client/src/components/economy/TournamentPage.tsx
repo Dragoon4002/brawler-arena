@@ -45,8 +45,8 @@ export function TournamentPage({ id }: { id: number }) {
   const act = useAct(reload);
   const [note, setNote] = useState('');
 
-  if (!data) return <>{err ? <p className="note">{err}</p> : <p>Loading tournament…</p>}<a className="navlink row-ico" href="#/tournaments"><Ico n="icon-back" />All tournaments</a></>;
-  if (!t) return <section className="slab"><h2>Tournament not found</h2><a className="btn ghost" href="#/tournaments"><span><Ico n="icon-back" />Back</span></a></section>;
+  if (!data) return <>{err ? <p className="note">{err}</p> : <p>Loading tournament…</p>}<a className="navlink row-ico" href="/tournaments"><Ico n="icon-back" />All tournaments</a></>;
+  if (!t) return <section className="slab"><h2>Tournament not found</h2><a className="btn ghost" href="/tournaments"><span><Ico n="icon-back" />Back</span></a></section>;
 
   const entered = t.entrants.some((e) => e.account === me);
   const free = (mine ?? []).filter((m) => isFree(m, me));
@@ -58,14 +58,14 @@ export function TournamentPage({ id }: { id: number }) {
     if (!mon) return setNote('Your monster is still loading, try again.');
     prepareFight({ kind: 'match', mon, stage: STAGE_IDS[mv.id % STAGE_IDS.length], matchId: mv.id, account: me });
   };
-  const watchHref = (mv: MatchView) => { const r = rooms?.find((x) => x.matchId === mv.id); return r ? `#/watch/${r.code}` : DEMO ? '#/watch/LIVE' : ''; };
+  const watchHref = (mv: MatchView) => { const r = rooms?.find((x) => x.matchId === mv.id); return r ? `/watch/${r.code}` : DEMO ? '/watch/LIVE' : ''; };
   const myIdx = t.entrants.findIndex((e) => e.account === me);
   const canClaim = !t.claimed?.[myIdx] && ((t.status === 'done' && t.champion === me) || (t.status === 'cancelled' && entered));
   const stale = t.status === 'open' && Date.now() - t.created_ms > 24 * 3600_000;
 
   return (
     <>
-      <a className="navlink row-ico" href="#/tournaments"><Ico n="icon-back" />All tournaments</a>
+      <a className="navlink row-ico" href="/tournaments"><Ico n="icon-back" />All tournaments</a>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div><h1 className="row-ico"><Ico n="trophy" className="ico h" />Tournament #{t.id}</h1>
           <p className="sub">{t.size} players, entry {fmt(t.entry_fee)} NEAR, pot {fmt(t.pot)} NEAR{t.bettable ? ', bets open' : ''}</p></div>

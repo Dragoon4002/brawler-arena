@@ -3,12 +3,13 @@ import { DEMO } from '@/lib/demo.ts';
 import { fmt, toYocto, useArena, useWallet, type TournamentView } from '@/lib/near.ts';
 import { useAct, useLoad } from '@/hooks/async.ts';
 import { Ico } from '@/components/ui.tsx';
+import { go } from '@/lib/nav.ts';
 
 export const STATUS_ICON = { open: 'icon-room-public', live: 'icon-live', done: 'trophy', cancelled: 'icon-close' } as const;
 
 function TCard({ t }: { t: TournamentView }) {
   return (
-    <a className="tile" href={`#/tournament/${t.id}`}>
+    <a className="tile" href={`/tournament/${t.id}`}>
       <div className="tile-head"><h3>Tournament #{t.id}</h3><span className={`chip row-ico ${t.status === 'live' ? 'gold' : ''}`}><Ico n={STATUS_ICON[t.status]} />{t.status}</span></div>
       <span className="tile-meta row-ico"><Ico n="icon-monster" />{t.entrants.length} / {t.size} entered</span>
       <span className="tile-meta row-ico"><Ico n="coin" />Entry {fmt(t.entry_fee)} NEAR, pot {fmt(t.pot)} NEAR</span>
@@ -50,7 +51,7 @@ export function Tournaments() {
   return (
     <>
       <div><h1 className="row-ico"><Ico n="trophy" className="ico h" />Tournaments</h1><p className="sub">Enter a monster, win the bracket, take the pot. Monsters are locked while a tournament runs.</p></div>
-      {isOwner && <CreateTournament done={(id) => { reload(); location.hash = `#/tournament/${id}`; }} />}
+      {isOwner && <CreateTournament done={(id) => { reload(); go(`/tournament/${id}`); }} />}
       {err && <p className="note">{err}</p>}
       {list === null ? <p>Loading tournaments…</p> : list.length === 0 ? <section className="slab"><h3>No tournaments yet</h3></section> : sections.map(([title, ico, ts]) => ts.length > 0 && (
         <section key={title} style={{ display: 'grid', gap: 14 }}>

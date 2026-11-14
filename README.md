@@ -8,7 +8,7 @@ Multi-game platform on NEAR. One balance (platform contract) shared by every gam
 | `packages/platform/` | shared TS wallet + balance hooks | - |
 | `contracts/platform/` | balances, matches, bets, tournaments, per-game referee | NEAR |
 | `crates/near-svc/` | rust: view, NEP-413 verify, referee tx queue | - |
-| `games/brawler/client/` | brawler game (Next.js, static export) | brawler.xyz.com |
+| `games/brawler/client/` | brawler game (Next.js, `npm run build && npm start`) | brawler.xyz.com |
 | `games/brawler/server/` | rust ws: relay, lobby, referee | ws svc |
 | `games/brawler/sim/` | rust sim port, golden-tested vs TS | - |
 | `games/brawler/contract/` | monster NFTs | NEAR |
@@ -27,6 +27,7 @@ npm run dev -w @xyz/market
 ```
 
 - Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY`. No CONTRACT_ID = free rooms only.
+- Room lobby: a staked guest who leaves before the host presses Start frees the seat, but their stake stays in the on-chain match (no refund flow yet).
 - Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (required in prod), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_BRAWLER_URL`.
 - Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
 - New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?)` on platform.

@@ -18,6 +18,11 @@ export const DEMO_ROOMS = [
   { code: 'FREE', pub: true, status: 'waiting', stage: 'ember', bettable: false, matchId: null, stake: '0', winner: null, watchers: 1, players: [mon(41)] },
 ] as const;
 
+// Canned chat for the room lobby / watch demos.
+export const demoChat = (a: string, b: string) => [
+  [a, 0, 'gl hf!'], [b, 1, 'you too. no heavy spam pls'], ['fan-ana.testnet', -1, 'backing the blue one'], [a, 0, 'arena ok?'], [b, 1, 'docks plz'], ['Spectator', -1, 'this is gonna be close'],
+].map(([from, seat, text], i, l) => ({ from: from as string, seat: seat as number, text: text as string, ts: Date.now() - (l.length - i) * 25_000 }));
+
 // amm = pool's [A, B] shares; fighter 0's price = b / (a + b).
 const match = (id: number, status: MatchView['status'], amm: [number, number], kos = 1): MatchView => ({
   id, game: 'brawler', host: DEMO_ROOMS[0].players[0].account, guest: DEMO_ROOMS[0].players[1].account, stake: NEAR(0.5), bettable: true,
@@ -70,7 +75,6 @@ const fake = (seed: number, owner: string, extra: Partial<NftMonster> = {}): Nft
 });
 const OTHERS = [61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72].map((n) => fake(n, `${nameFor(n).toLowerCase()}.testnet`));
 const NFTS: NftMonster[] = [];
-const seasonEnd = Date.now() + 5 * DAY;
 if (DEMO) {
   storeMonsters().forEach((m, i) => NFTS.push({
     ...m, owner: DEMO_ACCOUNT, breeder: DEMO_ACCOUNT, titles: i === 0 ? ['Season 1 Runner-up', 'Tournament #3 Champion'] : [], lockedUntil: 0, cooldownUntil: 0,
@@ -89,7 +93,6 @@ const histOf = (id: string): HistoryEntry[] => HIST[id] ??= [3, 2, 1, 0].map((n)
   match_id: 40 + n, vs: OTHERS[(n + id.length) % OTHERS.length].id, won: n === 2 ? false : n === 0 ? null : true, kos: n === 2 ? 0 : 1 + (n % 2),
   ms: Date.now() - (n + 1) * 5 * HOUR, tournament: n === 3 ? 3 : null,
 }));
-const season = () => ({ id: 1, name: 'Season 1', ends_ms: seasonEnd, active: true });
 let claimed = false;
 const mutate = (what: string, f: () => void) => wait(null).then(() => { f(); alert(`Demo: ${what}. In the real app your wallet asks you to confirm.`); return null; });
 
@@ -117,10 +120,8 @@ export const demoMonsters: MonstersApi = {
   rent: (id, days) => mutate(`monster rented for ${days} day(s)`, () => patch(id, { rental: { renter: DEMO_ACCOUNT, untilMs: Date.now() + days * DAY } })),
   listings: () => wait(NFTS.filter((m) => m.price).map((m) => ({ ...m }))),
   rentOffers: () => wait(NFTS.filter((m) => m.rentOffer).map((m) => ({ ...m }))),
-  season: () => wait(season()),
   owed: () => wait('0'),
   withdrawOwed: () => sent('owed NEAR sent to your wallet'),
-  leaderboard: () => wait(NFTS.slice().sort((x, y) => y.record.w - x.record.w).slice(0, 10).map((m): [string, number] => [m.id, m.record.w])),
   config: () => wait({ owner: 'admin.testnet', arena: 'arena.testnet', treasury: NEAR(3), breed_fee: NEAR(0.1), market_fee_bps: 250, royalty_bps: 500, rent_fee_bps: 250 }),
 };
 const fmtN = (y: string) => Number(BigInt(y) / 10n ** 21n) / 1000;
