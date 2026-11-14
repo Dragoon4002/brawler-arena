@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { STAGES } from '@/lib/stages.ts';
 import { useLobby, type LobbyRoom } from '@/lib/lobby.ts';
 import { fmt, useArena } from '@/lib/near.ts';
+import type { Monster } from '@/lib/genes.ts';
 import { monsters } from '@/lib/store.ts';
 import { errText } from '@/lib/format.ts';
 import { asset, Ico, Portrait, STAGE_ICON } from '@/components/ui.tsx';
@@ -25,37 +26,45 @@ function RoomCard({ r, onJoin }: { r: LobbyRoom; onJoin: () => void }) {
         {r.watchers > 0 && <span className="chip row-ico"><Ico n="icon-watch" />{r.watchers} watching</span>}
       </div>
       <div className="row">
-        {r.status === 'waiting' && r.pub && <button className="btn" onClick={onJoin}><span><Ico n="icon-play" />Join fight</span></button>}
+        {r.status === 'waiting' && r.pub && <button className="btn" onClick={onJoin}><span><Ico n="icon-play" />{r.stake !== '0' ? `Join · ${fmt(r.stake)} NEAR` : 'Join fight'}</span></button>}
         <a className="btn alt" href={`#/watch/${r.code}`}><span><Ico n={r.bettable ? 'icon-bet' : 'icon-watch'} />{r.bettable ? 'Watch and bet' : 'Watch'}</span></a>
       </div>
     </article>
   );
 }
 
-export function Lobby() {
+export function RoomList({ mon }: { mon: Monster }) {
   const { rooms, err } = useLobby();
   const arena = useArena();
   const [msg, setMsg] = useState('');
-  const mon = monsters()[0];
   const join = (code: string) => joinRoom(arena, code, mon, setMsg).catch((e) => setMsg(errText(e)));
   const live = rooms?.filter((r) => r.status === 'live') ?? [];
   const open = rooms?.filter((r) => r.status === 'waiting') ?? [];
   return (
     <>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
-        <div><h1 className="row-ico"><Ico n="icon-lobby" className="ico h" />Lobby</h1><p className="sub">Join an open seat with {mon.name}, or watch any fight for free and back a side.</p></div>
-        <a className="btn" href="#/play"><span><Ico n="icon-room-public" />Create a room</span></a>
-      </div>
       {msg && <p className="note" role="status">{msg}</p>}
       {err && <p className="note">{err}</p>}
       {rooms === null ? <p>Connecting to the arena…</p> : rooms.length === 0 ? (
         <section className="slab"><h3>No public rooms right now</h3><p className="sub">Create one and it shows up here for everyone.</p></section>
       ) : (
         <>
-          {live.length > 0 && <><h2 className="row-ico"><Ico n="icon-live" />Live now</h2><div className="grid rooms">{live.map((r) => <RoomCard key={r.code} r={r} onJoin={() => join(r.code)} />)}</div></>}
           {open.length > 0 && <><h2 className="row-ico"><Ico n="icon-room-public" />Open seats</h2><div className="grid rooms">{open.map((r) => <RoomCard key={r.code} r={r} onJoin={() => join(r.code)} />)}</div></>}
+          {live.length > 0 && <><h2 className="row-ico"><Ico n="icon-live" />Live now</h2><div className="grid rooms">{live.map((r) => <RoomCard key={r.code} r={r} onJoin={() => join(r.code)} />)}</div></>}
         </>
       )}
+    </>
+  );
+}
+
+export function Lobby() {
+  const mon = monsters()[0];
+  return (
+    <>
+      <div className="row" style={{ justifyContent: 'space-between' }}>
+        <div><h1 className="row-ico"><Ico n="icon-lobby" className="ico h" />Lobby</h1><p className="sub">Join an open seat with {mon.name}, or watch any fight for free and back a side.</p></div>
+        <a className="btn" href="#/play"><span><Ico n="icon-room-public" />Create a room</span></a>
+      </div>
+      <RoomList mon={mon} />
     </>
   );
 }

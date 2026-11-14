@@ -17,6 +17,26 @@ export interface Hooks {
   room?: (info: { code: string; matchId: number | null; bettable: boolean; seat: number }) => void;
   rematch?: () => void; // opponent asked for a rematch
   left?: () => void; // opponent (or our socket) gone: no rematch in this room
+  gone?: (why: string) => void; // room closed before the fight (host left / socket lost)
+  roomstate?: (rs: RoomState) => void;
+  chat?: (line: ChatLine) => void;
+  chatlog?: (lines: ChatLine[]) => void;
+}
+export interface Seat { name: string; dna: Dna; account: string; connected: boolean }
+export interface RoomState {
+  code: string; status: 'waiting' | 'live' | 'done'; stage: StageId; stake: string; matchId: number | null;
+  bettable: boolean; pub: boolean; view: boolean; seats: Seat[]; spectators: number;
+}
+export interface ChatLine { from: string; seat: number; text: string; ts: number }
+export interface PlayerSet { name?: string; dna?: Dna; stage?: StageId }
+
+// Shared by players and spectators: room/chat messages that aren't part of the fight.
+function roomMsg(m: any, hooks: Hooks) {
+  if (m.t === 'roomstate') hooks.roomstate?.({ ...m, stage: STAGE_IDS.includes(m.stage) ? m.stage : 'ember', seats: (m.seats ?? []).map((p: any) => ({ ...p, dna: sanitize(p.dna) })) });
+  else if (m.t === 'chat') hooks.chat?.(m);
+  else if (m.t === 'chatlog') hooks.chatlog?.(m.lines ?? []);
+  else return false;
+  return true;
 }
 export interface HostOpts { pub: boolean; view: boolean; bettable: boolean; matchId: number | null; stake: string; account: string }
 
@@ -70,7 +90,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
 }
 
 // Free-tier hosts sleep when idle and refuse the first connections while waking (~30-60 s), so retry for ~75 s.
-// The host's arena wins; the guest's choice is ignored.
+// The host's arena wins; the guest's choice is ignored. me/stage change in the room lobby via set().
 export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & HostOpts) | { t: 'join'; code: string; account: string; matchId: number | null } | { t: 'match'; matchId: number; account: string }, me: Player, stage: StageId, hooks: Hooks = {}, sign?: SignMatch) {
   let ws: WebSocket | null = null;
   let peer: ReturnType<typeof linkPeer> | null = null;
@@ -78,6 +98,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
   let stopped = false;
   let hb: ReturnType<typeof setInterval> | undefined, leftIv: ReturnType<typeof setInterval> | undefined;
   const say = (t: string) => hooks.status?.(t);
+  const send = (o: object) => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify(o));
 
   function connect(tries: number) {
     if (stopped) return;
@@ -117,7 +138,11 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
       say('Waking up server… (can take up to a minute)');
       setTimeout(() => ws === sock && connect(tries + 1), 2500);
     };
-    sock.onclose = () => { clearInterval(leftIv); if (game) game.setBanner('Connection closed'); if (opened) hooks.left?.(); };
+    sock.onclose = () => {
+      clearInterval(leftIv);
+      if (game) game.setBanner('Connection closed'); else if (opened && !stopped) hooks.gone?.('Lost connection to the server.');
+      if (opened) hooks.left?.();
+    };
     sock.onmessage = async (e) => {
       const m = JSON.parse(e.data);
       if (m.t === 'ping') sock.send('{"t":"pong"}');
@@ -128,8 +153,9 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
           try { auth = await sign(first.matchId, m.nonce); } catch { return say('Wallet signature needed to take your seat.'); }
         }
         sock.send(JSON.stringify({ ...first, name: me.name, dna: me.dna, stage, auth }));
-      } else if (m.t === 'room') { code = m.code; seat = m.seat ?? 0; say(`Room ${m.code} — share this code. Waiting for opponent…`); hooks.room?.({ code: m.code, matchId: first.t === 'join' ? null : first.matchId, bettable: first.t === 'host' && first.bettable, seat }); }
+      } else if (m.t === 'room') { code = m.code; seat = m.seat ?? 0; say(''); hooks.room?.({ code: m.code, matchId: first.matchId, bettable: first.t === 'host' && first.bettable, seat }); }
       else if (m.t === 'error') say(m.msg);
+      else if (roomMsg(m, hooks)) { if (m.t === 'roomstate' && STAGE_IDS.includes(m.stage)) theirStage = m.stage; }
       else if (m.t === 'start') {
         // 2nd+ start = rematch in the same room: drop the old game, link and per-game state
         clearInterval(hb); clearInterval(leftIv); peer?.close(); game?.stop();
@@ -146,6 +172,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
         maybeStart();
       } else if (m.t === 'sdp' || m.t === 'ice' || m.t === 'go') peer?.signal(m);
       else if (m.t === 'left') {
+        if (!game && seat === 1) return hooks.gone?.('The host left the room.'); // waiting: guest leaving just updates roomstate
         hooks.left?.();
         if (ended || !game) return;
         const until = Date.now() + 30_000; // server forfeits ~30 s after their last message
@@ -159,7 +186,14 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
 
   connect(0);
   return {
-    rematch() { if (ws?.readyState === WebSocket.OPEN) ws.send('{"t":"rematch"}'); },
+    rematch() { send({ t: 'rematch' }); },
+    begin() { send({ t: 'begin' }); },
+    chat(text: string) { send({ t: 'chat', text }); },
+    set(p: PlayerSet) {
+      if (p.name !== undefined || p.dna) me = { name: p.name ?? me.name, dna: p.dna ?? me.dna };
+      if (p.stage) stage = p.stage;
+      send({ t: 'set', ...p });
+    },
     stop() { stopped = true; clearInterval(hb); clearInterval(leftIv); ws?.close(); peer?.close(); game?.stop(); },
   };
 }
@@ -168,16 +202,17 @@ const verdict = (winner: number | null, reason: string, seat: number) =>
   winner === null ? `Match void (${reason}). Stakes and bets refunded.` : winner === seat ? `You win (${reason})` : `You lose (${reason})`;
 
 // Watch a live fight: replay the server's confirmed input tape with the same sim. Small jitter buffer.
-export function startSpectate(canvas: HTMLCanvasElement, code: string, hooks: Hooks & { info?: (spec: any) => void } = {}) {
+export function startSpectate(canvas: HTMLCanvasElement, code: string, hooks: Hooks & { info?: (spec: any) => void } = {}, account?: string | null) {
   const sock = new WebSocket(SERVER);
   let game: ReturnType<typeof loop> | null = null;
   const queue: number[][] = [];
   let buffering = true;
-  sock.onopen = () => sock.send(JSON.stringify({ t: 'watch', code }));
+  sock.onopen = () => sock.send(JSON.stringify({ t: 'watch', code, account: account || undefined }));
   sock.onerror = () => hooks.status?.(`Can't reach server ${SERVER}`);
   sock.onmessage = (e) => {
     const m = JSON.parse(e.data);
     if (m.t === 'error') hooks.status?.(m.msg);
+    else if (roomMsg(m, hooks)) return;
     else if (m.t === 'spec') {
       hooks.info?.(m);
       game?.stop(); queue.length = 0; buffering = true; // fresh spec (room went live with final DNA): rebuild
@@ -197,7 +232,10 @@ export function startSpectate(canvas: HTMLCanvasElement, code: string, hooks: Ho
     } else if (m.t === 'frames') queue.push(...m.ins);
     else if (m.t === 'over') { hooks.over?.(m.winner, m.reason); if (m.reason !== 'ko') game?.setBanner(m.winner === null ? 'Match void, bets refunded' : `Winner by ${m.reason}`); }
   };
-  return { stop() { sock.close(); game?.stop(); } };
+  return {
+    chat(text: string) { if (sock.readyState === WebSocket.OPEN) sock.send(JSON.stringify({ t: 'chat', text })); },
+    stop() { sock.close(); game?.stop(); },
+  };
 }
 
 export function startBotFight(canvas: HTMLCanvasElement, players: Player[], stage: StageId, hooks: Hooks = {}) {

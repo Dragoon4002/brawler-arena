@@ -18,6 +18,11 @@ export const DEMO_ROOMS = [
   { code: 'FREE', pub: true, status: 'waiting', stage: 'ember', bettable: false, matchId: null, stake: '0', winner: null, watchers: 1, players: [mon(41)] },
 ] as const;
 
+// Canned chat for the room lobby / watch demos.
+export const demoChat = (a: string, b: string) => [
+  [a, 0, 'gl hf!'], [b, 1, 'you too. no heavy spam pls'], ['fan-ana.testnet', -1, 'backing the blue one'], [a, 0, 'arena ok?'], [b, 1, 'docks plz'], ['Spectator', -1, 'this is gonna be close'],
+].map(([from, seat, text], i, l) => ({ from: from as string, seat: seat as number, text: text as string, ts: Date.now() - (l.length - i) * 25_000 }));
+
 // amm = pool's [A, B] shares; fighter 0's price = b / (a + b).
 const match = (id: number, status: MatchView['status'], amm: [number, number], kos = 1): MatchView => ({
   id, game: 'brawler', host: DEMO_ROOMS[0].players[0].account, guest: DEMO_ROOMS[0].players[1].account, stake: NEAR(0.5), bettable: true,

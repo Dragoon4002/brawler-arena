@@ -82,7 +82,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
       )}
 
       <footer className="hub-bottom" inert={!!children}>
-        {/* ponytail: arena pick here only changes the backdrop; Play still has its own picker */}
+        {/* ponytail: arena pick here only changes the backdrop; the room host picks the fight arena */}
         <button type="button" className="hub-event" onClick={() => setPop('map')}>
           <StageThumb id={stage} className="hub-event-thumb" />
           <small>Arena · tap to change</small>
