@@ -53,7 +53,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
   let net: Netplay | null = null;
   let banner = '', link = '';
   let spectate: ((advance: (inputs: number[]) => void, s: GameState) => void) | null = null;
-  renderer.setPlayers(players.map((p, i) => (seat < 0 ? p.name : i === seat ? `${p.name} (you)` : p.name)), players.map((p) => lookOf(p.dna)));
+  renderer.setPlayers(players.map((p, i) => (seat < 0 ? p.name : i === seat ? `${p.name} (you)` : p.name)), players.map((p) => p.dna));
 
   let shown = 0; // first frame whose effects haven't played yet (predicted frames play once, never replayed)
   function fx(s: GameState) {
@@ -259,7 +259,8 @@ export function startSpectate(canvas: HTMLCanvasElement, code: string, hooks: Ho
 
 export function startBotFight(canvas: HTMLCanvasElement, players: Player[], stage: StageId, hooks: Hooks = {}) {
   const game = loop(canvas, players, -2, stage, hooks);
-  game.feed((advance, s) => advance([bot(s, 0), bot(s, 1)]));
+  const human = params.has('play'); // ?play: you drive P1 with the keyboard/pad (local trial)
+  game.feed((advance, s) => advance([human ? readInput() : bot(s, 0), bot(s, 1)]));
   hooks.started?.(players, -2);
   return game;
 }

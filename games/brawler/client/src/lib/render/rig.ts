@@ -18,7 +18,7 @@ const P = (p: Partial<Pose>): Pose => ({
   y: 0, t: 0.08, h: -0.05, r: 0, fu: 0.4, fl: 1.4, bu: -0.1, bl: 1.2, ft: 0.25, fs: -0.3, bt: -0.2, bs: -0.2, tail: 0.3, jaw: 0, blink: 0, ...p,
 });
 
-const POSES = {
+export const POSES = {
   idle: P({}),
   idle2: P({ y: 2, t: 0.13, h: 0, fu: 0.48, fl: 1.55, bl: 1.35, tail: 0.45 }),
   run1: P({ y: -2, t: 0.32, fu: -0.6, fl: 1.2, bu: 0.8, bl: 1.0, ft: 0.95, fs: -0.4, bt: -0.6, bs: -1.3, tail: 0.1 }),

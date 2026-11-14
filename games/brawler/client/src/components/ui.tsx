@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { archetype, lookOf, STAT_KEYS, type Dna, type Monster } from '@/lib/genes.ts';
 import { drawMonster, idlePose, type Pose } from '@/lib/render/rig.ts';
+import { drawHero, hero, heroOf } from '@/lib/render/cutout.ts';
 import { drawStageThumb } from '@/lib/render/stage.ts';
 import type { StageId } from '@/lib/stages.ts';
 
@@ -40,9 +41,10 @@ export function Portrait({ dna, size = 200, pose, flip = false, className = 'por
       ctx.translate(size / 2, size * 0.86); ctx.scale(k * (flip ? -1 : 1), k);
       ctx.fillStyle = 'rgb(12 8 22 / 0.35)';
       ctx.beginPath(); ctx.ellipse(0, 4, 38, 8, 0, 0, Math.PI * 2); ctx.fill();
-      drawMonster(ctx, pose ?? idlePose(t), look, false);
+      const h = hero(heroOf(dna)); // vector monster until the hero's parts load
+      if (h) drawHero(ctx, pose ?? idlePose(t), h, false); else drawMonster(ctx, pose ?? idlePose(t), look, false);
       t++;
-      if (!reduceMotion() && !pose) raf = requestAnimationFrame(paint);
+      if (!h || (!reduceMotion() && !pose)) raf = requestAnimationFrame(paint);
     };
     paint();
     return () => cancelAnimationFrame(raf);
@@ -82,6 +84,35 @@ export function MonsterCard({ m, onClick, selected, href, extra, disabled }: { m
     : <button type="button" className="tile" aria-pressed={selected} disabled={disabled} onClick={onClick}>{body}</button>;
 }
 
+// Title-screen key art: 4 painted layers (public/title, split by sprites/title/layers.py) shifted for parallax.
+// Follows the pointer, drifts slowly when idle; static under reduced motion. Bleed (inset -40px) hides shifted edges.
+const TITLE_LAYERS = [['0-sky', 0], ['1-far', 8], ['2-mid', 18], ['3-front', 30]] as const;
+export function TitleArt({ className }: { className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (reduceMotion()) return;
+    const imgs = [...ref.current!.querySelectorAll('img')];
+    const aim = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
+    let raf = 0, last = 0;
+    const onMove = (e: PointerEvent) => { aim.x = (e.clientX / innerWidth) * 2 - 1; aim.y = (e.clientY / innerHeight) * 2 - 1; last = performance.now(); };
+    const frame = (t: number) => {
+      const idle = t - last > 3000; // no pointer lately: slow figure-eight drift
+      const tx = idle ? Math.sin(t / 3200) * 0.6 : aim.x, ty = idle ? Math.sin(t / 1600) * 0.4 : aim.y;
+      cur.x += (tx - cur.x) * 0.06; cur.y += (ty - cur.y) * 0.06;
+      imgs.forEach((im, i) => { const k = TITLE_LAYERS[i][1]; im.style.transform = `translate(${-cur.x * k}px, ${-cur.y * k * 0.5}px)`; });
+      raf = requestAnimationFrame(frame);
+    };
+    addEventListener('pointermove', onMove);
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); removeEventListener('pointermove', onMove); };
+  }, []);
+  return (
+    <div ref={ref} className={`title-art ${className ?? ''}`} aria-hidden="true">
+      {TITLE_LAYERS.map(([n]) => <img key={n} src={`/title/${n}.png`} alt="" draggable={false} />)}
+    </div>
+  );
+}
+
 export function ArenaBackdrop({ id, className }: { id: StageId; className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -92,8 +123,8 @@ export function ArenaBackdrop({ id, className }: { id: StageId; className?: stri
       if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
       const s = Math.max(w / 1280, h / 720);
       ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (w - 1280 * s) / 2, dpr * (h - 720 * s) / 2);
-      drawStageThumb(ctx, id, 1280, 720, performance.now() / 1000); // seconds, same clock as the fight renderer
-      if (!reduceMotion()) raf = requestAnimationFrame(paint);
+      const ready = drawStageThumb(ctx, id, 1280, 720, performance.now() / 1000); // seconds, same clock as the fight renderer
+      if (!ready || !reduceMotion()) raf = requestAnimationFrame(paint);
     };
     paint();
     const onResize = () => { if (reduceMotion()) paint(); };
@@ -110,8 +141,10 @@ export function StageThumb({ id, className }: { id: StageId; className?: string 
     const w = c.clientWidth || 320, h = Math.round(w * 9 / 16);
     c.width = w * dpr; c.height = h * dpr;
     const ctx = c.getContext('2d')!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawStageThumb(ctx, id, w, h);
+    let raf = 0;
+    const paint = () => { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); if (!drawStageThumb(ctx, id, w, h)) raf = requestAnimationFrame(paint); };
+    paint();
+    return () => cancelAnimationFrame(raf);
   }, [id]);
   return <canvas ref={ref} className={className} style={{ width: '100%', aspectRatio: '16 / 9' }} aria-hidden="true" />;
 }

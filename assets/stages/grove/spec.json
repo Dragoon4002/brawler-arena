@@ -1,0 +1,109 @@
+{
+ "id": "grove",
+ "name": "Skyroot Grove",
+ "blurb": "Two treetop islands split by a gap. Branches stacked high for air fights.",
+ "solids": [
+  {
+   "x0": 330,
+   "x1": 690,
+   "y": 620,
+   "y1": 700
+  },
+  {
+   "x0": 910,
+   "x1": 1270,
+   "y": 620,
+   "y1": 700
+  }
+ ],
+ "soft": [
+  {
+   "x0": 440,
+   "x1": 620,
+   "y": 450
+  },
+  {
+   "x0": 700,
+   "x1": 900,
+   "y": 320
+  },
+  {
+   "x0": 980,
+   "x1": 1160,
+   "y": 450
+  }
+ ],
+ "blast": {
+  "x0": -250,
+  "x1": 1850,
+  "y0": -500,
+  "y1": 1150
+ },
+ "spawns": [
+  {
+   "x": 510,
+   "y": 300
+  },
+  {
+   "x": 1090,
+   "y": 300
+  }
+ ],
+ "cam": {
+  "x0": 440,
+  "x1": 1160,
+  "y0": 300,
+  "y1": 660
+ },
+ "viewport": [
+  1280,
+  720
+ ],
+ "sky": "sky.png: fixed to screen, 1280x720",
+ "parallax": [
+  {
+   "file": "parallax_0.png",
+   "size": [
+    2048,
+    400
+   ],
+   "k": 0.07,
+   "y": 250,
+   "note": "tiles horizontally; scrolls at k x camera; below strip filled with its bottom-row colour"
+  },
+  {
+   "file": "parallax_1.png",
+   "size": [
+    2048,
+    400
+   ],
+   "k": 0.16,
+   "y": 380,
+   "note": "tiles horizontally; scrolls at k x camera; below strip filled with its bottom-row colour"
+  },
+  {
+   "file": "parallax_2.png",
+   "size": [
+    2048,
+    400
+   ],
+   "k": 0.28,
+   "y": 420,
+   "note": "tiles horizontally; scrolls at k x camera; below strip filled with its bottom-row colour"
+  }
+ ],
+ "world": {
+  "files": [
+   "platforms.png",
+   "fx_under.png",
+   "fx_front.png"
+  ],
+  "rect": [
+   -100,
+   -450,
+   1800,
+   1450
+  ],
+  "pxPerUnit": 1.25
+ }
+}

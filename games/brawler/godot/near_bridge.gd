@@ -22,6 +22,11 @@ func _ready() -> void:
 		return
 	_cb = JavaScriptBridge.create_callback(_on_message)
 	JavaScriptBridge.get_interface("window").addEventListener("message", _cb)
+	# The page may have announced the account before we were listening: ask once now.
+	var r := await get_account()
+	if r.ok:
+		account = r.data
+		account_changed.emit(account)
 
 func connect_wallet() -> Dictionary: return await _request("near:connect")
 func get_account() -> Dictionary: return await _request("near:account")

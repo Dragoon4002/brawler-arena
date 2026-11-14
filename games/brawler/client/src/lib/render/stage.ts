@@ -2,6 +2,7 @@
 // Static art (sky, parallax silhouettes, platforms) is painted once per stage into offscreen canvases;
 // only light/water/particles animate per frame.
 import { STAGES, type StageId, type Rect, type Ledge } from '../stages.ts';
+import { paintArtBackground, paintArtStage } from './artstage.ts';
 
 const INK = '#140c1f';
 const VW = 1280, VH = 720; // logical viewport (matches draw.ts)
@@ -443,13 +444,16 @@ export function paintStage(c: C, id: StageId, t: number) {
 }
 export function paintFront(c: C, id: StageId, t: number) { ART[id].front(c, t); }
 
-// Static preview for the arena-select screen.
+// Static preview for the arena-select screen. Returns false while the painted art is still loading (repaint later).
 export function drawStageThumb(c: C, id: StageId, w: number, h: number, t = 0) {
   c.save();
   c.scale(w / VW, h / VH);
-  paintBackground(c, id, { x: 800, y: 470 });
+  const cam = { x: 800, y: 470 };
+  if (!paintArtBackground(c, id, cam, VW, VH)) paintBackground(c, id, cam);
   const z = 0.82;
   c.translate(VW / 2, VH / 2); c.scale(z, z); c.translate(-800, -470);
-  paintStage(c, id, t); paintFront(c, id, t);
+  const art = paintArtStage(c, id);
+  if (!art) { paintStage(c, id, t); paintFront(c, id, t); }
   c.restore();
+  return art;
 }

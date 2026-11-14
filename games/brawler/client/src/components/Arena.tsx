@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Monster } from '@/lib/genes.ts';
-import type { StageId } from '@/lib/stages.ts';
+import { STAGES, type StageId } from '@/lib/stages.ts';
 import { getAudio, toggleMute } from '@/lib/audio.ts';
 import { DEMO_ROOMS, demoChat } from '@/lib/demo.ts';
 import { useArena, useSignMatch } from '@/lib/near.ts';
@@ -22,7 +22,8 @@ export const prepareFight = (s: FightSetup) => { setup = s; go('/fight'); };
 const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna });
 
 // Demo states for /fight/<state>?demo : waiting (host lobby) | challenger (guest lobby) | fight | victory | defeat | void
-const demoSetup = (): FightSetup => ({ kind: 'host', mon: monsters()[0], stage: 'ember', opts: { pub: true, view: true, bettable: true, matchId: 99, stake: '500000000000000000000000', account: '' } });
+const DEMO_STAGE = (new URLSearchParams(location.search).get('stage') ?? 'ember') as StageId; // ?demo&stage=grove
+const demoSetup = (): FightSetup => ({ kind: 'host', mon: monsters()[0], stage: DEMO_STAGE in STAGES ? DEMO_STAGE : 'ember', opts: { pub: true, view: true, bettable: true, matchId: 99, stake: '500000000000000000000000', account: '' } });
 const demoRoom = (mon: Monster, seat: number): RoomState => {
   const me = { name: mon.name, dna: mon.dna, account: 'demo-player.testnet', connected: true }, rival = { ...DEMO_ROOMS[2].players[0], connected: true };
   return { code: 'DEMO', status: 'waiting', stage: 'ember', stake: '500000000000000000000000', matchId: 99, bettable: true, pub: true, view: true, seats: seat ? [rival, me] : [me, rival], spectators: 3 };

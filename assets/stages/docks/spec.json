@@ -1,0 +1,84 @@
+{
+ "id": "docks",
+ "name": "Tidecrest Docks",
+ "blurb": "A long low pier over the night sea. Hard to knock anyone off the sides.",
+ "solids": [
+  {
+   "x0": 300,
+   "x1": 1300,
+   "y": 640,
+   "y1": 690
+  }
+ ],
+ "soft": [
+  {
+   "x0": 520,
+   "x1": 640,
+   "y": 500
+  },
+  {
+   "x0": 740,
+   "x1": 860,
+   "y": 380
+  },
+  {
+   "x0": 960,
+   "x1": 1080,
+   "y": 500
+  }
+ ],
+ "blast": {
+  "x0": -300,
+  "x1": 1900,
+  "y0": -450,
+  "y1": 1150
+ },
+ "spawns": [
+  {
+   "x": 560,
+   "y": 300
+  },
+  {
+   "x": 1040,
+   "y": 300
+  }
+ ],
+ "cam": {
+  "x0": 440,
+  "x1": 1160,
+  "y0": 400,
+  "y1": 680
+ },
+ "viewport": [
+  1280,
+  720
+ ],
+ "sky": "sky.png: fixed to screen, 1280x720",
+ "parallax": [
+  {
+   "file": "parallax_0.png",
+   "size": [
+    2048,
+    400
+   ],
+   "k": 0.06,
+   "y": 360,
+   "note": "tiles horizontally; scrolls at k x camera; below strip filled with its bottom-row colour"
+  }
+ ],
+ "world": {
+  "files": [
+   "platforms.png",
+   "fx_under.png",
+   "fx_live.png",
+   "fx_front.png"
+  ],
+  "rect": [
+   -100,
+   -450,
+   1800,
+   1450
+  ],
+  "pxPerUnit": 1.25
+ }
+}
