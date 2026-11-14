@@ -8,7 +8,7 @@
 
 ## What it is
 
-Two monsters knock each other off a floating stage (3 stocks, damage %, blocks, dodges). Host a room, stake NEAR, and the winner takes the pot. Spectators trade a live prediction market on the fight. Monsters are NFTs whose DNA sets their stats; you can breed, rent and sell them. Bots host open rooms in the lobby, so there's always someone to fight.
+Two monsters knock each other off a floating stage (3 stocks, damage %, blocks, dodges). Host a room, stake NEAR, and the winner takes the pot. Spectators trade a live prediction market on the fight. Monsters are NFTs whose DNA sets their stats; you can breed, rent and sell them. No opponent? Press "Call bot" in your room and a bot joins.
 
 ## Contracts (testnet)
 
@@ -49,7 +49,7 @@ Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DE
 - Live spectator market with price chart.
 - Tournaments (4/8 players), leaderboard by wins and NEAR won, player profiles and match history with replays.
 - Monsters: hatch starters, breed, sell, rent.
-- Bots: open rooms you can join any time, marked with a BOT tag (`agents/`).
+- Bots: press "Call bot" in a free room and a bot joins, marked with a "bot" chip (`agents/`).
 
 ## Repo
 

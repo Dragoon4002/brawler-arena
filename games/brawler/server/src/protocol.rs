@@ -66,6 +66,7 @@ pub fn room_row(r: &Room) -> Value {
     json!({
         "code": r.code, "pub": r.public, "status": r.status.as_str(), "stage": r.stage.name(), "bettable": r.bettable,
         "matchId": r.match_id, "stake": r.stake, "winner": r.winner, "players": players(r), "watchers": r.spectators.len(),
+        "wantsBot": r.wants_bot && r.seats.len() == 1 && r.match_id.is_none(),
     })
 }
 

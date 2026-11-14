@@ -77,6 +77,8 @@ pub struct Room {
     pub rematch: [bool; 2],
     /// Last CHAT_KEEP lines `{from, seat, text, ts}`.
     pub chat: VecDeque<Value>,
+    /// Host pressed "Call bot": the bot service joins rooms flagged in the lobby.
+    pub wants_bot: bool,
 }
 
 impl Room {
@@ -199,6 +201,7 @@ impl Shared {
             round: 0,
             rematch: [false; 2],
             chat: VecDeque::new(),
+            wants_bot: false,
         };
         configure(&mut r);
         let at = r.handle();

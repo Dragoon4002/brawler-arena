@@ -236,6 +236,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: First, me: Player,
   return {
     rematch() { send({ t: 'rematch' }); },
     begin() { send({ t: 'begin' }); },
+    callBot() { send({ t: 'callbot' }); },
     chat(text: string) { send({ t: 'chat', text }); },
     set(p: PlayerSet) {
       if (p.name !== undefined || p.dna) me = { name: p.name ?? me.name, dna: p.dna ?? me.dna };

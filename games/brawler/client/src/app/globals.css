@@ -595,3 +595,5 @@ a.lb-who:hover b { color: var(--gold); text-decoration: underline; }
 .touch-btn:nth-child(2) { background: rgb(255 209 102 / 0.65); color: var(--ink); }
 .touch-btn:active { transform: translateY(2px); filter: brightness(1.2); }
 .bot-tag { display: inline-block; vertical-align: middle; margin-left: 4px; padding: 1px 6px; font: 800 11px var(--font-body); color: var(--ink); background: #5ce1e6; border: 2px solid var(--ink); border-radius: 99px; }
+.arena-overlay .practice-pick { max-width: 640px; width: calc(100% - 32px); }
+.practice-pick h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 32px; }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { archetype, type Dna, type Monster } from '@/lib/genes.ts';
 import { STAGES, STAGE_IDS, type StageId } from '@/lib/stages.ts';
 import { fmt } from '@/lib/near.ts';
@@ -9,7 +9,7 @@ import { Chat } from './Chat.tsx';
 export interface RoomLobbyProps {
   rs: RoomState; seat: number; mine: Monster; options: Monster[]; locked: boolean; status: string;
   chat: ChatLine[]; leaveLabel: string;
-  onPick: (m: Monster) => void; onStage: (id: StageId) => void; onStart: () => void; onChat: (t: string) => void; onLeave: () => void;
+  onPick: (m: Monster) => void; onStage: (id: StageId) => void; onStart: () => void; onChat: (t: string) => void; onLeave: () => void; onCallBot?: () => void;
 }
 
 function SeatCard({ i, who, you, connected, onChange, locked }: {
@@ -44,6 +44,9 @@ export function RoomLobby(p: RoomLobbyProps) {
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const host = seat === 0;
   const ready = !!rs.seats[1]?.connected;
+  const [called, setCalled] = useState(false);
+  const joined = !!rs.seats[1];
+  useEffect(() => { if (!joined) setCalled(false); }, [joined]);
   const invite = `${location.origin}/play/join/${rs.code}${location.search}`;
   const copy = (what: 'code' | 'link') => navigator.clipboard?.writeText(what === 'code' ? rs.code : invite).then(() => { setCopied(what); setTimeout(() => setCopied(null), 1500); }, () => {});
   const who = (i: number) => (i === seat ? p.mine : rs.seats[i]); // own card updates instantly, before the server echo
@@ -97,6 +100,9 @@ export function RoomLobby(p: RoomLobbyProps) {
             {host ? (
               <>
                 <button type="button" className="btn big" disabled={!ready} onClick={p.onStart}><span><Ico n="icon-play" />Start fight</span></button>
+                {!ready && p.onCallBot && rs.matchId == null && (rs.pub || rs.view) && (
+                  <button type="button" className="btn ghost" disabled={called} onClick={() => { setCalled(true); p.onCallBot!(); }}><span><Ico n="icon-monster" />{called ? 'Bot on the way…' : 'Call bot'}</span></button>
+                )}
                 <p className="note" role="status">{p.status || (ready ? 'Both fighters ready.' : rs.pub ? 'Listed in the lobby. Share the code to invite a friend.' : 'Share the code with your opponent.')}</p>
               </>
             ) : <p className="room-wait" role="status"><Ico n="icon-timer" />{p.status || 'Waiting for host to start…'}</p>}

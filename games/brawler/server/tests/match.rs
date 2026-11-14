@@ -444,3 +444,33 @@ async fn host_leave_closes_room() {
     b.send(json!({ "t": "peek", "code": code })).unwrap();
     assert!(until(&mut br, "peek").await["room"].is_null());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn call_bot_flags_room_in_lobby() {
+    let url = serve().await;
+    let (a, mut ar) = client(&url).await;
+    a.send(json!({ "t": "host", "name": "A", "account": "a.testnet", "pub": true }))
+        .unwrap();
+    let code = until(&mut ar, "room").await["code"].clone();
+    let (l, mut lr) = client(&url).await;
+    l.send(json!({ "t": "lobby" })).unwrap();
+    assert_eq!(until(&mut lr, "lobby").await["rooms"][0]["wantsBot"], false);
+    a.send(json!({ "t": "callbot" })).unwrap();
+    assert_eq!(until(&mut lr, "lobby").await["rooms"][0]["wantsBot"], true);
+    let (b, mut br) = client(&url).await;
+    b.send(json!({ "t": "join", "code": code, "name": "Bot", "account": "bot-1.brawler" }))
+        .unwrap();
+    until(&mut br, "roomstate").await;
+    let row = loop {
+        let m = until(&mut lr, "lobby").await;
+        if m["rooms"][0]["players"].as_array().unwrap().len() == 2 {
+            break m;
+        }
+    };
+    assert_eq!(row["rooms"][0]["wantsBot"], false);
+    b.send(json!({ "t": "callbot" })).unwrap();
+    assert_eq!(
+        err(&mut br).await,
+        "Only a host waiting alone can call a bot"
+    );
+}
