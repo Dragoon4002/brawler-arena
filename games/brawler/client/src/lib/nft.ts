@@ -1,4 +1,4 @@
-import { useNearWallet } from 'near-connect-hooks';
+import { useNearWallet } from '@xyz/platform';
 import { sanitize, sanitizeSkills, SKILL_KINDS, type Monster, type Skill, type SkillKind } from './genes.ts';
 import { DEMO, demoMonsters } from './demo.ts';
 

@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import { NearProvider, useNearWallet } from 'near-connect-hooks';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { NearProvider, useNearWallet as useBaseWallet, type NearContextValue } from 'near-connect-hooks';
 import { nearToYocto, yoctoToNear } from 'near-api-js';
 
-export { NearProvider, useNearWallet };
+export { NearProvider, useBaseWallet, type NearContextValue };
+// lets an app swap in another signer (e.g. social login) under every useNearWallet caller
+export const WalletOverride = createContext<NearContextValue | null>(null);
+export function useNearWallet(): NearContextValue {
+  const base = useBaseWallet();
+  return useContext(WalletOverride) ?? base;
+}
 export const NETWORK = 'testnet' as const;
 export const PLATFORM_ID: string = process.env.NEXT_PUBLIC_PLATFORM_ID ?? 'v3.brawler-platform-5c8e2b.testnet';
 export const MARKET_URL: string = process.env.NEXT_PUBLIC_MARKET_URL ?? 'https://market.13-54-190-122.sslip.io';

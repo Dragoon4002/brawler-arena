@@ -1,5 +1,4 @@
-import { useNearWallet } from 'near-connect-hooks';
-import { fmt, PLATFORM_ID, toYocto, useBalance, usePlatform } from '@xyz/platform';
+import { fmt, PLATFORM_ID, toYocto, useBalance, useNearWallet, usePlatform } from '@xyz/platform';
 import { DEMO, DEMO_ACCOUNT, DEMO_BALANCE, demoArena } from './demo.ts';
 
 export { fmt, toYocto, usePlatform };
