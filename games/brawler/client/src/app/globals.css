@@ -596,3 +596,8 @@ input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-o
 .history .muted { color: var(--muted); font-size: 13px; }
 .chip.kind-tournament { background: var(--teal); color: var(--ink); }
 .chip.kind-staked { background: var(--ember); color: var(--ink); }
+.split:has(> .stat-tiles) { align-items: stretch; }
+.stat-tiles { grid-auto-rows: 1fr; }
+.stat-tile { align-content: center; }
+.split:has(> .stat-tiles) > .slab:first-child { display: flex !important; flex-direction: column; }
+.split:has(> .stat-tiles) > .slab:first-child > .btn:last-child { margin-top: auto; }
