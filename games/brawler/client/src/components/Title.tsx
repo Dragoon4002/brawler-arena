@@ -1,10 +1,8 @@
 import { useMemo, useState } from 'react';
-import { archetype } from '@/lib/genes.ts';
-import { STAGES, STAGE_IDS, type StageId } from '@/lib/stages.ts';
 import { DEMO } from '@/lib/demo.ts';
 import { fmt, useUnifiedBalance, useWallet } from '@/lib/near.ts';
 import { monsters } from '@/lib/store.ts';
-import { ArenaBackdrop, HubDialog, Ico, Logo, Portrait, STAGE_ICON, StageThumb, TYPE_ICON } from '@/components/ui.tsx';
+import { Ico, Logo, TitleArt } from '@/components/ui.tsx';
 import { FundsDialog } from '@/components/account/Funds.tsx';
 
 function HubBtn({ href, label, icon, badge, active, soon }: { href: string; label: string; icon: string; badge?: number; active?: boolean; soon?: boolean }) {
@@ -33,15 +31,11 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
   const list = useMemo(monsters, []);
   const { signedAccountId } = useWallet();
   const { balance } = useUnifiedBalance();
-  const [i, setI] = useState(0);
-  const [stage, setStage] = useState<StageId>('ember');
-  const [pop, setPop] = useState<'mon' | 'map' | 'funds' | null>(null);
-  const m = list[i];
+  const [pop, setPop] = useState<'funds' | null>(null);
   const wins = list.reduce((s, x) => s + x.record.w, 0), kos = list.reduce((s, x) => s + x.record.ko, 0);
-  const step = (d: number) => setI((i + d + list.length) % list.length);
   return (
     <div className={`hub ${children ? 'open' : ''}`}>
-      <ArenaBackdrop id={stage} className="hub-bg" />
+      <TitleArt className="hub-bg" />
       <header className="hub-top">
         <a href="/" aria-label="Home"><Logo className="hub-logo" /></a>
         <div className="hub-counters">
@@ -60,22 +54,6 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
         <HubBtn href="/market" label="Market" icon="coin-stack" soon />
       </nav>
 
-      <section className="hub-hero" aria-label="Your monster" inert={!!children}>
-        <div className="hub-tags">
-          <span className="hub-tag gen"><Ico n="dna" />Gen {m.gen}</span>
-          <span className="hub-tag rec"><Ico n="trophy" />{m.record.w}W · {m.record.l}L</span>
-          <span className="hub-tag"><Ico n={TYPE_ICON[archetype(m.dna)]} />{archetype(m.dna)}</span>
-        </div>
-        <button type="button" className="hub-mon" aria-label={`Choose monster, current ${m.name}`} onClick={() => setPop('mon')}>
-          <Portrait key={m.id} dna={m.dna} size={420} className="" />
-        </button>
-        <div className="hub-name">
-          {list.length > 1 && <button type="button" className="hub-arrow" onClick={() => step(-1)} aria-label="Previous monster">◀</button>}
-          <button type="button" className="hub-plate" onClick={() => setPop('mon')}><h1>{m.name}</h1><small>Change monster</small></button>
-          {list.length > 1 && <button type="button" className="hub-arrow" onClick={() => step(1)} aria-label="Next monster">▶</button>}
-        </div>
-      </section>
-
       <nav className="hub-side right" aria-label="Online">
         <HubBtn href="/lobby" label="Lobby" icon="icon-lobby" active={page === 'lobby'} />
         <HubBtn href="/tournaments" label="Cups" icon="trophy" active={page === 'tournaments'} />
@@ -90,44 +68,10 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
       )}
 
       <footer className="hub-bottom" inert={!!children}>
-        {/* ponytail: arena pick here only changes the backdrop; the room host picks the fight arena */}
-        <button type="button" className="hub-event" onClick={() => setPop('map')}>
-          <StageThumb id={stage} className="hub-event-thumb" />
-          <small>Arena · tap to change</small>
-          <b>{STAGES[stage].name}</b>
-          <span>{STAGES[stage].blurb}</span>
-        </button>
         <a className="hub-play" href="/play"><span><Ico n="icon-play" />Play</span></a>
       </footer>
 
-      {pop === 'mon' && (
-        <HubDialog title="Choose your monster" onClose={() => setPop(null)}>
-          <div className="hub-pick">
-            {list.map((x, j) => (
-              <button key={x.id} type="button" className="hub-card" aria-pressed={j === i} onClick={() => { setI(j); setPop(null); }}>
-                <Portrait dna={x.dna} size={220} className="" />
-                <b>{x.name}</b>
-                <span className="row-ico"><Ico n={TYPE_ICON[archetype(x.dna)]} />Gen {x.gen} · {archetype(x.dna)} · {x.record.w}W {x.record.l}L</span>
-              </button>
-            ))}
-          </div>
-          <a className="hub-link row-ico" href="/collection"><Ico n="icon-monster" />Manage collection</a>
-        </HubDialog>
-      )}
       {pop === 'funds' && <FundsDialog onClose={() => setPop(null)} />}
-      {pop === 'map' && (
-        <HubDialog title="Choose arena" onClose={() => setPop(null)}>
-          <div className="hub-pick maps">
-            {STAGE_IDS.map((id) => (
-              <button key={id} type="button" className="hub-card" aria-pressed={id === stage} onClick={() => { setStage(id); setPop(null); }}>
-                <StageThumb id={id} className="hub-card-thumb" />
-                <b className="row-ico"><Ico n={STAGE_ICON[id]} />{STAGES[id].name}</b>
-                <span>{STAGES[id].blurb}</span>
-              </button>
-            ))}
-          </div>
-        </HubDialog>
-      )}
     </div>
   );
 }

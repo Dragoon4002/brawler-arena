@@ -84,6 +84,35 @@ export function MonsterCard({ m, onClick, selected, href, extra, disabled }: { m
     : <button type="button" className="tile" aria-pressed={selected} disabled={disabled} onClick={onClick}>{body}</button>;
 }
 
+// Title-screen key art: 4 painted layers (public/title, split by sprites/title/layers.py) shifted for parallax.
+// Follows the pointer, drifts slowly when idle; static under reduced motion. Bleed (inset -40px) hides shifted edges.
+const TITLE_LAYERS = [['0-sky', 0], ['1-far', 8], ['2-mid', 18], ['3-front', 30]] as const;
+export function TitleArt({ className }: { className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (reduceMotion()) return;
+    const imgs = [...ref.current!.querySelectorAll('img')];
+    const aim = { x: 0, y: 0 }, cur = { x: 0, y: 0 };
+    let raf = 0, last = 0;
+    const onMove = (e: PointerEvent) => { aim.x = (e.clientX / innerWidth) * 2 - 1; aim.y = (e.clientY / innerHeight) * 2 - 1; last = performance.now(); };
+    const frame = (t: number) => {
+      const idle = t - last > 3000; // no pointer lately: slow figure-eight drift
+      const tx = idle ? Math.sin(t / 3200) * 0.6 : aim.x, ty = idle ? Math.sin(t / 1600) * 0.4 : aim.y;
+      cur.x += (tx - cur.x) * 0.06; cur.y += (ty - cur.y) * 0.06;
+      imgs.forEach((im, i) => { const k = TITLE_LAYERS[i][1]; im.style.transform = `translate(${-cur.x * k}px, ${-cur.y * k * 0.5}px)`; });
+      raf = requestAnimationFrame(frame);
+    };
+    addEventListener('pointermove', onMove);
+    raf = requestAnimationFrame(frame);
+    return () => { cancelAnimationFrame(raf); removeEventListener('pointermove', onMove); };
+  }, []);
+  return (
+    <div ref={ref} className={`title-art ${className ?? ''}`} aria-hidden="true">
+      {TITLE_LAYERS.map(([n]) => <img key={n} src={`/title/${n}.png`} alt="" draggable={false} />)}
+    </div>
+  );
+}
+
 export function ArenaBackdrop({ id, className }: { id: StageId; className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
