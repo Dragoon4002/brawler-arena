@@ -24,7 +24,7 @@ addEventListener('mousedown', (e) => {
 });
 addEventListener('mouseup', (e) => held.delete(`Mouse${e.button}`));
 addEventListener('contextmenu', (e) => { if (onArena(e)) e.preventDefault(); });
-addEventListener('blur', () => held.clear());
+addEventListener('blur', () => { held.clear(); touches.clear(); });
 
 function pad() {
   const g = navigator.getGamepads?.()[0];
@@ -43,8 +43,18 @@ function pad() {
   return b;
 }
 
+// On-screen touch pad: bits held per pointer, so move + attack fingers combine.
+const touches = new Map<number, number>();
+let touchTap = 0;
+export function setTouch(id: number, bits: number) {
+  touchTap |= bits & ~(touches.get(id) ?? 0);
+  if (bits) touches.set(id, bits); else touches.delete(id);
+}
+
 export function readInput() {
-  let b = pad();
+  let b = pad() | touchTap;
+  touchTap = 0;
+  for (const t of touches.values()) b |= t;
   for (const [code, bit] of Object.entries(KEYS)) if (held.has(code) || tapped.has(code)) b |= bit;
   tapped.clear();
   return b;
