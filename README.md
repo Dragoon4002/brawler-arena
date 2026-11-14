@@ -58,10 +58,11 @@ Every row names the place to check it: code, a contract method or a test.
 
 ## Try it: do X, see Y
 
-**A. No wallet, 1 minute.** Start the game and server first ([Run everything locally](#run-everything-locally); bots need `cd agents && npm start`).
+**A. No wallet, 1 minute (hosted, nothing to install).**
 
-1. Open `http://localhost:3000` → press **Practice vs bot** → you fight a bot right away. Keys: WASD, Space jump, J light, K heavy, L block, C dodge.
+1. Open https://13-54-190-122.sslip.io → press **Practice vs bot** → you fight a bot right away. Keys: WASD, Space jump, J light, K heavy, L block, C dodge.
 2. Press **Play** → create a free room → press **Call bot** → a bot joins with a "bot" chip → **Start fight** → online match through the server referee.
+3. **Play as guest** (hub, top right) → a funded guest account is created in your browser, no login. Money shows as coins; **Account → On-chain details** shows account ids, NEAR amounts and tx hashes for checking.
 
 **B. Google login (local, about 5 minutes).** NEAR Auth's shared testnet login accepts only `http://localhost:3000`, so open the game exactly there.
 
