@@ -72,10 +72,9 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState(load);
   const [open, setOpen] = useState(false);
   const value = useMemo(() => {
-    if (!FASTAUTH.enabled) return null;
     const signIn = async () => setOpen(true);
     if (!session) return { ...base, signIn };
-    const signOut = async () => { localStorage.removeItem(STORE); setSession(null); await auth().logout({ openUrl: false }).catch(() => {}); };
+    const signOut = async () => { localStorage.removeItem(STORE); setSession(null); if (FASTAUTH.enabled) await auth().logout({ openUrl: false }).catch(() => {}); };
     return overrideFor(base, session, signIn, signOut);
   }, [base, session]);
   const done = (s: Session) => { localStorage.setItem(STORE, JSON.stringify(s)); setSession(s); setOpen(false); };
@@ -95,7 +94,7 @@ function SocialDialog({ onClose, onWallet, onDone }: { onClose: () => void; onWa
   // checked up front so the click can open the Auth0 popup without awaiting anything first
   const [pre, setPre] = useState<{ ready: boolean; loggedIn: boolean } | null>(null);
   useEffect(() => {
-    Promise.all([fetch('/api/fastauth').then((r) => r.json()).then((j) => !!j.ready, () => false), auth().isLoggedIn()]).then(([ready, loggedIn]) => setPre({ ready, loggedIn }));
+    if (FASTAUTH.enabled) Promise.all([fetch('/api/fastauth').then((r) => r.json()).then((j) => !!j.ready, () => false), auth().isLoggedIn()]).then(([ready, loggedIn]) => setPre({ ready, loggedIn }));
   }, []);
   const fail = (e: unknown) => setStep({ s: 'error', msg: (e as Error).message || String(e) });
   const toAccount = async (accountId: string, pk: string) => {
@@ -127,8 +126,8 @@ function SocialDialog({ onClose, onWallet, onDone }: { onClose: () => void; onWa
     <HubDialog title="Sign in" onClose={onClose}>
       {step.s === 'choose' && (
         <div style={{ display: 'grid', gap: 12 }}>
-          <button type="button" className="btn alt" disabled={!pre} onClick={login}><span><Ico n="icon-wallet" />Continue with Google / email</span></button>
-          <p className="sub" style={{ margin: 0 }}>No seed phrase. Powered by NEAR Auth (testnet).</p>
+          <button type="button" className="btn alt" disabled={!FASTAUTH.enabled || !pre} onClick={login}><span><Ico n="icon-wallet" />Continue with Google / email</span></button>
+          <p className="sub" style={{ margin: 0 }}>{FASTAUTH.enabled ? 'No seed phrase. Powered by NEAR Auth (testnet).' : 'Works on localhost:3000 only'}</p>
           <button type="button" className="btn ghost" onClick={onWallet}><span><Ico n="icon-wallet" />Use a NEAR wallet</span></button>
         </div>
       )}
