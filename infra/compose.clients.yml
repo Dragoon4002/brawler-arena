@@ -2,6 +2,7 @@
 services:
   brawler-client:
     image: brawler-client
+    env_file: [{path: relayer.env, required: false}]
     restart: unless-stopped
 
   market:
