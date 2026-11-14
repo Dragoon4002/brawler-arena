@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Monster } from '@/lib/genes.ts';
-import { STAGES, type StageId } from '@/lib/stages.ts';
+import { STAGES, STAGE_IDS, type StageId } from '@/lib/stages.ts';
 import { getAudio, toggleMute } from '@/lib/audio.ts';
 import { DEMO_ROOMS, demoChat } from '@/lib/demo.ts';
 import { useArena, useSignMatch } from '@/lib/near.ts';
@@ -10,6 +10,8 @@ import { usePlayable } from '@/hooks/useMons.ts';
 import { asset, Ico } from '@/components/ui.tsx';
 import { RoomLobby } from '@/components/rooms/RoomLobby.tsx';
 import { go } from '@/lib/nav.ts';
+import { setTouch } from '@/lib/input.ts';
+import { IN } from '@/lib/sim/sim.ts';
 
 export type FightSetup =
   | { kind: 'host'; mon: Monster; stage: StageId; opts: HostOpts }
@@ -176,6 +178,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
   return (
     <div className="arena">
       <canvas ref={canvas} aria-label="Fight arena" />
+      {live && !over && <TouchPad />}
       <button type="button" className="chip sound-toggle row-ico" aria-pressed={muted} onClick={() => setMuted(toggleMute().muted)}>
         <Ico n={muted ? 'icon-sound-off' : 'icon-sound-on'} />{muted ? 'Sound off (M)' : 'Sound on (M)'}
       </button>
@@ -218,6 +221,89 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Practice: you (P1) vs the scripted bot, local only. No wallet, no server.
+let practiceMon: Monster | null = null;
+export const practice = (m: Monster) => { practiceMon = m; go('/practice'); };
+const pick = <T,>(l: T[]) => l[Math.floor(Math.random() * l.length)];
+
+export function Practice() {
+  const [n, setN] = useState(0);
+  return <PracticeFight key={n} again={() => setN((x) => x + 1)} />;
+}
+
+function PracticeFight({ again }: { again: () => void }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const [over, setOver] = useState<number | null>(null);
+  const [names, setNames] = useState<string[]>([]);
+  const [muted, setMuted] = useState(getAudio().muted);
+  useEffect(() => {
+    const list = monsters(), me = practiceMon ?? list[0];
+    const players = [asPlayer(me), asPlayer(pick(list.filter((m) => m.id !== me.id)) ?? me)];
+    setNames(players.map((p) => p.name));
+    const g = startBotFight(canvas.current!, players, pick(STAGE_IDS), { result: (w) => setTimeout(() => setOver(w), 1000) }, true);
+    const key = (e: KeyboardEvent) => {
+      if (e.code === 'Escape') go('/');
+      if (e.code === 'KeyM') setMuted(toggleMute().muted);
+      if (e.code === 'KeyR') again();
+    };
+    addEventListener('keydown', key);
+    return () => { removeEventListener('keydown', key); g.stop(); };
+  }, []);
+  return (
+    <div className="arena">
+      <canvas ref={canvas} aria-label="Practice arena" />
+      {over === null && <TouchPad />}
+      <button type="button" className="chip sound-toggle row-ico" aria-pressed={muted} onClick={() => setMuted(toggleMute().muted)}>
+        <Ico n={muted ? 'icon-sound-off' : 'icon-sound-on'} />{muted ? 'Sound off (M)' : 'Sound on (M)'}
+      </button>
+      <span className="chip practice-hint">Practice: nothing on-chain</span>
+      {over !== null && (
+        <div className="arena-overlay">
+          <div className="slab waiting" role="status">
+            <img className="title-img" src={asset(over === 0 ? 'title-victory' : 'title-defeat')} alt={over === 0 ? 'Victory' : 'Defeat'} />
+            <p><b>{names[over]}</b> wins by three knockouts.</p>
+            <div className="end-actions">
+              <button className="btn" onClick={again}><span><Ico n="icon-refresh" />Play again (R)</span></button>
+              <a className="btn alt" href="/"><span><Ico n="icon-back" />Back (Esc)</span></a>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Virtual pad for touch screens: stick (move, up = jump) + action buttons, each finger tracked by pointerId.
+const coarse = () => matchMedia('(pointer: coarse)').matches;
+const ACTIONS = [['Light', IN.LIGHT], ['Heavy', IN.HEAVY], ['Block', IN.BLOCK], ['Jump', IN.JUMP], ['Dodge', IN.DODGE]] as const;
+function TouchPad() {
+  const [on, setOn] = useState(coarse);
+  useEffect(() => {
+    if (on) return;
+    const t = () => setOn(true);
+    addEventListener('touchstart', t, { once: true });
+    return () => removeEventListener('touchstart', t);
+  }, [on]);
+  if (!on) return null;
+  const off = (e: React.PointerEvent) => setTouch(e.pointerId, 0);
+  const stick = (e: React.PointerEvent<HTMLElement>) => {
+    if (e.type === 'pointermove' && !e.buttons) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const dx = (e.clientX - r.left) / r.width - 0.5, dy = (e.clientY - r.top) / r.height - 0.5;
+    setTouch(e.pointerId, (dx < -0.15 ? IN.LEFT : dx > 0.15 ? IN.RIGHT : 0) | (dy < -0.25 ? IN.UP | IN.JUMP : dy > 0.25 ? IN.DOWN : 0));
+  };
+  return (
+    <div className="touchpad" onContextMenu={(e) => e.preventDefault()}>
+      <div className="touch-stick" aria-hidden onPointerDown={stick} onPointerMove={stick} onPointerUp={off} onPointerCancel={off} />
+      <div className="touch-btns">
+        {ACTIONS.map(([label, bit]) => (
+          <button key={label} type="button" className="touch-btn" onPointerDown={(e) => setTouch(e.pointerId, bit)} onPointerUp={off} onPointerCancel={off}>{label}</button>
+        ))}
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { usePlayable } from '@/hooks/useMons.ts';
 import { RoomList } from '@/components/rooms/Lobby.tsx';
 import { CreateRoom, JoinByCode } from '@/components/rooms/OnlineStart.tsx';
 import { Ico, Portrait } from '@/components/ui.tsx';
+import { practice } from '@/components/Arena.tsx';
 
 function Fighter({ mon, groups, onPick }: { mon: Monster; groups: [string, Monster[]][]; onPick: (id: string) => void }) {
   return (
@@ -11,6 +12,7 @@ function Fighter({ mon, groups, onPick }: { mon: Monster; groups: [string, Monst
       <Portrait dna={mon.dna} size={150} />
       <b>{mon.name}</b>
       <span className="tile-meta">{archetype(mon.dna)}</span>
+      <button type="button" className="btn ghost" onClick={() => practice(mon)}><span><Ico n="ko" />Practice vs bot</span></button>
       {groups.map(([title, list]) => list.length > 0 && (
         <div key={title} className="roster">
           <p className="roster-title">{title}</p>

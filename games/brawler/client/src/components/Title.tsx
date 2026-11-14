@@ -68,6 +68,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
       )}
 
       <footer className="hub-bottom" inert={!!children}>
+        <a className="btn alt hub-practice" href="/practice"><span><Ico n="ko" />Practice vs bot</span></a>
         <a className="hub-play" href="/play"><span><Ico n="icon-play" />Play</span></a>
       </footer>
 

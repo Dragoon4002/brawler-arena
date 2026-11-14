@@ -333,16 +333,6 @@ input[type='range'], input[type='checkbox'] { accent-color: var(--ember); border
   .hub.open .hub-btn { width: 62px; font-size: 12px; }
 }
 
-.godot-page { display: grid; gap: 16px; padding: 16px; min-height: 100dvh; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: 'head head' 'stage panel'; }
-.godot-head { grid-area: head; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.godot-stage { grid-area: stage; display: grid; place-items: center; min-height: 0; }
-.godot-stage iframe { width: 100%; aspect-ratio: 16 / 9; max-height: calc(100dvh - 120px); border: 4px solid var(--ink); border-radius: 14px; background: #000; }
-.godot-empty { max-width: 560px; display: grid; gap: 8px; }
-.godot-empty code { overflow-wrap: anywhere; }
-.godot-panel { grid-area: panel; display: grid; gap: 12px; align-content: start; min-height: 0; }
-.godot-btns { display: grid; gap: 10px; }
-.godot-log { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; max-height: 40dvh; overflow-y: auto; font: 12px/1.4 ui-monospace, monospace; color: var(--muted); overflow-wrap: anywhere; }
-@media (max-width: 860px) { .godot-page { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'head' 'stage' 'panel'; } }
 
 /* Play: Create | Join tabs */
 .tabs { display: flex; gap: 8px; margin-bottom: -24px; padding-left: 12px; position: relative; z-index: 1; }
@@ -589,3 +579,15 @@ a.lb-who:hover b { color: var(--gold); text-decoration: underline; }
 .funds-amount b { font-weight: 400; color: var(--gold); }
 .funds-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .funds-actions .btn { width: 100%; }
+
+.hub-practice { --bh: 64px; font-size: 24px; align-self: center; }
+.practice-hint { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); font-size: 12px; opacity: 0.85; pointer-events: none; white-space: nowrap; }
+
+.touchpad { position: fixed; inset: auto 0 0; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.touchpad > * { pointer-events: auto; touch-action: none; }
+.touch-stick { width: 132px; height: 132px; border-radius: 50%; background: radial-gradient(circle, rgb(46 35 80 / 0.7) 0 22%, rgb(12 8 22 / 0.45) 23%); border: 3px solid rgb(255 209 102 / 0.6); }
+.touch-btns { display: grid; grid-template-columns: repeat(3, 56px); gap: 8px; direction: rtl; }
+.touch-btn { width: 56px; height: 56px; border-radius: 50%; padding: 0; font: 13px var(--font-display); color: var(--cream); background: rgb(46 35 80 / 0.6); border: 3px solid rgb(12 8 22 / 0.8); box-shadow: 0 3px 0 rgb(12 8 22 / 0.6); touch-action: none; }
+.touch-btn:first-child { background: rgb(255 138 61 / 0.65); color: var(--ink); }
+.touch-btn:nth-child(2) { background: rgb(255 209 102 / 0.65); color: var(--ink); }
+.touch-btn:active { transform: translateY(2px); filter: brightness(1.2); }

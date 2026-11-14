@@ -98,7 +98,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
   }
   raf = requestAnimationFrame(frame);
   music(stage);
-  (globalThis as any).__net = () => ({ net, link, frame: state.frame }); // debug/test hook
+  (globalThis as any).__net = () => ({ net, link, frame: state.frame, state }); // debug/test hook
 
   return {
     attach(n: Netplay, label: string) { net = n; link = label; },
@@ -257,9 +257,9 @@ export function startSpectate(canvas: HTMLCanvasElement, code: string, hooks: Ho
   };
 }
 
-export function startBotFight(canvas: HTMLCanvasElement, players: Player[], stage: StageId, hooks: Hooks = {}) {
-  const game = loop(canvas, players, -2, stage, hooks);
-  const human = params.has('play'); // ?play: you drive P1 with the keyboard/pad (local trial)
+// human: you drive P1 with keyboard/pad/touch (practice, or ?play on demo fights)
+export function startBotFight(canvas: HTMLCanvasElement, players: Player[], stage: StageId, hooks: Hooks = {}, human = params.has('play')) {
+  const game = loop(canvas, players, human ? 0 : -2, stage, hooks);
   game.feed((advance, s) => advance([human ? readInput() : bot(s, 0), bot(s, 1)]));
   hooks.started?.(players, -2);
   return game;
