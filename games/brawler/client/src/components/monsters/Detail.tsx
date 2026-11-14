@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react';
 import { archetype, type Dna } from '@/lib/genes.ts';
 import { fmt, toYocto, useWallet } from '@/lib/near.ts';
 import { useMonsters, type HistoryEntry, type NftMonster } from '@/lib/nft.ts';
-import { when } from '@/lib/format.ts';
+import { short, when } from '@/lib/format.ts';
 import { useAct, useLoad } from '@/hooks/async.ts';
 import { useMons } from '@/hooks/useMons.ts';
 import { Ico, Portrait, Stats, TYPE_ICON } from '@/components/ui.tsx';
@@ -70,6 +70,40 @@ function Trade({ m, me, reload }: { m: NftMonster; me: string; reload: () => voi
   );
 }
 
+function VaultPanel({ m, me }: { m: NftMonster; me: string }) {
+  const api = useMonsters();
+  const { signIn } = useWallet();
+  const [v, reload] = useLoad(() => api.vault(m.id), [m.id]);
+  const act = useAct(reload);
+  const [amt, setAmt] = useState('0.1');
+  const owner = me !== '' && m.owner === me;
+  if (!v) return null;
+  return (
+    <section className="slab" aria-label="Vault" style={{ display: 'grid', gap: 12 }}>
+      <h2 className="row-ico"><Ico n="coin-stack" />Monster vault</h2>
+      <p className="sub">Rent earnings and deposits stay in the NFT. Whoever holds it can withdraw. Frozen while it is listed, so a buyer gets what they see.</p>
+      <dl className="kv">
+        <dt>Balance</dt><dd className="row-ico"><Ico n="coin" />{fmt(v.balance)} NEAR</dd>
+        <dt>Earned</dt><dd>{fmt(v.earned)} NEAR</dd>
+        <dt>Paid out</dt><dd>{fmt(v.paid_out)} NEAR</dd>
+      </dl>
+      <div className="row">
+        {owner && <button className="btn" disabled={act.busy || !!m.price || v.balance === '0'} onClick={() => act.run(() => api.vaultWithdraw(m.id), 'Withdrawn to your wallet.')}><span><Ico n="coin" />Withdraw all</span></button>}
+        <label className="row"><input type="number" min="0" step="0.1" value={amt} onChange={(e) => setAmt(e.target.value)} aria-label="Deposit in NEAR" style={{ width: 90 }} /> NEAR</label>
+        <button className="btn ghost" disabled={act.busy || !(+amt > 0)} onClick={() => (me ? act.run(() => api.vaultDeposit(m.id, toYocto(amt)), 'Vault funded.') : signIn())}><span>Fund vault</span></button>
+      </div>
+      {v.log.length > 0 && (
+        <ul className="hist">
+          {[...v.log].reverse().map((e, i) => (
+            <li key={i}><span className="chip">{e.kind}</span><span>{short(e.who)}</span>{e.amount !== '0' && <span>{fmt(e.amount)} NEAR</span>}<small>{when(e.at_ms)}</small></li>
+          ))}
+        </ul>
+      )}
+      {act.msg && <p className="note" role="status">{act.msg}</p>}
+    </section>
+  );
+}
+
 function History({ rows }: { rows: HistoryEntry[] }) {
   const vs = useMons(rows.map((h) => h.vs ?? '').filter(Boolean));
   return rows.length === 0 ? <p className="sub">No fights recorded yet.</p> : (
@@ -108,6 +142,7 @@ export function Detail({ id }: { id: string }) {
         </div>
         <div style={{ display: 'grid', gap: 20 }}>
           <Trade m={m} me={me} reload={reload} />
+          <VaultPanel m={m} me={me} />
           <section className="slab"><h2 className="row-ico"><Ico n="icon-play" />Fight stats</h2><div style={{ marginTop: 14 }}><Stats dna={m.dna} /></div></section>
           <section className="slab">
             <h2 className="row-ico"><Ico n="trophy" />Career</h2>

@@ -156,3 +156,6 @@ withdraw_owed, void semi advances seat with more KOs, champion gets pot - 0.1%, 
 | delete c.brawler-monsters-5c8e2b.testnet | [AuzjkJ3oNP…](https://testnet.nearblocks.io/txns/AuzjkJ3oNP5yMiRnFSFZ4c2SPE2P8S4rt2PXtoWxqnQ8) |
 | delete d.brawler-monsters-5c8e2b.testnet | [GkrqDUH1Jy…](https://testnet.nearblocks.io/txns/GkrqDUH1JyaBDgf8i3pdDHucbdUSeY1TFeRS9pgb9Fdq) |
 | delete e.brawler-monsters-5c8e2b.testnet | [GCWmWzPPK9…](https://testnet.nearblocks.io/txns/GCWmWzPPK9jXWhH1wtDEjBruKYemUh2C7cSeNduuDtvw) |
+
+| vault upgrade: deploy v2.brawler-monsters-5c8e2b.testnet (in place, no migration) | — |
+| vault_deposit 0.01 NEAR into monster 0 (trader1) | [9zgm8gWQ8t…](https://testnet.nearblocks.io/txns/9zgm8gWQ8tYdeyqavyngnauJBf4PGK9bm3LcDqKyUgrs) |

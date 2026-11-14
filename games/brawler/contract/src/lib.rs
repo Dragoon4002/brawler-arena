@@ -1,7 +1,7 @@
 //! The arena contract (`arena`) locks monsters into matches and writes results (record, history,
 //! season wins, titles). A busy monster (locked or rented out) cannot move.
 //!
-//! Money: buy/rent pay out with push transfers; a failed payout is credited to the payee's `owed`
+//! Money: sales pay out with push transfers; net rent and deposits accrue to the monster's vault (holder withdraws); a failed payout is credited to the payee's `owed`
 //! balance, which they pull with `withdraw_owed`. Minting (hatch/breed) is paid by the caller: storage is
 //! measured and any excess deposit refunded. Other storage (history, titles, rentals) is paid by
 //! the contract balance.
@@ -198,6 +198,30 @@ pub struct Monsters {
     prices: LookupMap<String, Vec<(u64, U128)>>,
 }
 
+const VAULT_LOG: usize = 30;
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone, Default)]
+pub struct Vault {
+    pub balance: U128,
+    pub earned: U128,
+    pub paid_out: U128,
+    pub log: Vec<VaultEntry>, // newest last, capped
+}
+
+#[near(serializers = [borsh, json])]
+#[derive(Clone)]
+pub struct VaultEntry {
+    pub kind: String,
+    pub who: AccountId,
+    pub amount: U128,
+    pub at_ms: u64,
+}
+
+fn vault_key(id: &TokenId) -> Vec<u8> {
+    [b"vault:".as_slice(), id.as_bytes()].concat()
+}
+
 fn now_ms() -> u64 {
     env::block_timestamp_ms()
 }
@@ -309,6 +333,7 @@ impl Monsters {
         require!(!m.busy(now_ms()), "Monster is busy");
         self.tokens.internal_transfer(&seller, &buyer, &token_id, None, None); // emits nft_transfer
         self.clear_market(&token_id);
+        self.vault_note(&token_id, "sale", &buyer, price);
 
         let fee = price * self.market_fee_bps as u128 / BPS;
         let royalty =
@@ -355,10 +380,38 @@ impl Monsters {
         self.m_mut(&token_id).rental = Some(Rental { renter: renter.clone(), until_ms: now + days as u64 * DAY_MS });
         let list = self.rented_by.entry(renter.clone()).or_default();
         list.retain(|t| self.monsters.get(t).and_then(|m| m.rented(now)) == Some(&renter));
-        list.push(token_id);
+        list.push(token_id.clone());
         let fee = amount * self.rent_fee_bps as u128 / BPS;
         self.treasury += fee;
-        self.pay(owner, amount - fee);
+        self.vault_note(&token_id, "rent", &renter, amount - fee);
+    }
+
+    /// Anyone can fund a monster; the money belongs to whoever holds the token.
+    #[payable]
+    pub fn vault_deposit(&mut self, token_id: String) {
+        self.owner_of(&token_id);
+        let amount = env::attached_deposit().as_yoctonear();
+        require!(amount > 0, "Attach NEAR");
+        self.vault_note(&token_id, "deposit", &env::predecessor_account_id(), amount);
+    }
+
+    /// Current holder only. Frozen while listed, so a buyer gets the vault they saw.
+    #[payable]
+    pub fn vault_withdraw(&mut self, token_id: String, amount: Option<U128>) -> U128 {
+        assert_one_yocto();
+        self.only_token_owner(&token_id);
+        require!(self.get(&token_id).price.is_none(), "Vault frozen while listed");
+        let bal = self.vault(&token_id).balance.0;
+        let amount = amount.map_or(bal, |a| a.0);
+        require!(amount > 0 && amount <= bal, "Bad amount");
+        let who = env::predecessor_account_id();
+        self.vault_note(&token_id, "withdraw", &who, amount);
+        self.pay(who, amount);
+        U128(amount)
+    }
+
+    pub fn vault_of(&self, token_id: String) -> Vault {
+        self.vault(&token_id)
     }
 
     /// Payout result: a failed transfer is credited to the payee's `owed` instead of vanishing.
@@ -593,7 +646,7 @@ impl Monsters {
 impl NonFungibleTokenCore for Monsters {
     #[payable]
     fn nft_transfer(&mut self, receiver_id: AccountId, token_id: TokenId, approval_id: Option<u64>, memo: Option<String>) {
-        self.before_transfer(&token_id);
+        self.before_transfer(&token_id, &receiver_id);
         self.tokens.nft_transfer(receiver_id, token_id, approval_id, memo)
     }
 
@@ -606,7 +659,7 @@ impl NonFungibleTokenCore for Monsters {
         memo: Option<String>,
         msg: String,
     ) -> PromiseOrValue<bool> {
-        self.before_transfer(&token_id);
+        self.before_transfer(&token_id, &receiver_id);
         self.tokens.nft_transfer_call(receiver_id, token_id, approval_id, memo, msg)
     }
 
@@ -625,13 +678,14 @@ impl NonFungibleTokenResolver for Monsters {
         token_id: TokenId,
         approved_account_ids: Option<HashMap<AccountId, u64>>,
     ) -> bool {
-        let kept = self.tokens.nft_resolve_transfer(previous_owner_id, receiver_id, token_id.clone(), approved_account_ids);
+        let kept = self.tokens.nft_resolve_transfer(previous_owner_id.clone(), receiver_id, token_id.clone(), approved_account_ids);
         if !kept {
             // receiver may have listed / rented it out before it bounced back.
             // ponytail: rent paid meanwhile went to the receiver; the renter loses the rest of it.
             // A lock taken by the receiver meanwhile stays until the arena unlocks it.
             self.clear_market(&token_id);
             self.m_mut(&token_id).rental = None;
+            self.vault_note(&token_id, "returned", &previous_owner_id, 0);
         }
         kept
     }
@@ -746,9 +800,34 @@ impl Monsters {
             .detach();
     }
 
-    fn before_transfer(&mut self, id: &TokenId) {
+    fn before_transfer(&mut self, id: &TokenId, to: &AccountId) {
         require!(!self.get(id).busy(now_ms()), "Monster is busy");
         self.clear_market(id);
+        self.vault_note(id, "transfer", to, 0);
+    }
+
+    fn vault(&self, id: &TokenId) -> Vault {
+        env::storage_read(&vault_key(id)).map(|b| near_sdk::borsh::from_slice(&b).unwrap()).unwrap_or_default()
+    }
+
+    fn vault_note(&self, id: &TokenId, kind: &str, who: &AccountId, amount: u128) {
+        let mut v = self.vault(id);
+        match kind {
+            "rent" | "deposit" => {
+                v.balance.0 += amount;
+                v.earned.0 += amount;
+            }
+            "withdraw" => {
+                v.balance.0 -= amount;
+                v.paid_out.0 += amount;
+            }
+            _ => {}
+        }
+        v.log.push(VaultEntry { kind: kind.into(), who: who.clone(), amount: U128(amount), at_ms: now_ms() });
+        if v.log.len() > VAULT_LOG {
+            v.log.remove(0);
+        }
+        env::storage_write(&vault_key(id), &near_sdk::borsh::to_vec(&v).unwrap());
     }
 
     fn clear_market(&mut self, id: &TokenId) {

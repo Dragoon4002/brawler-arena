@@ -327,7 +327,8 @@ fn rented() -> Monsters {
 #[test]
 fn rent_pays_owner_and_gives_fight_rights() {
     let mut c = rented();
-    assert_eq!(transfers(), vec![("alice".to_string(), 2 * N - 2 * N / 40)]);
+    assert!(transfers().is_empty()); // earnings stay in the monster's vault
+    assert_eq!(c.vault_of("0".into()).balance.0, 2 * N - 2 * N / 40);
     assert_eq!(c.config().treasury.0, 2 * N / 40);
     let m = c.get_monster("0".into()).unwrap();
     assert_eq!(m.rental.as_ref().unwrap().until_ms, T0 + 2 * DAY_MS);
@@ -1009,4 +1010,72 @@ fn presale_needs_price_plus_storage() {
     let id = c.create_presale(0, U128(P), 0, None, None, None, None);
     as_("alice", 2 * P);
     c.buy_presale(id, 2);
+}
+
+#[test]
+fn rent_accrues_to_vault_and_holder_withdraws() {
+    let mut c = rented();
+    let net = 2 * N - 2 * N / 40;
+    as_("alice", 1);
+    assert_eq!(c.vault_withdraw("0".into(), Some(U128(N))).0, N);
+    assert_eq!(transfers(), vec![("alice".to_string(), N)]);
+    as_("alice", 1);
+    c.vault_withdraw("0".into(), None);
+    let v = c.vault_of("0".into());
+    assert_eq!((v.balance.0, v.earned.0, v.paid_out.0), (0, net, net));
+    let kinds: Vec<_> = v.log.iter().map(|e| e.kind.as_str()).collect();
+    assert_eq!(kinds, ["rent", "withdraw", "withdraw"]);
+}
+
+#[test]
+fn vault_moves_with_sale_and_deposit_mid_sale_goes_to_buyer() {
+    let mut c = with_starters();
+    as_("carol", N);
+    c.vault_deposit("0".into());
+    as_("alice", 1);
+    c.list("0".into(), U128(5 * N));
+    as_("carol", N); // payout lands while the sale is open
+    c.vault_deposit("0".into());
+    as_("dex", 5 * N);
+    c.buy("0".into());
+    let v = c.vault_of("0".into());
+    assert_eq!(v.balance.0, 2 * N);
+    assert_eq!(v.log.last().map(|e| (e.kind.as_str(), e.who.clone())), Some(("sale", acc("dex"))));
+    as_("dex", 1);
+    c.vault_withdraw("0".into(), None);
+    assert_eq!(transfers(), vec![("dex".to_string(), 2 * N)]);
+}
+
+#[test]
+#[should_panic(expected = "Not your monster")]
+fn old_holder_cannot_withdraw_after_transfer() {
+    let mut c = with_starters();
+    as_("carol", N);
+    c.vault_deposit("0".into());
+    give(&mut c, "alice", "bob", "0");
+    assert_eq!(c.vault_of("0".into()).log.last().unwrap().who, acc("bob"));
+    as_("alice", 1);
+    c.vault_withdraw("0".into(), None);
+}
+
+#[test]
+#[should_panic(expected = "Vault frozen while listed")]
+fn listed_vault_is_frozen() {
+    let mut c = with_starters();
+    as_("carol", N);
+    c.vault_deposit("0".into());
+    as_("alice", 1);
+    c.list("0".into(), U128(5 * N));
+    as_("alice", 1);
+    c.vault_withdraw("0".into(), None);
+}
+
+#[test]
+#[should_panic(expected = "Bad amount")]
+fn cannot_overdraw_vault() {
+    let mut c = with_starters();
+    as_("carol", N);
+    c.vault_deposit("0".into());
+    as_("alice", 1);
+    c.vault_withdraw("0".into(), Some(U128(N + 1)));
 }

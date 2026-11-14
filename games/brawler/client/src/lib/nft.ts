@@ -19,6 +19,7 @@ export type Rarity = 'Common' | 'Rare' | 'Epic';
 export interface SkillType { id: number; name: string; kind: SkillKind; mag: number; rarity: Rarity; media?: string }
 export interface OwnedSkill extends SkillType { free: number; listed: number }
 export interface HistoryEntry { match_id: number; vs: string | null; won: boolean | null; kos: number; ms: number; tournament: number | null }
+export interface Vault { balance: string; earned: string; paid_out: string; log: { kind: string; who: string; amount: string; at_ms: number }[] }
 export interface ConfigView { owner: string; arena: string; treasury: string; breed_fee: string; market_fee_bps: number; royalty_bps: number; rent_fee_bps: number }
 
 export type NftMonster = Monster & {
@@ -71,6 +72,9 @@ export interface MonstersApi {
   skillTypes(): Promise<SkillType[]>;
   skills(): Promise<OwnedSkill[]>; // your balances (free units; equipped ones sit on the monster)
   equip(id: string, skillIds: number[]): Promise<unknown>; // replaces the whole loadout
+  vault(id: string): Promise<Vault>;
+  vaultDeposit(id: string, yocto: string): Promise<unknown>;
+  vaultWithdraw(id: string): Promise<unknown>;
 }
 
 export function useMonsters(): MonstersApi {
@@ -124,5 +128,8 @@ export function useMonsters(): MonstersApi {
       return joinOwned(rows, types);
     },
     equip: (id, skillIds) => call('equip', { token_id: id, skills: skillIds }, '1', GAS_X),
+    vault: (id) => view<Vault>('vault_of', { token_id: id }),
+    vaultDeposit: (id, yocto) => call('vault_deposit', { token_id: id }, yocto),
+    vaultWithdraw: (id) => call('vault_withdraw', { token_id: id }, '1', GAS_X),
   };
 }

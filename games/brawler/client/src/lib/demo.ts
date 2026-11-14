@@ -126,6 +126,9 @@ export const demoMonsters: MonstersApi = {
   rentOffers: () => wait(NFTS.filter((m) => m.rentOffer).map((m) => ({ ...m }))),
   owed: () => wait('0'),
   withdrawOwed: () => sent('owed NEAR sent to your wallet'),
+  vault: () => wait({ balance: '0', earned: '0', paid_out: '0', log: [] }),
+  vaultDeposit: () => sent('vault funded'),
+  vaultWithdraw: () => sent('vault withdrawn'),
   skillTypes: () => wait(SKILL_TYPES),
   skills: () => wait(SKILL_TYPES.filter((t) => FREE[t.id]).map((t) => ({ ...t, free: FREE[t.id], listed: 0 }))),
   equip: (id, ids) => mutate('skills equipped', () => {

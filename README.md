@@ -49,7 +49,8 @@ Every row names the place to check it: code, a contract method or a test.
 | NEAR Intents | Account → Deposit / withdraw → **Add funds from any chain**: live 1Click token list and `dry: true` quote. Mainnet only, so funding is disabled on testnet (`games/brawler/client/src/lib/intents.ts`) |
 | NFT holds inventory | Equipped skill units leave the owner's free balance and live on the monster; they move with it on `nft_transfer` / `buy` |
 | NFT carries credentials | Win/loss/KO record, titles and the last 50 matches are stored on the token (`get_monster`) |
-| NFT grants access rights and earns | `offer_rent` / `rent(days)`: the renter may fight with it, the owner earns the rent; the breeder earns 5% on every resale |
+| NFT grants access rights | `offer_rent` / `rent(days)`: the renter may fight with it |
+| NFT holds money (vault) | Rent earnings and deposits accrue to the monster, not the owner: `vault_of`, `vault_deposit`, `vault_withdraw`. The current holder withdraws; frozen while listed. Monster page → **Monster vault** shows balance, earned, paid out and a per-NFT ledger (rent, deposit, withdraw, sale, transfer) |
 | NFT can't be sold out from under a fight | The platform `lock`s the monster for a match; tests `lock_blocks_transfer_until_unlock`, `stale_unlock_keeps_newer_lock`, `failed_lock_recredits_without_unlock` |
 
 ## Try it: do X, see Y
@@ -96,13 +97,15 @@ cd market && bun install && bun dev     # :3100
 
 **E. Spectator market.** From another browser: **Lobby** → **Watch** a live staked room → buy "A wins" or "B wins" → after the fight, **Account → Claims** pays out.
 
+**F. NFT vault.** Open a monster page → **Monster vault** → **Fund vault** 0.1 NEAR → balance and the ledger show a `deposit`. **Withdraw all** → `withdraw`, paid out rises. List it for sale → Withdraw is disabled (the contract also rejects it). A buyer who buys gets the vault; the old owner's withdraw fails. Rent it out → the net rent lands in the vault, not the owner's account. CLI: `near contract call-function as-read-only v2.brawler-monsters-5c8e2b.testnet vault_of json-args '{"token_id":"0"}' network-config testnet now`.
+
 ## Game loop
 
 | Every | The player does | The economy moves |
 |---|---|---|
 | ~30 s | One exchange in a fight: dodge, hit, recover. Spectators trade in the fight's order book. | Equipped skills (Air Jump, Lifesteal, Quick Dodge, Second Wind, stat boosts) decide exchanges. Bet prices move with every hit. |
 | ~5 min | One staked match (3 stocks), claim the pot, then visit the Shop: mint a presale skill, buy from a merchant or a player, re-equip. | The pot settles on-chain. Merchant asks fall when stock piles up and rise when it sells out. Presales sell down their caps. |
-| Session | Climb the leaderboard, enter a cup, breed a stronger monster, rent one out or sell it. | Rent goes to owners, breeders earn 5% royalties, creators earn skill royalties, tournament pots pay winners. |
+| Session | Climb the leaderboard, enter a cup, breed a stronger monster, rent one out or sell it. | Rent fills the monster's vault, breeders earn 5% royalties, creators earn skill royalties, tournament pots pay winners. |
 
 ## Track: Games With Real Economies (`games`)
 
@@ -126,9 +129,11 @@ Each monster is a NEP-171/177/181 NFT that does more than hold an image:
 | **Holds inventory** | Up to 3 equipped NEP-245 skill units are stored on the monster and move with it on `nft_transfer` and `buy`. The new owner can unequip them into their own balance. |
 | **Carries credentials** | On-chain win/loss/KO record, titles, season wins and the last 50 matches (opponent, result, KOs, time, tournament) are written by `report_result` and read by `get_monster`. |
 | **Grants access rights** | `rent(days)` gives the renter the right to enter staked matches with it. The platform's `lock` accepts the renter, and the rental cap bounds it. |
-| **Earns** | Rent is paid to the owner. The breeder earns 5% on every resale of a monster they bred (`buy_pays_seller_royalty_and_fee`). |
+| **Holds money** | Each monster has an on-chain vault keyed by its token id. Net rent (`rent`) and anyone's `vault_deposit` land in it. Only the current holder can `vault_withdraw`, so the money moves with the token on `nft_transfer` and `buy`. |
+| **Earns** | Rent accrues to the vault. The breeder earns 5% on every resale of a monster they bred (`buy_pays_seller_royalty_and_fee`). |
+| **Has a ledger** | `vault_of` returns balance, total earned, total paid out and the last 30 entries: `rent`, `deposit`, `withdraw`, `sale` (buyer, price), `transfer` (new holder), `returned`. |
 | **Is dynamic** | DNA is generated on-chain (`hatch_starters`, `breed` mixes the parents) and sets fight stats. Record, titles, loadout, lock and rental state change after mint. |
-| **Has a history view** | Account → Match history, player profiles, `/replay/<id>`. |
+| **Has a history view** | Monster page → Monster vault (earnings, payouts, holders) and Fight history; Account → Match history, `/replay/<id>`. |
 
 ### Transfer threat model: how a seller could try to keep value, and what stops it
 
@@ -142,6 +147,11 @@ Each monster is a NEP-171/177/181 NFT that does more than hold an image:
 | A bounced `nft_transfer_call` leaves a stale rental | The rental is cleared on bounce | `bounced_transfer_call_clears_rental` |
 | Renter sells or re-lists it | The renter can't list or transfer | `renter_cannot_list` |
 | Double-rent | Rejected | `no_double_rent` |
+| Old holder withdraws the vault after selling | Withdraw checks the current owner | `old_holder_cannot_withdraw_after_transfer` |
+| Seller drains the vault while the buyer is paying for it | Vault is frozen while listed; a buy only works while listed | `listed_vault_is_frozen` |
+| A payout lands mid-sale and the seller keeps it | Deposits during the listing stay in the vault and go to the buyer | `vault_moves_with_sale_and_deposit_mid_sale_goes_to_buyer` |
+| Withdraw more than the vault holds | Rejected | `cannot_overdraw_vault` |
+| Rent paid to the owner's account, not the NFT | Net rent is credited to the vault | `rent_accrues_to_vault_and_holder_withdraws` |
 
 ### Not built (honest scope)
 
@@ -156,8 +166,8 @@ Games track:
 
 NFTs track:
 
-- The track's reference idea, **one sub-account wallet per NFT** (a vault that moves with the token), is designed in `games/brawler/plans/tracks.md` but **not implemented**. Earnings go to the owner's account.
-- **No holder-gated page.** Holder-only actions (equip, list, rent, breed) are gated on-chain by ownership checks instead.
+- The vault is **contract storage keyed by token id**, not a separate sub-account per NFT. Same guarantees (money moves with the token, holder-only withdraw), fewer accounts.
+- **No holder-gated page.** Holder-only actions (withdraw, equip, list, rent, breed) are gated on-chain by ownership checks; the vault view is public by design so buyers can price it in.
 
 ## Architecture
 
@@ -179,7 +189,7 @@ NFTs track:
 | Contract | Account | Role |
 |---|---|---|
 | Platform | [`v3.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v3.brawler-platform-5c8e2b.testnet) | balances, staked matches, signed settle, order-book spectator market, tournaments, per-game referee |
-| Monsters + skills | [`v2.brawler-monsters-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v2.brawler-monsters-5c8e2b.testnet) | NEP-171 monsters (hatch, breed, list/buy, rent, match locks) and NEP-245 skills (presales, skill market, `equip`) |
+| Monsters + skills | [`v2.brawler-monsters-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v2.brawler-monsters-5c8e2b.testnet) | NEP-171 monsters (hatch, breed, list/buy, rent, vaults, match locks) and NEP-245 skills (presales, skill market, `equip`) |
 | Referee | [`referee.v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/referee.v2.brawler-platform-5c8e2b.testnet) | the game server's signing key |
 | Merchants | [`smithy`](https://testnet.nearblocks.io/address/smithy.brawler-platform-5c8e2b.testnet), [`alchemist`](https://testnet.nearblocks.io/address/alchemist.brawler-platform-5c8e2b.testnet) `.brawler-platform-5c8e2b.testnet` | NPC merchant wallets |
 | NEAR Auth relayer | `relayer.brawler-platform-5c8e2b.testnet` | pays for MPC signing and the first-login grant |
@@ -190,7 +200,7 @@ Deploy log and end-to-end transactions: [`contracts/DEPLOYMENTS.md`](contracts/D
 
 | Suite | Command | Covers | Last run (2026-11-14) |
 |---|---|---|---|
-| Monsters + skills contract | `cd games/brawler/contract && cargo test` | NEP-171/245, royalties, rentals, locks, transfer threat model | 57 passed |
+| Monsters + skills contract | `cd games/brawler/contract && cargo test` | NEP-171/245, royalties, rentals, vaults, locks, transfer threat model | 62 passed |
 | Platform contract | `cd contracts/platform && cargo test` | signed settle, replay protection, conservation of funds, order book, tournaments, locks | 62 passed |
 | Sim parity | `cargo test --workspace` | Rust referee matches the TS sim frame for frame (golden vectors) | |
 | Merchants and bots | `cd agents && npm test` | pricing rules, broke-merchant closing, bot brain | 7 passed |
