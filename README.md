@@ -1,23 +1,34 @@
 # Brawler Arena
 
-Layout: `games/brawler/{client,relay,contract}`, `contracts/platform` (arena), see `tasks/todo.md` for multi-game plan.
+Multi-game platform on NEAR. One balance (platform contract) shared by every game.
 
-A real-time 2D platform fighter: two monsters on a floating stage, knocking each other off it. This is the base battle loop for a NEAR-based arena game. NFT monsters and their stats get plugged in later through `src/sim/sim.ts` → `Stats`.
+| Path | What | Host |
+|---|---|---|
+| `market/` | game hub: list, wallet, deposit/withdraw | xyz.com |
+| `packages/platform/` | shared TS wallet + balance hooks | - |
+| `contracts/platform/` | balances, matches, bets, tournaments, per-game referee | NEAR |
+| `crates/near-svc/` | rust: view, NEP-413 verify, referee tx queue | - |
+| `games/brawler/client/` | brawler game (vite) | brawler.xyz.com |
+| `games/brawler/server/` | rust ws: relay, lobby, referee | ws svc |
+| `games/brawler/sim/` | rust sim port, golden-tested vs TS | - |
+| `games/brawler/contract/` | monster NFTs | NEAR |
+
+Brawler: real-time 2D platform fighter, two monsters knock each other off a floating stage.
 
 ## Run
 
 ```sh
-npm install                    # root: npm workspaces
-cd games/brawler/client
-npm run dev       # game at http://localhost:5173
-npm run server    # online relay at ws://localhost:8787 (only needed for online play)
-npm test
+npm install && npm test && npm run build      # all TS workspaces
+cargo test --workspace                         # rust sim + server
+cargo run -p brawler-server                    # ws on :8787 (PORT)
+npm run dev -w @xyz/brawler                    # http://localhost:5173
+npm run dev -w @xyz/market
 ```
 
-- **Local versus:** click *Local Versus*.
-- **Online:** player A clicks *Host Online* and shares the 4-letter code. Player B types it and clicks *Join*.
-- **Production (one process):** `npm run build && npm start` serves the game and the relay on `$PORT` (default 8787). Deploy as a single Node web service, for example on Railway or Render.
-- **Remote server:** open the game with `?server=wss://your-host` or set `VITE_SERVER_URL` at build time.
+- Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY`. No CONTRACT_ID = free rooms only.
+- Client env: `VITE_SERVER_URL` (required in prod), `VITE_PLATFORM_ID`, `VITE_MARKET_URL`. Market: `VITE_BRAWLER_URL`.
+- Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
+- New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?)` on platform.
 
 ## Controls
 
@@ -40,7 +51,7 @@ Hold a direction with an attack to pick the move (neutral, side or down; ground 
   - **Input buffer:** button presses are remembered for 6 frames.
   - **Frame data:** in `moves.ts` (startup, active and recovery frames, hitbox, damage, knockback).
 - **`src/render/`**: a procedural bone rig. Each animation is a keyframed pose that gets tweened: wind-up, then a snap into the strike, then an ease back to rest. On top of that: a camera that zooms to fit both fighters, hit sparks, screen shake and KO beams. The renderer only reads sim state; it never changes it.
-- **`src/net.ts` + `server/relay.ts`**: delay-based lockstep netplay. Each client sends its input 4 frames ahead and steps the sim only when both players' inputs for that frame have arrived. The clients compare state hashes every second to detect desyncs. The relay server only pairs rooms and forwards packets.
+- **`src/net.ts` + `games/brawler/server`**: delay-based lockstep netplay. Each client sends its input 4 frames ahead and steps the sim only when both players' inputs for that frame have arrived. The clients compare state hashes every second to detect desyncs. The relay server only pairs rooms and forwards packets.
 
 The reference game was studied for its move set, animation phases and frame counts. No art, names or data were copied.
 
