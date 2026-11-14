@@ -72,6 +72,7 @@ export interface MonstersApi {
   skillTypes(): Promise<SkillType[]>;
   skills(): Promise<OwnedSkill[]>; // your balances (free units; equipped ones sit on the monster)
   equip(id: string, skillIds: number[]): Promise<unknown>; // replaces the whole loadout
+  skillWear(id: string): Promise<[number, number][]>; // [skill_id, fights_left] per equipped skill
   vault(id: string): Promise<Vault>;
   vaultDeposit(id: string, yocto: string): Promise<unknown>;
   vaultWithdraw(id: string): Promise<unknown>;
@@ -128,6 +129,7 @@ export function useMonsters(): MonstersApi {
       return joinOwned(rows, types);
     },
     equip: (id, skillIds) => call('equip', { token_id: id, skills: skillIds }, '1', GAS_X),
+    skillWear: (id) => view<[number, number][]>('skill_wear', { token_id: id }),
     vault: (id) => view<Vault>('vault_of', { token_id: id }),
     vaultDeposit: (id, yocto) => call('vault_deposit', { token_id: id }, yocto),
     vaultWithdraw: (id) => call('vault_withdraw', { token_id: id }, '1', GAS_X),

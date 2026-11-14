@@ -124,6 +124,16 @@ pub(crate) fn skey(id: u32) -> String {
     format!("skill:{id}")
 }
 
+pub const SKILL_LIFE: u32 = 20;
+
+fn wear_key(token: &str, skill: u32) -> Vec<u8> {
+    [b"wear:".as_slice(), &skill.to_le_bytes(), token.as_bytes()].concat()
+}
+
+pub(crate) fn wear(token: &str, skill: u32) -> u32 {
+    env::storage_read(&wear_key(token, skill)).map(|b| u32::from_le_bytes(b.try_into().unwrap())).unwrap_or(0)
+}
+
 fn sid(token_id: &str) -> Option<u32> {
     token_id.strip_prefix("skill:")?.parse().ok()
 }
@@ -559,6 +569,45 @@ impl Monsters {
         }
         for i in 0..3 {
             self.mint_units(pool[(seed.wrapping_add(i as u32) % pool.len() as u32) as usize], who, 1);
+        }
+    }
+
+    /// 1 unit of a Common type with supply left, picked from `seed`.
+    pub(crate) fn drop_common(&mut self, who: &AccountId, seed: u32) {
+        let pool: Vec<u32> = self
+            .skills
+            .iter()
+            .filter(|t| t.rarity == Rarity::Common && t.max_supply.is_none_or(|s| t.minted < s))
+            .map(|t| t.id)
+            .collect();
+        if !pool.is_empty() {
+            self.mint_units(pool[(seed % pool.len() as u32) as usize], who, 1);
+        }
+    }
+
+    /// One fight of wear on each equipped unit; a unit at SKILL_LIFE is unequipped and burned.
+    pub(crate) fn wear_skills(&mut self, token: &TokenId) {
+        let Some(m) = self.monsters.get(token) else { return };
+        let mut worn = vec![];
+        for &s in &m.skills {
+            let w = wear(token, s) + 1;
+            if w >= SKILL_LIFE {
+                env::storage_remove(&wear_key(token, s));
+                worn.push(s);
+            } else {
+                env::storage_write(&wear_key(token, s), &w.to_le_bytes());
+            }
+        }
+        if worn.is_empty() {
+            return;
+        }
+        let owner = self.owner_of(token);
+        self.m_mut(token).skills.retain(|s| !worn.contains(s));
+        for s in worn {
+            if let Some(t) = self.skills.get_mut(s) {
+                t.minted = t.minted.saturating_sub(1);
+            }
+            event("nep245", "mt_burn", json!({"owner_id": owner, "token_ids": [skey(s)], "amounts": ["1"], "memo": "worn out"}));
         }
     }
 

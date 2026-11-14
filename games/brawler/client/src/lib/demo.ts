@@ -126,6 +126,7 @@ export const demoMonsters: MonstersApi = {
   rentOffers: () => wait(NFTS.filter((m) => m.rentOffer).map((m) => ({ ...m }))),
   owed: () => wait('0'),
   withdrawOwed: () => sent('owed NEAR sent to your wallet'),
+  skillWear: (id) => wait((find(id)?.skillIds ?? []).map((s): [number, number] => [s, 20])),
   vault: () => wait({ balance: '0', earned: '0', paid_out: '0', log: [] }),
   vaultDeposit: () => sent('vault funded'),
   vaultWithdraw: () => sent('vault withdrawn'),
