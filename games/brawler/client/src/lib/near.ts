@@ -13,7 +13,7 @@ const ONE_YOCTO = '1'; // spend calls need full-access key -> wallet confirm
 export interface MatchView {
   id: number; game: string; host: string; guest: string | null; stake: string; bettable: boolean;
   status: 'open' | 'live' | 'settled' | 'refund'; winner: number | null; kos: number;
-  amm: [string, string]; price_bps: number; collateral: string; // price_bps = fighter 0's price, 0..10000
+  price_bps: number; collateral: string; fills: number; // price_bps = last fill, fighter 0's side, 0..10000
   created_ms: number; started_ms: number;
   monsters: [string | null, string | null]; tournament: number | null;
   tape_hash?: string | null; // sha256 of the referee's input tape (see lib/tape.ts)
@@ -24,14 +24,13 @@ export interface TournamentView {
   champion: string | null; created_ms: number;
   claimed?: boolean[]; // per entrant: prize/refund already taken
 }
-export interface PositionView { shares: [string, string]; paid: string; claimed: boolean }
-interface BetView { id: number; who: string; side: number; amount: string; shares: string; ms: number }
-export interface LotView { id: number; side: number; card: number; dir: 'long' | 'short'; shares: string; cost: string }
-export interface FeedItem { id: number; who: string; kind: 'buy' | 'payout' | 'refund'; side?: number; near: string }
-export interface Limits { owner: string; min_bet: string; max_bet: string; seed: string }
-
-// accept 3% worse quote by tx landing
-export const slip = (yocto: string) => ((BigInt(yocto) * 97n) / 100n).toString();
+export interface PositionView { shares: [number, number]; paid: [string, string]; open: string; claimed: boolean }
+export interface OrderView { id: number; side: number; price_bps: number; qty: number; filled: number; ms: number }
+export interface FillView { id: number; taker: string; maker: string; side: number; price_bps: number; qty: number; ms: number }
+export type Book = [[number, number][], [number, number][]]; // per side: [price_bps, qty] bids, best first
+export interface Limits { owner: string; fee_bps: number; max_bet: string; unit: string; treasury: string }
+// referee's signed result, from the server's `over`; anyone can submit it via `settle`
+export interface Attestation { match_id: number; winner: number | null; kos: [number, number]; tape_hash: string; signature: string }
 
 export const lowBalance = (have: string | null, need: string) =>
   `Not enough balance (${fmt(have ?? '0')} of ${fmt(need)} NEAR). Top up in Account.`;
@@ -70,19 +69,21 @@ export function useArena() {
     claimTournament: (id: number) => call('claim_tournament', { id }),
     cancelTournament: (id: number) => call('cancel_tournament', { id }),
     cancelMatch: (id: number) => call('cancel_match', { match_id: id }),
-    buy: async (id: number, side: number, yocto: string, minOut: string, _meta?: { card: number; dir: 'long' | 'short' }) => { await need(yocto); return call('buy', { match_id: id, side, amount: yocto, min_out: minOut }, ONE_YOCTO); },
-    // my bets on match, oldest first
-    getLots: async (id: number, account: string): Promise<LotView[]> =>
-      (await view<BetView[]>('get_bets_of', { match_id: id, account_id: account })).map((b) => ({ id: b.id, side: b.side, card: b.side, dir: 'long' as const, shares: b.shares, cost: b.amount })),
+    placeOrder: async (id: number, side: number, priceBps: number, qty: number) => {
+      await need((BigInt(priceBps) * BigInt(qty) * 10n ** 18n).toString());
+      return call('place_order', { match_id: id, side, price_bps: priceBps, qty }, ONE_YOCTO, GAS_X) as Promise<{ id: number | null; filled: number; cost: string }>;
+    },
+    cancelOrder: (id: number, orderId: number) => call('cancel_order', { match_id: id, order_id: orderId }),
+    settle: (a: Attestation) => call('settle', { ...a }, '0', GAS_X),
+    getBook: (id: number) => view<Book>('get_book', { match_id: id }),
+    getOrders: (id: number, account: string) => view<OrderView[]>('get_orders', { match_id: id, account_id: account }),
+    getFills: (id: number) => view<FillView[]>('get_fills', { match_id: id, limit: 6 }),
     claim: (id: number) => call('claim', { match_id: id }),
     expire: (id: number) => call('expire', { match_id: id }),
     getMatch: (id: number) => view<MatchView | null>('get_match', { match_id: id }),
     getPosition: (id: number, account: string) => view<PositionView | null>('get_position', { match_id: id, account_id: account }),
     getPrices: (id: number) => view<[number, number][]>('get_prices', { match_id: id }),
-    quoteBuy: (id: number, side: number, yocto: string) => view<string>('quote_buy', { match_id: id, side, amount: yocto }),
     config: () => view<Limits>('config'),
-    getFeed: async (id: number): Promise<FeedItem[]> =>
-      (await view<BetView[]>('get_recent_bets', { match_id: id, limit: 6 })).map((b) => ({ id: b.id, who: b.who, kind: 'buy' as const, side: b.side, near: b.amount })),
     claimable: (id: number, account: string) => view<string>('claimable', { match_id: id, account_id: account }),
     listMatches: (from = 0, limit = 50) => view<MatchView[]>('list_matches', { from, limit, game: GAME }),
   };

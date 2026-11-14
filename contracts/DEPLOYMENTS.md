@@ -1,6 +1,22 @@
 # Testnet deployments
 
-## v2 (current, 2026-11-14)
+## v3 (code ready, NOT deployed yet: owner short on testnet NEAR)
+
+Gasless `settle` by attestation + order-book market; fresh state, so a new account `v3.brawler-platform-5c8e2b.testnet`.
+Preflight 2026-11-15: wasm 317200 B, needs 3.722 NEAR spendable on `brawler-platform-5c8e2b.testnet` (3.672 to the new account
++ gas), has 0.265 -> short 3.457 NEAR; monsters owner ok. Nothing sent.
+
+Switch steps once funded:
+1. `cd contracts/platform && cargo near build non-reproducible-wasm`
+2. `node scripts/deploy-platform-v3.mjs` (preflight, then one tx create+deploy+`new`, then `wire-platform.mjs`:
+   `register_game("brawler", referee.v2.brawler-platform-5c8e2b.testnet, brawler-monsters-5c8e2b.testnet, <referee public key from ~/.near-credentials>)`
+   + monsters `set_arena(v3)` by the monsters owner). New monsters contract later: `MONSTERS_ID=<id> node scripts/wire-platform.mjs`.
+3. `node scripts/testnet-e2e.mjs` (defaults to v3: order book, settle by winner, forged/replayed settle rejected, fallback report, tournament).
+4. Point defaults at v3: `packages/platform/index.ts` PLATFORM_ID, server/infra `CONTRACT_ID`, README tables. Server keeps
+   `REFEREE_ID`/`REFEREE_KEY` (same key); it logs `referee: gasless attestations` once the contract holds its key.
+   The v2 treasury (≈1.57 NEAR) can be withdrawn by the owner (`withdraw_treasury`) once v2 is retired.
+
+## v2 (current live, 2026-11-14)
 
 | role | account |
 |---|---|

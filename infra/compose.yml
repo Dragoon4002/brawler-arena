@@ -10,6 +10,7 @@ services:
       MONSTERS_ID: ${MONSTERS_ID:-}
       REFEREE_ID: ${REFEREE_ID:-}
       REFEREE_KEY: ${REFEREE_KEY:-}
+      SETTLE_FALLBACK_S: ${SETTLE_FALLBACK_S:-300}
     volumes: [brawler_data:/data]
     restart: unless-stopped
 

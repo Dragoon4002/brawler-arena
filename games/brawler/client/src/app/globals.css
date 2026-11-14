@@ -501,6 +501,13 @@ kbd { font: 700 12px var(--font-body); padding: 1px 6px; border-radius: 5px; bac
 .bet-pos h4 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 18px; }
 .bet-pos-row { --c: var(--ember); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 4px 8px; border-left: 4px solid var(--c); background: rgb(255 255 255 / 0.04); border-radius: 4px; }
 .bet-pos-row > b:first-child { color: var(--c); }
+.book-ladder { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px; }
+.book-ladder > div { --c: var(--ember); display: grid; gap: 2px; align-content: start; padding: 6px 8px; border-left: 4px solid var(--c); background: rgb(255 255 255 / 0.04); border-radius: 4px; }
+.book-ladder b { color: var(--c); }
+.book-ladder span { display: flex; justify-content: space-between; }
+.book-ladder i { font-style: normal; color: var(--muted); }
+.bet .side-pick .btn { --bh: 46px; font-size: 16px; }
+.bet > .chip { justify-self: start; cursor: pointer; font: inherit; font-size: 13px; }
 .demo-end { gap: 6px; font-size: 13px; color: var(--muted); }
 .demo-end .chip { cursor: pointer; font: inherit; font-size: 13px; }
 .bet-pops { position: absolute; top: 60px; }

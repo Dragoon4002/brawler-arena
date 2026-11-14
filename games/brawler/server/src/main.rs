@@ -1,4 +1,4 @@
-//! Brawler ws server. Env: PORT, NEAR_RPC, CONTRACT_ID, MONSTERS_ID, REFEREE_ID, REFEREE_KEY, HISTORY_FILE.
+//! Brawler ws server. Env: PORT, NEAR_RPC, CONTRACT_ID, MONSTERS_ID, REFEREE_ID, REFEREE_KEY, HISTORY_FILE, SETTLE_FALLBACK_S.
 use near_svc::Near;
 use std::{env::var, sync::Arc};
 

@@ -20,7 +20,7 @@ type Call = (String, Value, u64);
 pub struct Near {
     net: NetworkConfig,
     pub contract: String,
-    referee: Option<(AccountId, Arc<Signer>)>,
+    referee: Option<(AccountId, Arc<Signer>, SecretKey)>,
     queues: Mutex<HashMap<u64, mpsc::UnboundedSender<Call>>>,
 }
 
@@ -34,7 +34,7 @@ impl Near {
         let referee = referee.and_then(|(id, key)| {
             let id: AccountId = id.parse().ok()?;
             let key: SecretKey = key.parse().ok()?;
-            Some((id, Signer::from_secret_key(key).ok()?))
+            Some((id, Signer::from_secret_key(key.clone()).ok()?, key))
         });
         if referee.is_none() {
             eprintln!(
@@ -125,13 +125,30 @@ impl Near {
         self.referee.is_some()
     }
 
+    pub fn public_key(&self) -> Option<String> {
+        Some(self.referee.as_ref()?.2.public_key().to_string())
+    }
+
+    /// Referee key's ed25519 signature over a 32-byte digest, base64. None without a referee key.
+    pub fn sign(&self, digest: [u8; 32]) -> Option<String> {
+        match self
+            .referee
+            .as_ref()?
+            .2
+            .sign(near_api::types::CryptoHash(digest))
+        {
+            Signature::ED25519(s) => Some(B64.encode(s.to_bytes())),
+            _ => None,
+        }
+    }
+
     /// Unqueued referee call, awaited: true once it landed OK (same retries as `call`).
     pub async fn call_now(&self, match_id: u64, method: &str, args: Value, tgas: u64) -> bool {
         self.send(match_id, method, args, tgas).await
     }
 
     async fn send(&self, match_id: u64, method: &str, args: Value, tgas: u64) -> bool {
-        let (Some((id, signer)), Ok(contract)) =
+        let (Some((id, signer, _)), Ok(contract)) =
             (&self.referee, self.contract.parse::<AccountId>())
         else {
             return false;
