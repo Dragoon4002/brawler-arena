@@ -1,19 +1,70 @@
 # Brawler Arena
 
-Multi-game platform on NEAR. One balance (platform contract) shared by every game.
+**A real-time monster fighting game on NEAR where every staked match, spectator bet and tournament settles on-chain, and every result is provably replayable.**
 
-| Path | What | Host |
+- **Play now:** https://65-0-237-185.sslip.io (Practice vs bot needs no wallet; online rooms need a NEAR testnet wallet)
+- **Demo video:** _coming soon_
+- **Network:** NEAR testnet
+
+## What it is
+
+Two monsters knock each other off a floating stage (3 stocks, damage %, blocks, dodges). Host a room, stake NEAR, and the winner takes the pot. Spectators trade a live prediction market on the fight. Monsters are NFTs whose DNA sets their stats; you can breed, rent and sell them. Bots keep the lobby alive with exhibition fights and take on anyone waiting for an opponent.
+
+## Contracts (testnet)
+
+| Contract | Account | What it does |
 |---|---|---|
-| `market/` | game hub: list, wallet, deposit/withdraw | xyz.com |
-| `packages/platform/` | shared TS wallet + balance hooks | - |
-| `contracts/platform/` | balances, matches, bets, tournaments, per-game referee | NEAR |
-| `crates/near-svc/` | rust: view, NEP-413 verify, referee tx queue | - |
-| `games/brawler/client/` | brawler game (Next.js, `npm run build && npm start`) | brawler.xyz.com |
-| `games/brawler/server/` | rust ws: relay, lobby, referee | ws svc |
-| `games/brawler/sim/` | rust sim port, golden-tested vs TS | - |
-| `games/brawler/contract/` | monster NFTs | NEAR |
+| Platform | [`v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v2.brawler-platform-5c8e2b.testnet) | balances, staked matches, spectator market, tournaments, per-game referee |
+| Monsters | [`brawler-monsters-5c8e2b.testnet`](https://testnet.nearblocks.io/address/brawler-monsters-5c8e2b.testnet) | monster NFTs: hatch, breed, list/buy, rent, match locks |
+| Referee | [`referee.v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/referee.v2.brawler-platform-5c8e2b.testnet) | the game server's key; only it can report results |
 
-Brawler: real-time 2D platform fighter, two monsters knock each other off a floating stage.
+Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DEPLOYMENTS.md).
+
+## What's on-chain
+
+| On-chain | Off-chain |
+|---|---|
+| Deposits, withdrawals, in-contract balance | Live fight inputs (WebRTC P2P, or WebSocket relay) |
+| Match stakes, escrow, payout (`create_match`, `join_match`, `report_result`) | Room lobby, chat, matchmaking |
+| Guest refund before the fight (`unjoin`), voids and expiry | Rendering, sound |
+| Spectator prediction market: AMM prices, `buy`, `claim` | Full input tapes (served at `/tape/<id>`) |
+| SHA-256 hash of every settled match's input tape (`tape_hash`) | Free friendly matches |
+| Tournaments: entry, bracket advance, `claim_tournament` | |
+| Monster NFTs, DNA, breeding, sales, rentals, lock during a match | |
+
+## How we use NEAR
+
+- **Escrow without trust:** stakes and bets live in the platform contract. The game server can only call `report_result` through its referee key; it never holds funds.
+- **Provable fairness:** the sim is deterministic. The referee re-simulates both players' inputs, reports the winner and the tape's SHA-256 on-chain. Anyone can open `/replay/<id>`: the browser re-runs the tape, recomputes the hash and checks both against the contract.
+- **Prediction markets per fight:** each bettable match opens an AMM market seeded by the house treasury, capped at the stake so it can't be drained.
+- **NFT gameplay assets:** monster stats come from on-chain DNA, and the NFT is locked while it fights, so it can't be sold mid-match.
+- **One balance across games:** the platform registers games with their own referee; Brawler is the first.
+- **Wallet only when money moves:** Practice vs bot and watching need no wallet.
+
+## Features
+
+- Practice vs bot, no wallet, keyboard / gamepad / touch.
+- Online rooms: public or private, free or staked, spectators, chat, rematch.
+- Rollback netcode (P2P with relay fallback); reconnect to a fight within 30 s.
+- Live spectator market with price chart.
+- Tournaments (4/8 players), leaderboard by wins and NEAR won, player profiles and match history with replays.
+- Monsters: hatch starters, breed, sell, rent.
+- Bots: exhibition fights and opponents for lonely rooms (`agents/`).
+
+## Repo
+
+| Path | What |
+|---|---|
+| `games/brawler/client/` | game client (Next.js) |
+| `games/brawler/server/` | Rust WebSocket server: relay, lobby, referee, tapes, history |
+| `games/brawler/sim/` | Rust port of the sim, golden-tested against the TS sim |
+| `games/brawler/contract/` | monster NFT contract |
+| `contracts/platform/` | platform contract |
+| `crates/near-svc/` | Rust NEAR RPC, NEP-413 verify, referee tx queue |
+| `packages/platform/` | shared TS wallet + balance hooks |
+| `agents/` | bot service |
+| `market/` | game hub |
+| `infra/` | Terraform, Ansible, Docker, Caddy |
 
 ## Run
 
@@ -28,7 +79,7 @@ npm run dev -w @xyz/market
 
 - Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY`. No CONTRACT_ID = free rooms only.
 - Room lobby: a staked guest who leaves before the host presses Start frees the seat; referee `unjoin` refunds their stake and reopens the match (rejected once bets exist).
-- Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (required in prod), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_BRAWLER_URL`.
+- Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (default: same origin), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_BRAWLER_URL`.
 - Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
 - New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?)` on platform.
 
@@ -45,12 +96,12 @@ make deploy                           # docker + repo (repo_version, default mai
 ```
 
 - DNS must resolve to the EIP before `make deploy`, or Caddy can't get a cert.
-- Client: `NEXT_PUBLIC_SERVER_URL=wss://<domain>` in Vercel, or `?server=wss://<domain>` for a quick test.
+- The client is served from the same box (Caddy routes WebSocket, `/history`, `/tape` to the server, the rest to the client). `?server=wss://<domain>` overrides the server for a quick test.
 - Redeploy: `make deploy ANSIBLE_ARGS="-e repo_version=<sha>"`. Remote state: add an `s3` backend in `versions.tf` (optional).
 
 ## Controls
 
-Online only: host a room, join by code, or watch from the lobby.
+Practice vs bot from the title screen, or play online: host a room, join by code, or watch from the lobby. Phones get an on-screen stick and buttons.
 
 | | Move / aim | Jump | Light | Heavy | Block | Dodge |
 |---|---|---|---|---|---|---|
@@ -64,19 +115,10 @@ Hold a direction with an attack to pick the move (neutral, side or down; ground 
 
 ## How it works
 
-- **`src/lib/sim/`**: deterministic simulation at a fixed 60 Hz. It has no DOM, no randomness, no trig and no clock, so the same inputs always produce the same state.
-  - **Fighter states:** idle, run, jumpsquat, air, land, dodge, attack, hitstun, block, dead.
-  - **Health + damage %:** each stock has 200 HP. Damage taken lowers HP and raises knockback: (base + damage% × growth) × defence modifier.
-  - **Hit timing:** hitlag freezes both fighters on impact, and hitstun scales with knockback.
-  - **Stocks:** you lose one when you leave the blast zone or your HP hits 0; 3 each.
-  - **Movement:** 1 ground jump plus 2 air jumps, short hop, fast-fall, and dodges with invulnerability frames and a cooldown.
-  - **Input buffer:** button presses are remembered for 6 frames.
-  - **Frame data:** in `moves.ts` (startup, active and recovery frames, hitbox, damage, knockback).
-- **`src/lib/render/`**: a procedural bone rig. Each animation is a keyframed pose that gets tweened: wind-up, then a snap into the strike, then an ease back to rest. On top of that: a camera that zooms to fit both fighters, hit sparks, screen shake and KO beams. The renderer only reads sim state; it never changes it.
-- **`src/lib/net.ts` + `games/brawler/server`**: delay-based lockstep netplay. Each client sends its input 4 frames ahead and steps the sim only when both players' inputs for that frame have arrived. The clients compare state hashes every second to detect desyncs. The relay server only pairs rooms and forwards packets.
-
-The reference game was studied for its move set, animation phases and frame counts. No art, names or data were copied.
-
-## Not built yet
-
-Wall cling, weapon pickups, rollback netcode, matchmaking, wiring NFT stats in, sound.
+- **`src/lib/sim/`**: deterministic simulation at a fixed 60 Hz. No DOM, no randomness, no trig, no clock: the same inputs always produce the same state, in TS and in the Rust port.
+  - Fighter states: idle, run, jumpsquat, air, land, dodge, attack, hitstun, block, dead.
+  - Each stock has 200 HP; damage raises knockback: (base + damage% × growth) × defence modifier.
+  - Hitlag on impact, hitstun scaled by knockback, 6-frame input buffer, frame data in `moves.ts`.
+- **`src/lib/render/`**: procedural bone rig with keyframed poses, a fit-both camera, hit sparks, screen shake and KO beams. Reads sim state only.
+- **`src/lib/net.ts`**: rollback netplay. The local sim predicts the opponent's input up to 10 frames ahead and re-simulates when real input arrives; clients compare state hashes every second.
+- **Server**: relays inputs, records the confirmed tape, re-simulates it as referee, reports the result and tape hash on-chain, and serves history and tapes.
