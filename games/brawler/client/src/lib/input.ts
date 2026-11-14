@@ -1,18 +1,20 @@
 import { IN } from './sim/sim.ts';
 
-// WASD/arrows move, Space/W/Up jump, right click (or Z) light, left click (or X) heavy, Q block, C dodge.
+// WASD (or arrows) move, Space/W jump, J light, K heavy, L block, C dodge.
+// Alternates: right click / Z light, left click / X heavy, Q block.
 // Gamepad: A jump, X light, B/Y heavy, bumpers/triggers dodge.
 const KEYS: Record<string, number> = {
   KeyA: IN.LEFT, KeyD: IN.RIGHT, KeyW: IN.UP | IN.JUMP, KeyS: IN.DOWN,
   ArrowLeft: IN.LEFT, ArrowRight: IN.RIGHT, ArrowUp: IN.UP | IN.JUMP, ArrowDown: IN.DOWN,
-  Space: IN.JUMP, KeyZ: IN.LIGHT, KeyX: IN.HEAVY, KeyC: IN.DODGE, KeyQ: IN.BLOCK,
+  Space: IN.JUMP, KeyJ: IN.LIGHT, KeyK: IN.HEAVY, KeyL: IN.BLOCK, KeyC: IN.DODGE,
+  KeyZ: IN.LIGHT, KeyX: IN.HEAVY, KeyQ: IN.BLOCK,
   Mouse0: IN.HEAVY, Mouse2: IN.LIGHT,
 };
 const held = new Set<string>();
 const tapped = new Set<string>(); // pressed+released between two 60 Hz polls still counts once
 const press = (code: string) => { held.add(code); tapped.add(code); };
 addEventListener('keydown', (e) => {
-  if (e.code in KEYS && !(e.target instanceof HTMLInputElement)) { press(e.code); e.preventDefault(); }
+  if (e.code in KEYS && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) { press(e.code); e.preventDefault(); }
 });
 addEventListener('keyup', (e) => held.delete(e.code));
 // Only clicks on the fight canvas (or its letterbox) count, so UI buttons keep working.

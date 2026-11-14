@@ -37,10 +37,11 @@ Online only: host a room, join by code, or watch from the lobby.
 
 | | Move / aim | Jump | Light | Heavy | Block | Dodge |
 |---|---|---|---|---|---|---|
-| Keyboard + mouse | WASD / arrows | Space or W | Right click / Z | Left click / X | Q (hold) | C |
+| Keyboard | WASD (or arrows) | Space or W | J | K | L (hold) | C |
+| Mouse / alternates | | | Right click / Z | Left click / X | Q (hold) | |
 | Gamepad | Stick / D-pad | A | X | B / Y | | Bumpers / triggers |
 
-Block (grounded, hold Q): hits from the front deal 1/5 damage and a small push instead of launching you; hits from behind land in full. You can't move or attack while blocking.
+Block (grounded, hold L or Q): hits from the front deal 1/5 damage and a small push instead of launching you; hits from behind land in full. You can't move or attack while blocking.
 
 Hold a direction with an attack to pick the move (neutral, side or down; ground or air). Air neutral heavy is the recovery move; air down heavy is the ground pound. Hold down on a thin platform to drop through it. Press ` to show hitboxes and Esc to return to the menu.
 

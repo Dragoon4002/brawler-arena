@@ -62,7 +62,7 @@ export function Play() {
         </div>
       </section>
       {a && <OnlineStart mon={a} stage={stage} />}
-      <p className="note">Controls: move with WASD or arrows, jump with Space or W, right click light attack, left click heavy attack, Q block, C dodge. Z and X also attack. Gamepads work too.</p>
+      <p className="note">Move WASD · Jump Space/W · J light · K heavy · L block (mouse: right light, left heavy) · C dodge. Arrows, Z/X and Q also work, and gamepads.</p>
     </>
   );
 }
