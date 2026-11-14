@@ -33,7 +33,7 @@ export async function joinRoom(arena: Arena, code: string, mon: Monster, say: (t
 }
 
 export function CreateRoom({ mon }: { mon: Monster }) {
-  const { u } = useChainDetails();
+  const { on, u } = useChainDetails();
   const arena = useArena();
   const [pub, setPub] = useState(true);
   const [bettable, setBettable] = useState(false);
@@ -70,7 +70,7 @@ export function CreateRoom({ mon }: { mon: Monster }) {
         <div className="stake-presets" role="group" aria-label="Quick stake">
           {['0', '0.5', '1', '5'].map((v) => <button key={v} type="button" className="chip" aria-pressed={stake === v} onClick={() => setStake(v)}>{v === '0' ? 'Free' : `${v} ${u}`}</button>)}
         </div>
-        <p id="stake-help" className="note">{st ? `Your opponent matches ${stake} ${u}. Winner takes both, minus 0.1%.` : bettable ? 'No stake: only spectators bet.' : '0 = friendly match, nothing on-chain.'}</p>
+        <p id="stake-help" className="note">{st ? `Your opponent matches ${stake} ${u}. Winner takes both, minus 0.1%.` : bettable ? 'No stake: only spectators bet.' : on ? '0 = friendly match, nothing on-chain.' : '0 = friendly match, no stakes.'}</p>
         <fieldset className="seg" aria-label="Visibility">
           <legend>Visibility</legend>
           <label><input type="radio" name="vis" checked={pub} onChange={() => setPub(true)} /><span className="row-ico"><Ico n="icon-room-public" />Public</span><small>Listed in the lobby</small></label>

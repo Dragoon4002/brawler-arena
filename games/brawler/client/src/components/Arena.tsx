@@ -13,6 +13,7 @@ import { RoomLobby } from '@/components/rooms/RoomLobby.tsx';
 import { go } from '@/lib/nav.ts';
 import { setTouch } from '@/lib/input.ts';
 import { IN } from '@/lib/sim/sim.ts';
+import { useChainDetails } from '@/lib/chain.ts';
 
 export type FightSetup =
   | { kind: 'host'; mon: Monster; stage: StageId; opts: HostOpts }
@@ -46,6 +47,7 @@ export function Arena({ demo }: { demo?: string }) {
 const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
 
 function Fight({ demo, again }: { demo?: string; again: () => void }) {
+  const { on } = useChainDetails();
   const canvas = useRef<HTMLCanvasElement>(null);
   const arena = useArena();
   const sign = useSignMatch();
@@ -214,7 +216,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
               <>
                 {over.settle
                   ? <button className="btn big" onClick={settle}><span><Ico n="icon-claim" />{over.winner === null ? 'Settle and return to lobby' : 'Claim and return to lobby'}</span></button>
-                  : over.winner !== null && <p className="note">Result posts on-chain automatically within ~5 min; winnings land in your balance.</p>}
+                  : over.winner !== null && <p className="note">{on ? 'Result posts on-chain automatically within ~5 min; winnings land in your balance.' : 'Result posts automatically within ~5 min; winnings land in your balance.'}</p>}
                 {claimMsg && <p className="note" role="status">{claimMsg}</p>}
               </>
             )}
@@ -271,6 +273,7 @@ function PracticePick({ onPick }: { onPick: (id: StageId) => void }) {
 }
 
 function PracticeFight({ stage, again, change }: { stage: StageId; again: () => void; change: () => void }) {
+  const { on } = useChainDetails();
   const canvas = useRef<HTMLCanvasElement>(null);
   const [over, setOver] = useState<number | null>(null);
   const [names, setNames] = useState<string[]>([]);
@@ -296,7 +299,7 @@ function PracticeFight({ stage, again, change }: { stage: StageId; again: () => 
       <button type="button" className="chip sound-toggle row-ico" aria-pressed={muted} onClick={() => setMuted(toggleMute().muted)}>
         <Ico n={muted ? 'icon-sound-off' : 'icon-sound-on'} />{muted ? 'Sound off (M)' : 'Sound on (M)'}
       </button>
-      <span className="chip practice-hint">Practice: nothing on-chain</span>
+      <span className="chip practice-hint">{on ? 'Practice: nothing on-chain' : 'Practice: no stakes'}</span>
       {over !== null && (
         <div className="arena-overlay">
           <div className="slab waiting" role="status">

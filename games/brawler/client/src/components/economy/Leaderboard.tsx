@@ -4,12 +4,12 @@ import { rank } from '@/lib/leaderboard.ts';
 import { short } from '@/lib/format.ts';
 import { useLoad } from '@/hooks/async.ts';
 import { Ico } from '@/components/ui.tsx';
-import { useChainDetails } from '@/lib/chain.ts';
+import { nick, useChainDetails } from '@/lib/chain.ts';
 
 const SORTS = [['wins', 'Most wins'], ['won', 'Top earners']] as const;
 
 export function Leaderboard() {
-  const { u } = useChainDetails();
+  const { on, u } = useChainDetails();
   const arena = useArena();
   const [by, setBy] = useState<'wins' | 'won'>('wins');
   const [data, , err] = useLoad(async () => {
@@ -36,7 +36,7 @@ export function Leaderboard() {
             {rows.map((r, i) => (
               <li key={r.account} className="lb-row">
                 <b className={`rank r${i + 1}`}>{i + 1}</b>
-                <a className="lb-who" href={`/player/${encodeURIComponent(r.account)}`}><b title={r.account}>{short(r.account)}</b><small>{r.played} fights · {r.played - r.wins} losses</small></a>
+                <a className="lb-who" href={`/player/${encodeURIComponent(r.account)}`}><b title={on ? r.account : undefined}>{(on ? short(r.account) : nick(r.account))}</b><small>{r.played} fights · {r.played - r.wins} losses</small></a>
                 <span className={`chip row-ico${by === 'wins' ? ' on' : ''}`}><Ico n="trophy" />{r.wins} wins</span>
                 <span className={`chip row-ico${by === 'won' ? ' on' : ''}`}><Ico n="coin" />{fmt(r.won.toString())} {u}</span>
               </li>

@@ -11,15 +11,16 @@ import { prepareFight } from '@/components/Arena.tsx';
 import { isFree } from '@/components/monsters/Badges.tsx';
 import { Ico, Portrait } from '@/components/ui.tsx';
 import { STATUS_ICON } from './Tournaments.tsx';
-import { useChainDetails } from '@/lib/chain.ts';
+import { nick, useChainDetails } from '@/lib/chain.ts';
 
 interface SlotInfo { acct: string | null; mon: string | null }
 function Slot({ s, mons, win, lose, me }: { s: SlotInfo; mons: Record<string, NftMonster>; win: boolean; lose: boolean; me: string }) {
+  const { on } = useChainDetails();
   const m = s.mon ? mons[s.mon] : undefined;
   return (
     <div className={`slot ${win ? 'win' : ''} ${lose ? 'lose' : ''}`}>
       {m ? <Portrait dna={m.dna} size={44} className="" /> : <span className="lb-ph" />}
-      <span className="lb-who"><b>{m?.name ?? (s.acct ? `#${s.mon}` : 'TBD')}</b><small title={s.acct ?? ''}>{s.acct === me ? 'You' : short(s.acct)}</small></span>
+      <span className="lb-who"><b>{m?.name ?? (s.acct ? `#${s.mon}` : 'TBD')}</b><small title={on ? s.acct ?? '' : undefined}>{s.acct === me ? 'You' : (on ? short(s.acct) : nick(s.acct))}</small></span>
       {win && <Ico n="trophy" />}
     </div>
   );
@@ -28,7 +29,7 @@ function Slot({ s, mons, win, lose, me }: { s: SlotInfo; mons: Record<string, Nf
 const roundName = (r: number, n: number) => (r === n - 1 ? 'Final' : r === n - 2 && n > 2 ? 'Semifinals' : `Round ${r + 1}`);
 
 export function TournamentPage({ id }: { id: number }) {
-  const { u } = useChainDetails();
+  const { on, u } = useChainDetails();
   const arena = useArena(), api = useMonsters();
   const me = useWallet().signedAccountId ?? '';
   const { rooms } = useLobby();
@@ -73,7 +74,7 @@ export function TournamentPage({ id }: { id: number }) {
           <p className="sub">{t.size} players, entry {fmt(t.entry_fee)} {u}, pot {fmt(t.pot)} {u}{t.bettable ? ', bets open' : ''}</p></div>
         <span className={`chip row-ico ${t.status === 'live' ? 'gold' : ''}`}><Ico n={STATUS_ICON[t.status]} />{t.status}</span>
       </div>
-      {t.champion && <section className="slab"><h2 className="row-ico"><Ico n="trophy" />Champion: {short(t.champion)}{t.champion === me ? ' (you)' : ''}</h2></section>}
+      {t.champion && <section className="slab"><h2 className="row-ico"><Ico n="trophy" />Champion: {(on ? short(t.champion) : nick(t.champion))}{t.champion === me ? ' (you)' : ''}</h2></section>}
 
       {myLive && (
         <section className="slab" aria-label="Your match" style={{ display: 'grid', gap: 12 }}>

@@ -5,7 +5,7 @@ import { Ico, Portrait } from '@/components/ui.tsx';
 import { useChainDetails } from '@/lib/chain.ts';
 
 export function Holders() {
-  const { u } = useChainDetails();
+  const { on, u } = useChainDetails();
   const api = useMonsters();
   const { signedAccountId, signIn } = useWallet();
   const me = signedAccountId ?? '';
@@ -15,12 +15,12 @@ export function Holders() {
   }, [me]);
   const act = useAct(reload);
   if (!me) return <section className="slab"><h2 className="row-ico"><Ico n="icon-wallet" />Holders only</h2><p className="sub">Connect a wallet that holds a monster to enter.</p><button className="btn" onClick={() => signIn()}><span>Connect</span></button></section>;
-  if (!rows) return <p>Checking your monsters on-chain…</p>;
+  if (!rows) return <p>{on ? 'Checking your monsters on-chain…' : 'Checking your monsters…'}</p>;
   if (rows.length === 0) return <section className="slab"><h2 className="row-ico"><Ico n="icon-close" />Holders only</h2><p className="sub">This page opens for accounts that own a monster NFT. Rented monsters don't count.</p><a className="btn" href="/market"><span><Ico n="coin-stack" />Get a monster</span></a></section>;
   const total = rows.reduce((a, r) => a + BigInt(r.v.balance), 0n), earned = rows.reduce((a, r) => a + BigInt(r.v.earned), 0n);
   return (
     <>
-      <div><h1 className="row-ico"><Ico n="trophy" />Holders' vault room</h1><p className="sub">Only holders see this. Every monster you own keeps its own earnings; withdraw is checked on-chain against the current owner.</p></div>
+      <div><h1 className="row-ico"><Ico n="trophy" />Holders' vault room</h1><p className="sub">Only holders see this. Every monster you own keeps its own earnings; withdraw is checked{on ? ' on-chain' : ''} against the current owner.</p></div>
       <section className="slab"><dl className="kv"><dt>Monsters held</dt><dd>{rows.length}</dd><dt>In vaults</dt><dd className="row-ico"><Ico n="coin" />{fmt(total.toString())} {u}</dd><dt>Earned all time</dt><dd>{fmt(earned.toString())} {u}</dd></dl></section>
       <div className="grid">
         {rows.map(({ m, v }) => (

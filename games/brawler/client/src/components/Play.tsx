@@ -5,6 +5,7 @@ import { RoomList } from '@/components/rooms/Lobby.tsx';
 import { CreateRoom, JoinByCode } from '@/components/rooms/OnlineStart.tsx';
 import { Ico, Portrait, SkillChips } from '@/components/ui.tsx';
 import { practice } from '@/components/Arena.tsx';
+import { useChainDetails } from '@/lib/chain.ts';
 
 function Fighter({ mon, groups, onPick }: { mon: Monster; groups: [string, Monster[]][]; onPick: (id: string) => void }) {
   return (
@@ -39,8 +40,9 @@ const TABS = [['create', 'Create', 'icon-room-public'], ['join', 'Join', 'icon-l
 type Tab = (typeof TABS)[number][0];
 
 export function Play({ initial = 'create', invite }: { initial?: Tab; invite?: string }) {
+  const { on } = useChainDetails();
   const { free, local, all } = usePlayable();
-  const groups: [string, Monster[]][] = [['On-chain · stakeable', free], ['Browser · casual only', local]];
+  const groups: [string, Monster[]][] = [[on ? 'On-chain · stakeable' : 'Yours · stakeable', free], ['Browser · casual only', local]];
   const [p1, setP1] = useState('');
   const [tab, setTab] = useState<Tab>(initial);
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
