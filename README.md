@@ -9,7 +9,7 @@
 | **Play now (hosted)** | **https://13-54-190-122.sslip.io**: Practice vs bot needs nothing; **Play as guest** gives you a funded account in one click. Google login works on `localhost:3000` only (testnet NEAR Auth limit) |
 | Shop (hosted) | https://market.13-54-190-122.sslip.io |
 | Run it locally | [Run everything locally](#run-everything-locally): game `localhost:3000`, Shop `localhost:3000/shop`, server `localhost:8787` |
-| Demo video | X post: _link added at submission_ |
+| Demo video | X post: https://x.com/DragoonSd4/status/2121753072175378897 |
 | Tracks | `games` (Games With Real Economies), `nfts` (NFTs That Do Something) |
 | Network | NEAR testnet · License: MIT |
 
