@@ -264,7 +264,7 @@ Optional: [ ] NEP-199 payout, [ ] shared Portrait in market, [ ] Caddy-hosted ma
 5. **Loadout travels with the monster.** On transfer/sale, equipped units stay in the monster's escrow; the new owner gets them equipped and can unequip into their own balance. (Replaces "unequip back to seller" in §1.)
 6. **Starters get free Common skills**: `hatch_starters` also credits 3 random Common stat skills (mag 1) to the player's free balance.
 7. **Prices**: Commons 0.05 NEAR permanent shop; Rare presale 24 h, cap 200, 2 per wallet.
-8. **Hosting: AWS box**, same as the game: `https://market.65-0-237-185.sslip.io` (Caddy site block), shipped as an image like `brawler-client` (`make push-market`).
+8. **Hosting: AWS box**, same as the game: `https://market.13-54-190-122.sslip.io` (Caddy site block), shipped as an image like `brawler-client` (`make push-market`).
 9. **Platform**: reuse `v2.brawler-platform-5c8e2b.testnet`; fresh monsters account; `register_game` upsert points `brawler` assets at it; monsters `arena_id` = v2 platform.
 10. Godot: no.
 

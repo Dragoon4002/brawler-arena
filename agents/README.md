@@ -12,7 +12,7 @@ docker compose -f infra/compose.yml up -d agents
 
 | env | default | |
 |---|---|---|
-| `SERVER_URL` | `wss://65-0-237-185.sslip.io` | game server WS |
+| `SERVER_URL` | `wss://52-64-167-184.sslip.io` | game server WS |
 | `COMMENTATOR` | `1` | `0` disables |
 | `BOT_LEVEL` | `medium` | bot skill: `easy` / `medium` / `hard` (reaction lag, dropped attacks, input noise) |
 | `COMMENTATOR_NAME` | `Bot Commentator` | chat name |

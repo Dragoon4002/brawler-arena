@@ -1,20 +1,22 @@
-# Server keeps rooms in memory -> exactly one instance, no ASG/ALB.
+# server: game server + bots (rooms in memory -> exactly one, no ASG/ALB). clients: game client + market.
 
 data "aws_ec2_instance_type" "this" {
-  instance_type = var.instance_type
+  for_each      = var.instance_types
+  instance_type = each.value
 }
 
 locals {
-  arch = contains(data.aws_ec2_instance_type.this.supported_architectures, "arm64") ? "arm64" : "amd64"
+  arch = { for k, t in data.aws_ec2_instance_type.this : k => contains(t.supported_architectures, "arm64") ? "arm64" : "amd64" }
 }
 
 data "aws_ami" "ubuntu" {
+  for_each    = toset(values(local.arch))
   most_recent = true
   owners      = ["099720109477"]
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-${local.arch}-server-*"]
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-${each.key}-server-*"]
   }
 }
 
@@ -25,7 +27,7 @@ resource "aws_key_pair" "this" {
 
 resource "aws_security_group" "this" {
   name        = var.name
-  description = "brawler ws server"
+  description = "brawler boxes"
 }
 
 resource "aws_vpc_security_group_ingress_rule" "ssh" {
@@ -52,8 +54,9 @@ resource "aws_vpc_security_group_egress_rule" "all" {
 }
 
 resource "aws_instance" "this" {
-  ami                    = data.aws_ami.ubuntu.id
-  instance_type          = var.instance_type
+  for_each               = var.instance_types
+  ami                    = data.aws_ami.ubuntu[local.arch[each.key]].id
+  instance_type          = each.value
   key_name               = aws_key_pair.this.key_name
   vpc_security_group_ids = [aws_security_group.this.id]
 
@@ -67,7 +70,7 @@ resource "aws_instance" "this" {
     http_tokens = "required"
   }
 
-  tags = { Name = var.name }
+  tags = { Name = "${var.name}-${each.key}" }
 
   # new AMI releases shouldn't replace the box (and drop in-memory rooms)
   lifecycle {
@@ -76,15 +79,7 @@ resource "aws_instance" "this" {
 }
 
 resource "aws_eip" "this" {
-  instance = aws_instance.this.id
+  for_each = aws_instance.this
+  instance = each.value.id
   domain   = "vpc"
-}
-
-resource "aws_route53_record" "this" {
-  count   = var.route53_zone_id == null ? 0 : 1
-  zone_id = var.route53_zone_id
-  name    = var.domain
-  type    = "A"
-  ttl     = 300
-  records = [aws_eip.this.public_ip]
 }

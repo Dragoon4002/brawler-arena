@@ -7,7 +7,7 @@ import os from 'node:os';
 const env = process.env;
 const M = env.MONSTERS_ID ?? 'v2.brawler-monsters-5c8e2b.testnet';
 const OWNER = env.OWNER_ID ?? 'brawler-platform-5c8e2b.testnet';
-const MARKET = env.MARKET_URL ?? 'https://market.65-0-237-185.sslip.io';
+const MARKET = env.MARKET_URL ?? 'https://market.13-54-190-122.sslip.io';
 const rpc = new JsonRpcProvider({ url: env.NEAR_RPC ?? 'https://test.rpc.fastnear.com' });
 const key = JSON.parse(fs.readFileSync(`${os.homedir()}/.near-credentials/testnet/${OWNER}.json`)).private_key;
 const owner = new Account(OWNER, rpc, key);

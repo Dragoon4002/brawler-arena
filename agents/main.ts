@@ -7,7 +7,7 @@ import { isBot } from '../games/brawler/client/src/lib/bot.ts';
 import { pilot, template, type Level, type Moment, type View } from './brain.ts';
 
 const env = process.env;
-const SERVER = env.SERVER_URL ?? 'wss://65-0-237-185.sslip.io';
+const SERVER = env.SERVER_URL ?? 'wss://52-64-167-184.sslip.io';
 const on = (k: string) => env[k] !== '0';
 const LEVEL = (env.BOT_LEVEL ?? 'medium') as Level;
 const CASTER = env.COMMENTATOR_NAME ?? 'Bot Commentator';

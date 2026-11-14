@@ -2,9 +2,9 @@
 
 A real-time 1v1 platform fighter on NEAR testnet. Monsters are NEP-171 NFTs whose on-chain DNA sets their stats, skills are NEP-245 tokens that players trade and equip, and every staked match, spectator bet and tournament settles in a contract. Every result can be replayed and checked against the hash the referee posted on-chain.
 
-- **Game:** `<game url>` (TBD: Vercel deploy of `games/brawler/client`)
-- **Market:** `<market url>` (TBD: Vercel deploy of `market/`)
-- **Game server:** `wss://65-0-237-185.sslip.io` (AWS EC2, Caddy TLS)
+- **Game:** https://13-54-190-122.sslip.io
+- **Market:** https://market.13-54-190-122.sslip.io
+- **Game server:** `wss://52-64-167-184.sslip.io` (AWS EC2, Caddy TLS; client + market on a second EC2 box)
 - **Network:** NEAR testnet. **License:** MIT.
 
 ## Problem
@@ -95,7 +95,7 @@ Libraries and tools used (Q-005):
 
 - TS: Next.js 16, React 19, `near-api-js` 7, `@hot-labs/near-connect` + `near-connect-hooks` (wallet selector), Tailwind 4 (market), bun (market), TypeScript.
 - Rust: `near-sdk` / `near-contract-standards` 5.30 (contracts), `cargo-near`, `axum` (WebSocket server), `near-api` (referee RPC), `sha2`, `serde`, `rand`, `ethnum`.
-- Infra: Terraform, Ansible, Docker, Caddy; Vercel (client, market, UI art in Vercel Blob).
+- Infra: Terraform, Ansible, Docker, Caddy on two EC2 boxes (server, clients); UI art in Vercel Blob.
 - Art and video: Blender (`games/brawler/sprites/*.blend`), Remotion (`games/brawler/video/`); Godot 4 for the experimental `games/brawler/godot/` client.
 - AI-assisted code: most code was written with AI coding agents (Claude Code), directed and reviewed by the team. Plans and specs the agents worked from are in `games/brawler/plans/` and `tasks/`.
 
@@ -112,7 +112,7 @@ Libraries and tools used (Q-005):
 
 ## Try it (judges)
 
-1. Open https://65-0-237-185.sslip.io and press "Practice vs bot". You fight a bot right away, no wallet needed.
+1. Open https://13-54-190-122.sslip.io and press "Practice vs bot". You fight a bot right away, no wallet needed.
 2. Connect a NEAR testnet wallet and host a free room, then press "Call bot" and a bot joins. For a staked room, join as the guest from a second browser with another wallet (bots only play free rooms). The stake moves into the platform contract (`create_match` / `join_match`).
 3. Open the lobby in another browser and watch the room. Buy a side in the live prediction market and watch the AMM price chart move.
 4. Finish the fight. The referee calls `report_result`, the pot goes to the winner's in-contract balance, and spectators `claim`.
@@ -176,19 +176,17 @@ cd market && bun install && bun dev           # market, http://localhost:3000 (?
 
 ## Deploy
 
-The game client and market deploy to Vercel (project roots `games/brawler/client` and `market/`, env in `infra/README.md`). A single EC2 box runs the server and bots (rooms are in-memory, so exactly one instance) behind Caddy for TLS. Needs `terraform`, `ansible`, AWS creds, a domain.
+Two EC2 boxes behind Caddy TLS: **server** runs the game server and bots (rooms are in-memory, so exactly one instance); **clients** runs the game client and market (Next standalone). Domains are `<eip>.sslip.io`, no DNS setup. Needs `terraform`, `ansible`, `jq`, docker buildx, AWS creds. Details in `infra/README.md`.
 
 ```sh
-cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars   # set ssh_cidr, domain, route53_zone_id?
-make deploy-infra                     # EC2 + EIP + SG (+ Route53 A record)
-# no route53_zone_id? point an A record for <domain> at `terraform -chdir=infra/terraform output -raw public_ip`
-export CONTRACT_ID=v2.brawler-platform-5c8e2b.testnet MONSTERS_ID=brawler-monsters-5c8e2b.testnet REFEREE_ID=referee.v2.brawler-platform-5c8e2b.testnet REFEREE_KEY=...   # or ansible-vault secrets.yml via ANSIBLE_ARGS
-make deploy                           # docker + repo (repo_version, default main) + compose up
+cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars   # set ssh_cidr
+make deploy-infra                     # 2x EC2 + EIP + SG
+export REFEREE_KEY=...                # referee private key (CONTRACT_ID/MONSTERS_ID/REFEREE_ID have defaults)
+make deploy                           # docker + repo (main) on both, build+ship 4 images, compose up
 ```
 
-- DNS must resolve to the EIP before `make deploy`, or Caddy can't get a cert.
 - `?server=wss://<domain>` on the game URL overrides the server for a quick test.
-- Redeploy: `make deploy ANSIBLE_ARGS="-e repo_version=<sha>"`. Remote state: add an `s3` backend in `versions.tf` (optional).
+- Redeploy: `make deploy ANSIBLE_ARGS="-e repo_version=<sha>"`.
 
 ## Controls
 
