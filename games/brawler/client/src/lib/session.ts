@@ -5,7 +5,7 @@ import { Netplay, linkPeer } from './net.ts';
 import { lookOf, sanitize, statsOf, type Dna } from './genes.ts';
 import { STAGE_IDS, type StageId } from './stages.ts';
 import { music, playEvents } from './audio.ts';
-import { bot } from './demo.ts';
+import { bot } from './bot.ts';
 import type { SignMatch } from './near.ts';
 import { unpack } from './tape.ts';
 

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { IN, newGame } from '../games/brawler/client/src/lib/sim/sim.ts';
-import { bot, joinable, pilot, template, type View } from './brain.ts';
+import { bot } from '../games/brawler/client/src/lib/bot.ts';
+import { joinable, pilot, template, type View } from './brain.ts';
 
 test('challenger joins only public free rooms with a lone human host', () => {
   const row = { code: 'ABCD', pub: true, status: 'waiting', matchId: null, bettable: false, stake: '0', players: [{ account: 'ana.testnet' }] };

@@ -1,5 +1,6 @@
 import { IN, type GameState } from '../games/brawler/client/src/lib/sim/sim.ts';
 import { STAGES } from '../games/brawler/client/src/lib/stages.ts';
+import { bot } from '../games/brawler/client/src/lib/bot.ts';
 
 export interface Fighter { name: string; stocks: number; damage: number }
 export interface View { fighters: [Fighter, Fighter]; secs: number }
@@ -8,22 +9,6 @@ export interface View { fighters: [Fighter, Fighter]; secs: number }
 
 const safe = (s: GameState) => STAGES[s.stage].solids.map((r) => ({ lo: r.x0 + 60, hi: r.x1 - 60 }));
 const offStage = (s: GameState, me: number) => !safe(s).some((r) => s.fighters[me].x >= r.lo && s.fighters[me].x <= r.hi);
-
-// Copy of client demo.ts `bot` (that module needs a browser).
-export function bot(s: GameState, me: number) {
-  const f = s.fighters[me], o = s.fighters[1 - me], dx = o.x - f.x, t = s.frame + me * 37;
-  let b = Math.abs(dx) > 70 ? (dx > 0 ? IN.RIGHT : IN.LEFT) : 0;
-  if (Math.abs(dx) < 90 && t % 24 < 2) b |= t % 96 < 24 ? IN.HEAVY : IN.LIGHT;
-  if (o.y < f.y - 80 && t % 30 === 0) b |= IN.JUMP;
-  const g = safe(s);
-  if (!g.some((r) => f.x >= r.lo && f.x <= r.hi)) {
-    const mid = (r: { lo: number; hi: number }) => (r.lo + r.hi) / 2;
-    const to = g.reduce((a, r) => (Math.abs(o.x - mid(r)) < Math.abs(o.x - mid(a)) ? r : a));
-    const goal = Math.min(to.hi, Math.max(to.lo, f.x < mid(to) ? to.lo + 40 : to.hi - 40));
-    b = (f.x < goal ? IN.RIGHT : IN.LEFT) | (t % 20 === 0 ? IN.JUMP : 0);
-  }
-  return b;
-}
 
 // lag = extra reaction frames, miss = chance an attack input is dropped, noise = chance of a random input flip per frame
 export const LEVELS = {
