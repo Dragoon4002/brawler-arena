@@ -28,13 +28,23 @@ pub struct Stats {
     pub dex: f64,
     pub def: f64,
     pub spd: f64,
+    /// Effect skill bits, see `fx`.
+    pub fx: u8,
 }
 pub const DEFAULT_STATS: Stats = Stats {
     str: 6.,
     dex: 5.,
     def: 5.,
     spd: 6.,
+    fx: 0,
 };
+
+pub mod fx {
+    pub const AIR_JUMP: u8 = 1;
+    pub const LIFESTEAL: u8 = 2;
+    pub const QUICK_DODGE: u8 = 4;
+    pub const SECOND_WIND: u8 = 8;
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum St {
@@ -88,6 +98,8 @@ pub struct Fighter {
     pub buf: i32,
     pub buf_t: f64,
     pub m: Mods,
+    pub fx: u8,
+    pub wind_used: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -159,6 +171,18 @@ pub fn stat_mods(s: Stats) -> Mods {
     }
 }
 
+fn jumps(f: u8) -> f64 {
+    if f & fx::AIR_JUMP != 0 { 3. } else { 2. }
+}
+
+fn dodge_cd(f: &Fighter, n: f64) -> f64 {
+    if f.fx & fx::QUICK_DODGE != 0 {
+        n - (n / 3.).floor()
+    } else {
+        n
+    }
+}
+
 fn new_fighter(st: &StageDef, i: usize, stats: Stats) -> Fighter {
     let (x, y) = st.spawns[i];
     Fighter {
@@ -170,7 +194,7 @@ fn new_fighter(st: &StageDef, i: usize, stats: Stats) -> Fighter {
         state: St::Air,
         t: 0.,
         grounded: false,
-        air_jumps: 2.,
+        air_jumps: jumps(stats.fx),
         recovery_used: false,
         air_dodged: false,
         fast_fall: false,
@@ -190,6 +214,8 @@ fn new_fighter(st: &StageDef, i: usize, stats: Stats) -> Fighter {
         buf: 0,
         buf_t: 0.,
         m: stat_mods(stats),
+        fx: stats.fx,
+        wind_used: false,
     }
 }
 
@@ -301,14 +327,14 @@ fn start_dodge(f: &mut Fighter, inp: i32) {
         f.vx = dx * 9.;
         f.vy = 0.;
         f.invuln = 15.;
-        f.dodge_cd = 50.;
+        f.dodge_cd = dodge_cd(f, 50.);
     } else {
         let dy = (if inp & DOWN != 0 { 1. } else { 0. }) - (if inp & UP != 0 { 1. } else { 0. });
         let k = if dx != 0. && dy != 0. { 7.07 } else { 10. };
         f.vx = dx * k;
         f.vy = dy * k;
         f.invuln = 17.;
-        f.dodge_cd = 60.;
+        f.dodge_cd = dodge_cd(f, 60.);
         f.air_dodged = true;
         f.fast_fall = false;
     }
@@ -514,7 +540,8 @@ fn respawn(st: &StageDef, f: &mut Fighter, i: usize) {
     f.vy = 0.;
     f.damage = 0.;
     f.invuln = RESPAWN_INVULN;
-    f.air_jumps = 2.;
+    f.air_jumps = jumps(f.fx);
+    f.wind_used = false;
     f.recovery_used = false;
     f.air_dodged = false;
     f.mv = None;
@@ -586,7 +613,7 @@ fn update(st: &StageDef, f: &mut Fighter, inp: i32, pressed: i32, i: usize) {
     }
 
     if physics(st, f) {
-        f.air_jumps = 2.;
+        f.air_jumps = jumps(f.fx);
         f.recovery_used = false;
         f.air_dodged = false;
         f.fast_fall = false;
@@ -685,9 +712,9 @@ pub fn step(s: &mut GameState, inputs: [i32; 2]) {
     }
     for (i, j, id) in hits {
         let m = moves::get(id);
-        let (a_x, a_facing, a_dmg) = {
+        let (a_x, a_facing, a_dmg, a_fx) = {
             let a = &s.fighters[i];
-            (a.x, a.facing, a.m.dmg)
+            (a.x, a.facing, a.m.dmg, a.fx)
         };
         let dmg = js_round(m.dmg * a_dmg);
         let lag = 3. + (dmg / 4.).floor();
@@ -709,6 +736,12 @@ pub fn step(s: &mut GameState, inputs: [i32; 2]) {
             continue;
         }
         b.damage += dmg;
+        if a_fx & fx::LIFESTEAL != 0 {
+            let heal = (dmg / 5.).floor();
+            let a = &mut s.fighters[i];
+            a.damage = js_max(0., a.damage - heal);
+        }
+        let b = &mut s.fighters[j];
         let kb = (m.base + b.damage * m.growth) * b.m.kb_taken;
         b.vx = sx * m.ax * kb;
         b.vy = m.ay * kb;
@@ -724,6 +757,16 @@ pub fn step(s: &mut GameState, inputs: [i32; 2]) {
         set_state(b, St::Hitstun);
     }
 
+    for f in s.fighters.iter_mut() {
+        if f.fx & fx::SECOND_WIND != 0
+            && !f.wind_used
+            && f.state != St::Dead
+            && f.damage >= MAX_HP - 50.
+        {
+            f.damage -= 30.;
+            f.wind_used = true;
+        }
+    }
     let bz = &st.blast;
     for f in s.fighters.iter_mut() {
         let in_bounds = f.x > bz.x0 && f.x < bz.x1 && f.y > bz.y0 && f.y < bz.y1;

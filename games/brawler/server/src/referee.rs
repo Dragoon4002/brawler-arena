@@ -1,9 +1,5 @@
 // Replays confirmed input tape w/ same sim as players, reports KOs + winner to platform contract.
-use brawler_sim::{
-    GameState, StageId,
-    genes::{Dna, stats_of},
-    new_game, step,
-};
+use brawler_sim::{GameState, StageId, Stats, new_game, step};
 use near_svc::Near;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -27,9 +23,9 @@ pub struct Referee {
 }
 
 impl Referee {
-    pub fn new(near: Arc<Near>, match_id: Option<u64>, dna: [Dna; 2], stage: StageId) -> Self {
+    pub fn new(near: Arc<Near>, match_id: Option<u64>, stats: [Stats; 2], stage: StageId) -> Self {
         Referee {
-            state: new_game([stats_of(&dna[0]), stats_of(&dna[1])], stage),
+            state: new_game(stats, stage),
             frame: 0,
             kos: 0,
             match_id,

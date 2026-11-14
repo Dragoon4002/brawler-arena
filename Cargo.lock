@@ -185,6 +185,7 @@ dependencies = [
  "base64 0.22.1",
  "brawler-sim",
  "futures-util",
+ "near-api",
  "near-svc",
  "rand 0.9.5",
  "serde",

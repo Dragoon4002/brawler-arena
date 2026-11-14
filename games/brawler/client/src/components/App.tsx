@@ -13,6 +13,7 @@ import { TournamentPage } from '@/components/economy/TournamentPage.tsx';
 import { Tournaments } from '@/components/economy/Tournaments.tsx';
 import { Breed } from '@/components/monsters/Breed.tsx';
 import { Collection } from '@/components/monsters/Collection.tsx';
+import { Customize } from '@/components/monsters/Customize.tsx';
 import { Detail } from '@/components/monsters/Detail.tsx';
 import { Play } from '@/components/Play.tsx';
 import { Lobby } from '@/components/rooms/Lobby.tsx';
@@ -58,6 +59,7 @@ function Routes() {
     : page === 'collection' ? <Collection />
     : page === 'monster' && arg ? <Detail key={arg} id={arg} />
     : page === 'breed' ? <Breed />
+    : page === 'customize' ? <Customize key={arg} id={arg} />
     : page === 'market' ? <Market />
     : page === 'leaderboard' ? <Leaderboard />
     : page === 'player' && arg ? <Profile key={arg} account={decodeURIComponent(arg)} />

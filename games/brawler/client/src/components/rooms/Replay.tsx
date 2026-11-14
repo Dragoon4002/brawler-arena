@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { sanitize } from '@/lib/genes.ts';
+import { sanitize, sanitizeSkills } from '@/lib/genes.ts';
 import { CONTRACT_ID, useArena, type MatchView } from '@/lib/near.ts';
 import { SERVER, startReplay } from '@/lib/session.ts';
 import { simulate, tapeHash, type Tape } from '@/lib/tape.ts';
@@ -36,7 +36,7 @@ export function Replay({ tapeKey }: { tapeKey: string }) {
 
   useEffect(() => {
     if (!tape) return;
-    const g = startReplay(canvas.current!, tape.players.map((p) => ({ name: p.name, dna: sanitize(p.dna) })), tape.stage, tape.frames);
+    const g = startReplay(canvas.current!, tape.players.map((p) => ({ name: p.name, dna: sanitize(p.dna), skills: sanitizeSkills(p.skills) })), tape.stage, tape.frames);
     ctl.current = g;
     setPaused(false);
     return () => g.stop();

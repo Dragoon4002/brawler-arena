@@ -26,7 +26,7 @@ const saved = (): FightSetup | null => { try { return JSON.parse(sessionStorage.
 const forget = () => { try { sessionStorage.removeItem(LIVE); } catch { /* storage blocked */ } };
 export const prepareFight = (s: FightSetup) => { setup = s; go('/fight'); };
 
-const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna });
+const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna, skills: m.skills }); // skills: local fights only, the server sends seats for online ones
 
 // Demo states for /fight/<state>?demo : waiting (host lobby) | challenger (guest lobby) | fight | victory | defeat | void
 const DEMO_STAGE = (new URLSearchParams(location.search).get('stage') ?? 'ember') as StageId; // ?demo&stage=grove
