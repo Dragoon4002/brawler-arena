@@ -13,6 +13,8 @@
 //! On-chain match must have game == "brawler".
 //! `match`: 1st arrival gets {t:'room', code, seat}, 2nd starts it; seat = on-chain host 0 / guest 1.
 //!   Opponent absent NO_SHOW -> present seat wins, {t:'over', winner, reason:'no-show'}.
+//! {t:'rematch'} after `over` (free rooms, seats only): opponent gets {t:'rematch'}; once both asked the room
+//!   restarts (fresh `start`/`spec`). Opponent gone -> {t:'left'}; else rejected with `error`.
 
 mod game;
 mod protocol;

@@ -129,6 +129,7 @@ impl Session {
                 self.tape(m);
                 Ok(())
             }
+            "rematch" => self.rematch(),
             "pong" => {
                 self.conn.pong.notify_one();
                 Ok(())
@@ -394,6 +395,38 @@ impl Session {
         }
         tape.extend(ins.iter().take(TAPE_BATCH).map(tape_of));
         game::replay(&self.app, r, &mut st.lobby);
+    }
+
+    /// Free rooms only: both seats ask -> same room restarts. Opponent gone -> `left` (client hosts anew).
+    fn rematch(&self) -> Reply {
+        let Some(at) = &self.room else {
+            return Err("Not in a room");
+        };
+        let mut st = self.app.lock();
+        let Some(r) = at.get_mut(&mut st.rooms) else {
+            self.conn.send(&json!({ "t": "left" }));
+            return Ok(());
+        };
+        let i = r.seat_of(&self.conn).ok_or("Spectators can't rematch")?;
+        if r.match_id.is_some() {
+            return Err("On-chain matches need a new match");
+        }
+        if r.status != Status::Done {
+            return Err("Match is not over");
+        }
+        let Some(other) = r.opponent(i).cloned() else {
+            self.conn.send(&json!({ "t": "left" }));
+            return Ok(());
+        };
+        r.rematch[i] = true;
+        if !r.rematch[1 - i] {
+            other.send(&json!({ "t": "rematch" }));
+            return Ok(());
+        }
+        r.reset();
+        drop(st);
+        tokio::spawn(game::begin(self.app.clone(), at.clone(), None));
+        Ok(())
     }
 
     fn relay(&self, raw: &Utf8Bytes) {

@@ -15,6 +15,8 @@ export interface Hooks {
   result?: (winnerSeat: number, kos: number[], seat: number) => void; // once per finished game; kos[i] = stocks player i took
   over?: (winner: number | null, reason: string) => void; // server referee verdict (online / spectate)
   room?: (info: { code: string; matchId: number | null; bettable: boolean; seat: number }) => void;
+  rematch?: () => void; // opponent asked for a rematch
+  left?: () => void; // opponent (or our socket) gone: no rematch in this room
 }
 export interface HostOpts { pub: boolean; view: boolean; bettable: boolean; matchId: number | null; stake: string; account: string }
 
@@ -74,7 +76,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
   let peer: ReturnType<typeof linkPeer> | null = null;
   let game: ReturnType<typeof loop> | null = null;
   let stopped = false;
-  let hb: ReturnType<typeof setInterval> | undefined;
+  let hb: ReturnType<typeof setInterval> | undefined, leftIv: ReturnType<typeof setInterval> | undefined;
   const say = (t: string) => hooks.status?.(t);
 
   function connect(tries: number) {
@@ -89,6 +91,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
     let theirStage: StageId = 'ember';
     let chain: Player[] | null = null; // server-sent seats (chain DNA); must win so our sim matches the referee's
     let theirs: Player | null = null, ready: { send: any; delay: number; label: string } | null = null;
+    let ended = false;
 
     // Fight starts once we know the opponent's monster AND the input channel is up.
     const maybeStart = () => {
@@ -114,7 +117,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
       say('Waking up server… (can take up to a minute)');
       setTimeout(() => ws === sock && connect(tries + 1), 2500);
     };
-    sock.onclose = () => { if (game) game.setBanner('Connection closed'); };
+    sock.onclose = () => { clearInterval(leftIv); if (game) game.setBanner('Connection closed'); if (opened) hooks.left?.(); };
     sock.onmessage = async (e) => {
       const m = JSON.parse(e.data);
       if (m.t === 'ping') sock.send('{"t":"pong"}');
@@ -128,6 +131,9 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
       } else if (m.t === 'room') { code = m.code; seat = m.seat ?? 0; say(`Room ${m.code} — share this code. Waiting for opponent…`); hooks.room?.({ code: m.code, matchId: first.t === 'join' ? null : first.matchId, bettable: first.t === 'host' && first.bettable, seat }); }
       else if (m.t === 'error') say(m.msg);
       else if (m.t === 'start') {
+        // 2nd+ start = rematch in the same room: drop the old game, link and per-game state
+        clearInterval(hb); clearInterval(leftIv); peer?.close(); game?.stop();
+        game = null; net = null; theirs = null; ready = null; chain = null; ended = false;
         seat = m.seat; delay = m.delay;
         if (Array.isArray(m.players) && m.players.length === 2) chain = m.players.map((p: any) => ({ name: String(p.name ?? 'Rival').slice(0, 24) || 'Rival', dna: sanitize(p.dna) }));
         if (seat === 1 || first.t === 'match') hooks.room?.({ code: first.t === 'join' ? first.code : code, matchId: m.matchId ?? null, bettable: !!m.bettable, seat });
@@ -139,14 +145,23 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
         theirStage = STAGE_IDS.includes(m.stage) ? m.stage : 'ember';
         maybeStart();
       } else if (m.t === 'sdp' || m.t === 'ice' || m.t === 'go') peer?.signal(m);
-      else if (m.t === 'left') game?.setBanner('Opponent left. They forfeit after 30 s.');
-      else if (m.t === 'over') { hooks.over?.(m.winner, m.reason); if (m.reason !== 'ko') game?.setBanner(verdict(m.winner, m.reason, seat)); }
+      else if (m.t === 'left') {
+        hooks.left?.();
+        if (ended || !game) return;
+        const until = Date.now() + 30_000; // server forfeits ~30 s after their last message
+        const tick = () => game?.setBanner(`Opponent left. They forfeit in ${Math.max(0, Math.ceil((until - Date.now()) / 1000))} s.`);
+        clearInterval(leftIv); tick(); leftIv = setInterval(tick, 1000);
+      } else if (m.t === 'over') { ended = true; clearInterval(leftIv); hooks.over?.(m.winner, m.reason); if (m.reason !== 'ko') game?.setBanner(verdict(m.winner, m.reason, seat)); }
+      else if (m.t === 'rematch') hooks.rematch?.();
       else net?.onMessage(m);
     };
   }
 
   connect(0);
-  return { stop() { stopped = true; clearInterval(hb); ws?.close(); peer?.close(); game?.stop(); } };
+  return {
+    rematch() { if (ws?.readyState === WebSocket.OPEN) ws.send('{"t":"rematch"}'); },
+    stop() { stopped = true; clearInterval(hb); clearInterval(leftIv); ws?.close(); peer?.close(); game?.stop(); },
+  };
 }
 
 const verdict = (winner: number | null, reason: string, seat: number) =>

@@ -70,6 +70,9 @@ pub struct Room {
     pub created: Instant,
     /// `match` rooms: on-chain seat of 1st arrival (wins if other never shows).
     pub no_show: Option<i32>,
+    /// Bumped per rematch so a stale DONE_TTL timer can't remove the next game.
+    pub round: u32,
+    pub rematch: [bool; 2],
 }
 
 impl Room {
@@ -88,6 +91,18 @@ impl Room {
 
     pub fn opponent(&self, seat: usize) -> Option<&Arc<Conn>> {
         self.seats.get(1 - seat).and_then(|s| s.conn.as_ref())
+    }
+
+    /// Fresh game in the same room (same seats/DNA/stage); `game::begin` takes it from here.
+    pub fn reset(&mut self) {
+        self.round += 1;
+        self.status = Status::Waiting;
+        self.winner = None;
+        self.referee = None;
+        self.frames.clear();
+        self.no_show = None;
+        self.rematch = [false; 2];
+        self.seats.iter_mut().for_each(|s| s.tape.clear());
     }
 
     pub fn players(&self) -> impl Iterator<Item = &Arc<Conn>> {
@@ -156,6 +171,8 @@ impl Shared {
             frames: vec![],
             created: Instant::now(),
             no_show: None,
+            round: 0,
+            rematch: [false; 2],
         };
         configure(&mut r);
         let at = r.handle();
