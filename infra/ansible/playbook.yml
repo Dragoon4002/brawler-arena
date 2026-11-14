@@ -74,7 +74,7 @@
       notify: Restart caddy
 
     - name: Compose up
-      ansible.builtin.command: "{{ compose }} up -d --build"
+      ansible.builtin.command: "{{ compose }} up -d --no-build"
       args:
         chdir: "{{ app_dir }}"
       register: up

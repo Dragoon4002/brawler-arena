@@ -2,7 +2,7 @@ COMPOSE := docker compose -f infra/compose.yml
 
 TF := terraform -chdir=infra/terraform
 
-.PHONY: dev down logs test wasm e2e deploy-infra deploy
+.PHONY: dev down logs test wasm e2e deploy-infra push-image deploy
 
 dev:
 	$(COMPOSE) up --build -d
@@ -32,7 +32,13 @@ deploy-infra:
 	$(TF) init
 	$(TF) apply
 
+# built locally: a release build on a 2G t4g box takes >10 min and starves ssh
+PLATFORM ?= linux/arm64
+push-image:
+	docker buildx build --platform $(PLATFORM) -f infra/brawler-server.Dockerfile -t brawler-server --load .
+	docker save brawler-server | gzip | ssh ubuntu@$$($(TF) output -raw public_ip) 'gunzip | sudo docker load'
+
 # extra flags: make deploy ANSIBLE_ARGS="-e @infra/ansible/secrets.yml --ask-vault-pass"
-deploy:
+deploy: push-image
 	ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook infra/ansible/playbook.yml \
 		-i "$$($(TF) output -raw public_ip)," -e domain="$$($(TF) output -raw domain)" $(ANSIBLE_ARGS)

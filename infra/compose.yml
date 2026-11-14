@@ -1,6 +1,7 @@
 # env from shell or infra/.env. no CONTRACT_ID = free rooms only
 services:
   brawler-server:
+    image: brawler-server
     build: { context: .., dockerfile: infra/brawler-server.Dockerfile }
     ports: ["${BRAWLER_PORT:-8787}:8787"]
     environment:
