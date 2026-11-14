@@ -7,7 +7,7 @@ import { Arena } from '@/components/Arena.tsx';
 import { DemoIndex } from '@/components/demo/DemoIndex.tsx';
 import { MarketSim } from '@/components/demo/MarketSim.tsx';
 import { Market } from '@/components/economy/Market.tsx';
-import { Season } from '@/components/economy/Season.tsx';
+import { Leaderboard } from '@/components/economy/Leaderboard.tsx';
 import { TournamentPage } from '@/components/economy/TournamentPage.tsx';
 import { Tournaments } from '@/components/economy/Tournaments.tsx';
 import { GodotPage } from '@/components/GodotPage.tsx';
@@ -56,7 +56,7 @@ function Routes() {
     : page === 'monster' && arg ? <Detail key={arg} id={arg} />
     : page === 'breed' ? <Breed />
     : page === 'market' ? <Market />
-    : page === 'season' ? <Season />
+    : page === 'leaderboard' ? <Leaderboard />
     : page === 'tournaments' ? <Tournaments />
     : page === 'tournament' && arg ? <TournamentPage id={+arg} />
     : page === 'account' ? <Account />

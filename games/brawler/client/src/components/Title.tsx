@@ -7,19 +7,27 @@ import { monsters } from '@/lib/store.ts';
 import { ArenaBackdrop, HubDialog, Ico, Logo, Portrait, STAGE_ICON, StageThumb, TYPE_ICON } from '@/components/ui.tsx';
 import { FundsDialog } from '@/components/account/Funds.tsx';
 
-function HubBtn({ href, label, icon, badge, active }: { href: string; label: string; icon: string; badge?: number; active?: boolean }) {
+function HubBtn({ href, label, icon, badge, active, soon }: { href: string; label: string; icon: string; badge?: number; active?: boolean; soon?: boolean }) {
   return (
     <div className="hub-slot">
-      <a className="hub-btn" href={href} aria-current={active ? 'page' : undefined}>
-        <Ico n={icon} className="hub-btn-ico" />
-        <span>{label}</span>
-        {badge ? <b className="hub-badge">{badge}</b> : null}
-      </a>
+      {soon ? (
+        <span className="hub-btn soon" aria-disabled="true" title={`${label}: coming soon`}>
+          <Ico n={icon} className="hub-btn-ico" />
+          <span>{label}</span>
+          <b className="hub-soon">Soon</b>
+        </span>
+      ) : (
+        <a className="hub-btn" href={href} aria-current={active ? 'page' : undefined}>
+          <Ico n={icon} className="hub-btn-ico" />
+          <span>{label}</span>
+          {badge ? <b className="hub-badge">{badge}</b> : null}
+        </a>
+      )}
     </div>
   );
 }
 
-const PANEL_FROM: Record<string, 'left' | 'right' | 'bottom'> = { collection: 'left', breed: 'left', market: 'left', account: 'left', lobby: 'right', tournaments: 'right', season: 'right', play: 'bottom' };
+const PANEL_FROM: Record<string, 'left' | 'right' | 'bottom'> = { collection: 'left', breed: 'left', market: 'left', account: 'left', lobby: 'right', tournaments: 'right', leaderboard: 'right', play: 'bottom' };
 
 export function Title({ page, children }: { page?: string; children?: React.ReactNode }) {
   const list = useMemo(monsters, []);
@@ -47,9 +55,9 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
 
       <nav className="hub-side left" aria-label="Monsters">
         <HubBtn href="/collection" label="Monsters" icon="icon-monster" badge={list.length} active={page === 'collection'} />
-        <HubBtn href="/breed" label="Breed" icon="icon-breed" active={page === 'breed'} />
-        <HubBtn href="/market" label="Market" icon="coin-stack" active={page === 'market'} />
         <HubBtn href="/account" label="Account" icon="icon-wallet" active={page === 'account'} />
+        <HubBtn href="/breed" label="Breed" icon="icon-breed" soon />
+        <HubBtn href="/market" label="Market" icon="coin-stack" soon />
       </nav>
 
       <section className="hub-hero" aria-label="Your monster" inert={!!children}>
@@ -71,7 +79,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
       <nav className="hub-side right" aria-label="Online">
         <HubBtn href="/lobby" label="Lobby" icon="icon-lobby" active={page === 'lobby'} />
         <HubBtn href="/tournaments" label="Cups" icon="trophy" active={page === 'tournaments'} />
-        <HubBtn href="/season" label="Season" icon="icon-history" active={page === 'season'} />
+        <HubBtn href="/leaderboard" label="Ranks" icon="icon-history" active={page === 'leaderboard'} />
       </nav>
 
       {children && (
