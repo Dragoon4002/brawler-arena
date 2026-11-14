@@ -2,7 +2,10 @@ import { breed, nameFor, randomDna, sanitize, type Monster } from './genes.ts';
 
 const KEY = 'ba.monsters.v1';
 const HISTORY = 'ba.history.v1';
-export interface MatchLog { at: number; mine: string; vs: string; won: boolean; mode: 'local' | 'online' }
+export interface MatchLog {
+  at: number; mine: string; vs: string; won: boolean; mode: 'local' | 'online';
+  kos?: number; vsAccount?: string; stake?: string; matchId?: number | null; tournament?: boolean;
+}
 
 const read = <T,>(k: string, d: T): T => { try { return JSON.parse(localStorage.getItem(k) ?? '') as T; } catch { return d; } };
 const write = (k: string, v: unknown) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
@@ -27,8 +30,8 @@ export function breedPair(a: Monster, b: Monster) {
   return { child, mutated };
 }
 
-export function recordResult(id: string, won: boolean, kos: number, vs: string, mode: MatchLog['mode']) {
+export function recordResult(id: string, won: boolean, kos: number, vs: string, mode: MatchLog['mode'], extra: Partial<MatchLog> = {}) {
   write(KEY, monsters().map((m) => (m.id === id ? { ...m, record: { w: m.record.w + +won, l: m.record.l + +!won, ko: m.record.ko + kos } } : m)));
-  write(HISTORY, [{ at: Date.now(), mine: id, vs, won, mode }, ...history()].slice(0, 50));
+  write(HISTORY, [{ ...extra, at: Date.now(), mine: id, vs, won, mode, kos }, ...history()].slice(0, 200));
 }
 export const history = () => read<MatchLog[]>(HISTORY, []);

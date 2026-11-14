@@ -96,7 +96,11 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
       chat: (l: ChatLine) => setChat((c) => [...c, l].slice(-200)),
       chatlog: setChat,
       over: (winner: number | null, reason: string) => setTimeout(() => setOver({ winner, reason, seat }), reason === 'ko' ? 1000 : 0),
-      result: (winner: number, kos: number[], st: number) => recordResult(monRef.current.id, winner === st, kos[st], 'online rival', 'online'),
+      result: (winner: number, kos: number[], st: number) => {
+        const r = rsRef.current, them = r?.seats[1 - st];
+        recordResult(monRef.current.id, winner === st, kos[st], them?.name || 'Online rival', 'online',
+          { vsAccount: them?.account || undefined, stake: r?.stake ?? '0', matchId: r?.matchId ?? (s.kind === 'match' ? s.matchId : null), tournament: s.kind === 'match' });
+      },
     };
     const game = startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : s.kind === 'match' ? { t: 'match', matchId: s.matchId, account: s.account } : { t: 'join', code: s.code, account: s.account, matchId: s.matchId }, asPlayer(s.mon), s.stage, hooks, sign);
     ctl.current = game;
@@ -104,6 +108,8 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
   }, []);
 
   const monRef = useRef(s?.mon as Monster);
+  const rsRef = useRef(rs);
+  rsRef.current = rs;
   monRef.current = mine ?? monRef.current;
   useEffect(() => { if (closed) { const t = setTimeout(() => { go('/lobby'); }, 4000); return () => clearTimeout(t); } }, [closed]);
 

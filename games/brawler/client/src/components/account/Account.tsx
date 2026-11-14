@@ -3,10 +3,11 @@ import { yoctoToNear } from 'near-api-js';
 import { getAudio, setAudio } from '@/lib/audio.ts';
 import { fmt, useUnifiedBalance, useWallet } from '@/lib/near.ts';
 import { useMonsters } from '@/lib/nft.ts';
-import { history, monster, monsters } from '@/lib/store.ts';
+import { monsters } from '@/lib/store.ts';
 import { Ico } from '@/components/ui.tsx';
 import { Claims } from './Claims.tsx';
 import { FundsDialog } from './Funds.tsx';
+import { History, Stats, useFights } from './History.tsx';
 
 export function Account() {
   const { signedAccountId, signIn, signOut, getBalance, loading, network } = useWallet();
@@ -16,8 +17,7 @@ export function Account() {
     if (!signedAccountId) return setBal('');
     getBalance(signedAccountId).then((y: bigint) => setBal(Number(yoctoToNear(y)).toFixed(3))).catch(() => setBal('unavailable'));
   }, [signedAccountId, getBalance]);
-  const log = history();
-  const wins = log.filter((l) => l.won).length;
+  const fights = useFights(signedAccountId);
   const api = useMonsters();
   const [owed, setOwed] = useState('0');
   const [funds, setFunds] = useState(false);
@@ -42,21 +42,11 @@ export function Account() {
             </>
           )}
         </section>
-        <section className="slab">
-          <h2 className="row-ico"><Ico n="icon-history" />Recent fights</h2>
-          <p className="sub">{log.length ? `${wins} wins from ${log.length} fights` : 'No fights yet.'}</p>
-          <ul style={{ listStyle: 'none', padding: 0, margin: '12px 0 0', display: 'grid', gap: 8 }}>
-            {log.slice(0, 10).map((l) => (
-              <li key={l.at} className="row" style={{ justifyContent: 'space-between' }}>
-                <span>{monster(l.mine)?.name ?? 'Unknown'} vs {l.vs}</span>
-                <span className={`chip row-ico ${l.won ? 'gold' : ''}`}><Ico n={l.won ? 'trophy' : 'skull'} />{l.won ? 'Won' : 'Lost'}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <Stats fights={fights} />
       </div>
       {funds && <FundsDialog onClose={() => setFunds(false)} />}
       <Claims />
+      <History fights={fights} />
       <SoundSettings />
     </>
   );
