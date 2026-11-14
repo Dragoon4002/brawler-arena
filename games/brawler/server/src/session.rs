@@ -444,7 +444,7 @@ impl Session {
             c.send(&json!({
                 "t": "resume", "code": r.code, "seat": 1 - i, "stage": r.stage.name(), "matchId": r.match_id,
                 "bettable": r.bettable, "frames": tape,
-                "players": r.seats.iter().map(|s| json!({ "name": s.name, "dna": s.dna })).collect::<Vec<_>>(),
+                "players": crate::protocol::players(&r),
             }));
         }
     }

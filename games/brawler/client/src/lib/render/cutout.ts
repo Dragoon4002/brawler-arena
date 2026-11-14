@@ -16,6 +16,8 @@ const heroes = new Map<string, Hero | null>();
 export const HERO_IDS = ['bramdra', 'makvel', 'grodrasu', 'lortor', 'torfen'] as const;
 export type HeroId = typeof HERO_IDS[number];
 export const heroOf = (dna: Dna): HeroId => HERO_IDS[Math.round(dna.hue / 72) % 5];
+// Only 5 art sets, picked by hue bucket: hue x5 spreads one bucket over the whole colour wheel so siblings look distinct.
+export const tintOf = (dna: Dna) => `hue-rotate(${(dna.hue * 5 + dna.accent) % 360}deg) saturate(${0.85 + dna.pattern * 0.2})`;
 
 // Starts loading on first call; null until every part image is ready (caller falls back to the vector rig).
 export function hero(name: string): Hero | null {
@@ -51,15 +53,35 @@ function place(ctx: CanvasRenderingContext2D, h: Hero, part: Part, p: Pose) {
 }
 
 // Fighter-local space: origin at feet, facing right (same contract as drawMonster).
-export function drawHero(ctx: CanvasRenderingContext2D, p: Pose, h: Hero, flash: boolean) {
+const tinted = new WeakMap<Hero, Map<string, CanvasImageSource[]>>();
+function partsIn(h: Hero, tint: string): CanvasImageSource[] {
+  if (!tint) return h.parts.map((x) => x.img);
+  let m = tinted.get(h);
+  if (!m) tinted.set(h, (m = new Map()));
+  let out = m.get(tint);
+  if (!out) {
+    out = h.parts.map(({ img }) => {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const g = c.getContext('2d')!;
+      g.filter = tint; g.drawImage(img, 0, 0);
+      return c;
+    });
+    m.set(tint, out);
+  }
+  return out;
+}
+
+export function drawHero(ctx: CanvasRenderingContext2D, p: Pose, h: Hero, flash: boolean, tint = '') {
   const k = HEIGHT / h.height;
   ctx.save();
   ctx.scale(k, k);
   ctx.translate(-h.feet[0], -h.feet[1] + (p.y - I.y) / k);
   if (p.r) { ctx.translate(...h.hip); ctx.rotate(p.r); ctx.translate(-h.hip[0], -h.hip[1]); }
   if (flash) ctx.filter = 'brightness(0) invert(1)';
-  for (const part of h.parts) {
-    ctx.save(); place(ctx, h, part, p); ctx.drawImage(part.img, ...part.at); ctx.restore();
-  }
+  const imgs = partsIn(h, flash ? '' : tint);
+  h.parts.forEach((part, i) => {
+    ctx.save(); place(ctx, h, part, p); ctx.drawImage(imgs[i], ...part.at); ctx.restore();
+  });
   ctx.restore();
 }

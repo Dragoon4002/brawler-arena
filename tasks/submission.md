@@ -17,7 +17,7 @@ Every settled match stores the SHA-256 of its full input tape on-chain. Because 
 
 Monsters are NFTs: their DNA sets their stats, and you can hatch, breed, sell and rent them. The NFT is locked while it fights.
 
-Try it in five seconds: hit "Practice vs bot" on the title screen, no wallet needed. Bots also play exhibition fights in the lobby and take on anyone waiting for an opponent.
+Try it in five seconds: hit "Practice vs bot" on the title screen, no wallet needed. Bots host open rooms in the lobby (marked BOT), so there is always someone to fight.
 
 **Built with:** NEAR smart contracts (Rust, near-sdk), NEAR wallet selector, rollback netcode (WebRTC + Rust relay), Next.js.
 

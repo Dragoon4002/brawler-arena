@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { archetype, lookOf, STAT_KEYS, type Dna, type Monster } from '@/lib/genes.ts';
 import { drawMonster, idlePose, type Pose } from '@/lib/render/rig.ts';
-import { drawHero, hero, heroOf } from '@/lib/render/cutout.ts';
+import { drawHero, hero, heroOf, tintOf } from '@/lib/render/cutout.ts';
+import { isBot } from '@/lib/bot.ts';
 import { drawStageThumb } from '@/lib/render/stage.ts';
 import type { StageId } from '@/lib/stages.ts';
 
@@ -23,6 +24,8 @@ export function Ico({ n, className = 'ico' }: { n: string; className?: string })
   return <img className={className} src={asset(n)} alt="" aria-hidden="true" draggable={false} />;
 }
 
+export const BotTag = ({ account }: { account?: string }) => (isBot(account) ? <span className="bot-tag" title="Computer opponent">BOT</span> : null);
+
 export const TYPE_ICON = { Bruiser: 'type-bruiser', Duelist: 'type-duelist', Bulwark: 'type-bulwark', Skirmisher: 'type-skirmisher' } as Record<string, string>;
 export const STAGE_ICON = { ember: 'arena-ember', grove: 'arena-grove', docks: 'arena-docks' } as Record<StageId, string>;
 
@@ -42,7 +45,7 @@ export function Portrait({ dna, size = 200, pose, flip = false, className = 'por
       ctx.fillStyle = 'rgb(12 8 22 / 0.35)';
       ctx.beginPath(); ctx.ellipse(0, 4, 38, 8, 0, 0, Math.PI * 2); ctx.fill();
       const h = hero(heroOf(dna)); // vector monster until the hero's parts load
-      if (h) drawHero(ctx, pose ?? idlePose(t), h, false); else drawMonster(ctx, pose ?? idlePose(t), look, false);
+      if (h) drawHero(ctx, pose ?? idlePose(t), h, false, tintOf(dna)); else drawMonster(ctx, pose ?? idlePose(t), look, false);
       t++;
       if (!h || (!reduceMotion() && !pose)) raf = requestAnimationFrame(paint);
     };

@@ -163,7 +163,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
     if (ctl.current) return ctl.current.begin();
     if (!rs) return;
     setLive(true);
-    bots.current = startBotFight(canvas.current!, rs.seats.map((x) => ({ name: x.name, dna: x.dna })), rs.stage);
+    bots.current = startBotFight(canvas.current!, rs.seats.map((x) => ({ name: x.name, dna: x.dna, account: x.account })), rs.stage);
   };
   const hostOpts = s?.kind === 'host' ? s.opts : null;
   const lobbyRs: RoomState | null = rs ?? (room && s ? { // until the server's first roomstate
@@ -251,9 +251,10 @@ function PracticeFight({ again }: { again: () => void }) {
   const [over, setOver] = useState<number | null>(null);
   const [names, setNames] = useState<string[]>([]);
   const [muted, setMuted] = useState(getAudio().muted);
+  const account = useArena().account ?? '';
   useEffect(() => {
     const list = monsters(), me = practiceMon ?? list[0];
-    const players = [asPlayer(me), asPlayer(pick(list.filter((m) => m.id !== me.id)) ?? me)];
+    const players = [{ ...asPlayer(me), account }, { ...asPlayer(pick(list.filter((m) => m.id !== me.id)) ?? me), account: 'practice bot' }];
     setNames(players.map((p) => p.name));
     const g = startBotFight(canvas.current!, players, pick(STAGE_IDS), { result: (w) => setTimeout(() => setOver(w), 1000) }, true);
     const key = (e: KeyboardEvent) => {

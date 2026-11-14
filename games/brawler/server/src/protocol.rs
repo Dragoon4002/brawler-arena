@@ -55,7 +55,7 @@ pub fn tape_of(v: &Value) -> i32 {
     }
 }
 
-fn players(r: &Room) -> Value {
+pub fn players(r: &Room) -> Value {
     r.seats
         .iter()
         .map(|s| json!({ "name": s.name, "dna": s.dna, "account": s.account }))

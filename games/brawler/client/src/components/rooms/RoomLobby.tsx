@@ -3,7 +3,7 @@ import { archetype, type Dna, type Monster } from '@/lib/genes.ts';
 import { STAGES, STAGE_IDS, type StageId } from '@/lib/stages.ts';
 import { fmt } from '@/lib/near.ts';
 import type { ChatLine, RoomState } from '@/lib/session.ts';
-import { ArenaBackdrop, asset, HubDialog, Ico, Portrait, STAGE_ICON, StageThumb, TYPE_ICON } from '@/components/ui.tsx';
+import { ArenaBackdrop, asset, BotTag, HubDialog, Ico, Portrait, STAGE_ICON, StageThumb, TYPE_ICON } from '@/components/ui.tsx';
 import { Chat } from './Chat.tsx';
 
 export interface RoomLobbyProps {
@@ -13,7 +13,7 @@ export interface RoomLobbyProps {
 }
 
 function SeatCard({ i, who, you, connected, onChange, locked }: {
-  i: number; who?: { name: string; dna: Dna }; you: boolean; connected: boolean; onChange?: () => void; locked: boolean;
+  i: number; who?: { name: string; dna: Dna; account?: string }; you: boolean; connected: boolean; onChange?: () => void; locked: boolean;
 }) {
   const role = i ? 'Challenger' : 'Host';
   if (!who) return (
@@ -29,7 +29,7 @@ function SeatCard({ i, who, you, connected, onChange, locked }: {
     <article className={`seat-card s${i}`} aria-label={`${role}: ${who.name}${you ? ' (you)' : ''}`}>
       <span className="seat-role">{role}{you && <b> · You</b>}</span>
       <Portrait dna={who.dna} size={160} flip={i === 1} />
-      <h3>{who.name}</h3>
+      <h3>{who.name} <BotTag account={who.account} /></h3>
       <span className="tile-meta row-ico"><Ico n={TYPE_ICON[type]} />{type}{!connected && ' · reconnecting…'}</span>
       {onChange && (locked
         ? <span className="chip row-ico"><Ico n="icon-lock" />Locked on-chain for this match</span>

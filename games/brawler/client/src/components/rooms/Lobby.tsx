@@ -5,7 +5,7 @@ import { fmt, useArena } from '@/lib/near.ts';
 import type { Monster } from '@/lib/genes.ts';
 import { monsters } from '@/lib/store.ts';
 import { errText } from '@/lib/format.ts';
-import { asset, Ico, Portrait, STAGE_ICON } from '@/components/ui.tsx';
+import { asset, BotTag, Ico, Portrait, STAGE_ICON } from '@/components/ui.tsx';
 import { joinRoom } from './OnlineStart.tsx';
 
 function RoomCard({ r, onJoin }: { r: LobbyRoom; onJoin: () => void }) {
@@ -13,9 +13,9 @@ function RoomCard({ r, onJoin }: { r: LobbyRoom; onJoin: () => void }) {
   return (
     <article className="tile room-card">
       <div className="room-vs">
-        <div><Portrait dna={a.dna} size={110} /><b>{a.name}</b></div>
+        <div><Portrait dna={a.dna} size={110} /><b>{a.name} <BotTag account={a.account} /></b></div>
         <span className="vs">vs</span>
-        {b ? <div><Portrait dna={b.dna} size={110} flip /><b>{b.name}</b></div> : <div className="ghost-slot small"><span>?</span><b>Open seat</b></div>}
+        {b ? <div><Portrait dna={b.dna} size={110} flip /><b>{b.name} <BotTag account={b.account} /></b></div> : <div className="ghost-slot small"><span>?</span><b>Open seat</b></div>}
       </div>
       <div className="row">
         {r.status === 'live' ? <img className="tag-img" src={asset('tag-live')} alt="Live" /> : <span className="chip row-ico"><Ico n="icon-timer" />Waiting</span>}

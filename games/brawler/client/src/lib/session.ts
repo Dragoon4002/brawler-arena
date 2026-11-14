@@ -9,7 +9,8 @@ import { bot } from './bot.ts';
 import type { SignMatch } from './near.ts';
 import { unpack } from './tape.ts';
 
-export interface Player { name: string; dna: Dna }
+export interface Player { name: string; dna: Dna; account?: string }
+const toPlayer = (p: any): Player => ({ name: String(p.name ?? 'Rival').slice(0, 24) || 'Rival', dna: sanitize(p.dna), account: typeof p.account === 'string' ? p.account.slice(0, 64) : undefined });
 export interface Hooks {
   status?: (text: string) => void; // lobby text (room code, connecting…)
   started?: (players: Player[], seat: number) => void;
@@ -54,7 +55,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
   let net: Netplay | null = null;
   let banner = '', link = '';
   let spectate: ((advance: (inputs: number[]) => void, s: GameState) => void) | null = null;
-  renderer.setPlayers(players.map((p, i) => (seat < 0 ? p.name : i === seat ? `${p.name} (you)` : p.name)), players.map((p) => p.dna));
+  renderer.setPlayers(players.map((p, i) => (seat < 0 ? p.name : i === seat ? `${p.name} (you)` : p.name)), players.map((p) => p.dna), players.map((p) => p.account ?? ''));
 
   let shown = 0; // first frame whose effects haven't played yet (predicted frames play once, never replayed)
   function fx(s: GameState) {
@@ -195,7 +196,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: First, me: Player,
         code = m.code; seat = m.seat;
         hooks.room?.({ code, matchId: m.matchId ?? null, bettable: !!m.bettable, seat });
         const frames: number[] = m.frames ?? [];
-        const players = (m.players ?? []).map((p: any) => ({ name: String(p.name ?? 'Rival').slice(0, 24) || 'Rival', dna: sanitize(p.dna) }));
+        const players = (m.players ?? []).map(toPlayer);
         play(players, STAGE_IDS.includes(m.stage) ? m.stage : 'ember', new Netplay(send, seat, RESUME_DELAY, frames.length), `RELAY · resumed · ${RESUME_DELAY}f delay`, frames);
       } else if (m.t === 'rejoin') { // opponent is back: hand it our confirmed frame, both continue over the relay
         if (!net || !game || ended) return;
@@ -209,7 +210,7 @@ export function startOnline(canvas: HTMLCanvasElement, first: First, me: Player,
         clearInterval(hb); clearInterval(leftIv); peer?.close(); game?.stop();
         game = null; net = null; theirs = null; ready = null; chain = null; ended = false;
         seat = m.seat; delay = m.delay;
-        if (Array.isArray(m.players) && m.players.length === 2) chain = m.players.map((p: any) => ({ name: String(p.name ?? 'Rival').slice(0, 24) || 'Rival', dna: sanitize(p.dna) }));
+        if (Array.isArray(m.players) && m.players.length === 2) chain = m.players.map(toPlayer);
         if (seat === 1 || first.t === 'match') hooks.room?.({ code: first.t === 'join' ? first.code : code, matchId: m.matchId ?? null, bettable: !!m.bettable, seat });
         say('Opponent found — connecting…');
         sock.send(JSON.stringify({ t: 'pick', name: me.name.slice(0, 24), dna: me.dna, stage }));
@@ -263,7 +264,7 @@ export function startSpectate(canvas: HTMLCanvasElement, code: string, hooks: Ho
     else if (m.t === 'spec') {
       hooks.info?.(m);
       game?.stop(); queue.length = 0; buffering = true; // fresh spec (room went live with final DNA): rebuild
-      const players = m.players.map((p: any) => ({ name: p.name, dna: sanitize(p.dna) }));
+      const players = m.players.map(toPlayer);
       if (players.length < 2) { hooks.status?.('Waiting for a challenger…'); players.push({ name: '???', dna: players[0].dna }); }
       game = loop(canvas, players, -2, STAGE_IDS.includes(m.stage) ? m.stage : 'ember', hooks);
       // Catch up instantly on everything played so far, then stream.

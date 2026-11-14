@@ -1,20 +1,21 @@
-// Brawler bots: exhibition bot-vs-bot room, challenger that fights humans waiting in free rooms, template commentator.
+// Brawler bots: each hosts a public free room a human can join (never bot vs bot), plus a template commentator.
 import { hash, newGame, step, type GameState } from '../games/brawler/client/src/lib/sim/sim.ts';
 import { nameFor, randomDna, sanitize, statsOf, type Dna } from '../games/brawler/client/src/lib/genes.ts';
 import { STAGE_IDS } from '../games/brawler/client/src/lib/stages.ts';
 import { Netplay } from '../games/brawler/client/src/lib/net.ts';
-import { joinable, pilot, template, type Level, type Moment, type View } from './brain.ts';
+import { isBot } from '../games/brawler/client/src/lib/bot.ts';
+import { pilot, template, type Level, type Moment, type View } from './brain.ts';
 
 const env = process.env;
 const SERVER = env.SERVER_URL ?? 'wss://65-0-237-185.sslip.io';
 const on = (k: string) => env[k] !== '0';
-const JOIN_AFTER = Number(env.JOIN_AFTER_S ?? 20) * 1000;
+const HOSTS = Number(env.BOT_HOSTS ?? 2);
 const LEVEL = (env.BOT_LEVEL ?? 'medium') as Level;
 const CASTER = env.COMMENTATOR_NAME ?? 'Bot Commentator';
 const SAY_GAP = 6000;
 const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const pickOne = <T>(a: readonly T[]) => a[Math.floor(Math.random() * a.length)];
-const monster = (): { name: string; dna: Dna } => { const seed = Math.floor(Math.random() * 2 ** 31); return { name: `Bot ${nameFor(seed)}`.slice(0, 24), dna: randomDna(seed) }; };
+const monster = (): { name: string; dna: Dna } => { const seed = Math.floor(Math.random() * 2 ** 31); return { name: nameFor(seed).slice(0, 24), dna: randomDna(seed) }; };
 
 /* ---------- seat: one bot player over the normal client protocol ---------- */
 
@@ -79,70 +80,34 @@ function seat(first: object, me: { name: string; dna: Dna }, level: Level, hooks
   return s;
 }
 
-/* ---------- exhibition: one public bot-vs-bot room, always ---------- */
+/* ---------- hosts: each bot waits in its own public free room for a human to join; bots never fight bots ---------- */
 
-function exhibition() {
-  let done = false;
-  const restart = (why: string) => {
+function host(n: number) {
+  const me = monster(), account = `bot-${n}.brawler`;
+  let done = false, games = 0, greeted = false, idle: ReturnType<typeof setTimeout> | undefined;
+  const reopen = (why: string) => {
     if (done) return;
-    done = true;
-    log(`exhibition: ${why}, new room in 5 s`);
-    host.leave(); guest?.leave();
-    setTimeout(exhibition, 5000);
+    done = true; clearTimeout(idle);
+    log(`host ${account}: ${why}, new room in 3 s`);
+    s.leave();
+    setTimeout(() => host(n), 3000);
   };
-  let guest: Seat | null = null;
-  const a = monster(), b = monster();
-  const host = seat({ t: 'host', stage: pickOne(STAGE_IDS), pub: true, view: true, bettable: false, matchId: null, stake: '0', account: 'bot-1.brawler' }, a, 'medium', {
-    room: (h) => {
-      log(`exhibition: room ${h.code} ${a.name} vs ${b.name}`);
-      guest = seat({ t: 'join', code: h.code, account: 'bot-2.brawler' }, b, 'medium', {
-        room: () => setTimeout(() => host.send({ t: 'begin' }), 3000),
-        gone: () => restart('guest gone'),
-      });
+  const s = seat({ t: 'host', stage: pickOne(STAGE_IDS), pub: true, view: true, bettable: false, matchId: null, stake: '0', account }, me, LEVEL, {
+    room: (x) => log(`host ${account}: room ${x.code} as ${me.name} (${LEVEL})`),
+    state: (x, m) => {
+      const guest = m.seats?.[1];
+      if (!guest) { greeted = false; return; }
+      if (greeted || x.live || games) return;
+      greeted = true;
+      if (isBot(guest.account)) return reopen('bot guest');
+      x.send({ t: 'chat', text: `Hi ${guest.name}! ${me.name} here, a ${LEVEL} bot. Starting in 3…` });
+      setTimeout(() => !x.live && x.send({ t: 'begin' }), 3000);
     },
-    // watchers stay in the room for a rematch; nobody watching -> fresh monsters + arena
-    over: (h) => setTimeout(() => {
-      if (done) return;
-      if (h.spectators > 0) { host.send({ t: 'rematch' }); guest?.send({ t: 'rematch' }); }
-      else restart('match over');
-    }, 8000),
-    gone: () => restart('host gone'),
+    over: (x) => { games++; x.send({ t: 'rematch' }); idle = setTimeout(() => reopen('no rematch'), 60_000); },
+    rematch: () => clearTimeout(idle),
+    gone: (x) => { if (!x.live) reopen('guest left'); }, // mid-fight drop: they may rejoin, else the server forfeits them
   });
 }
-
-/* ---------- challenger: joins humans waiting alone in public free rooms ---------- */
-
-const waiting = new Map<string, number>(), taken = new Set<string>();
-let rows: any[] = [];
-
-function challenge(code: string) {
-  taken.add(code);
-  let games = 0, asked = false;
-  const me = monster();
-  log(`challenger: joining ${code} as ${me.name} (${LEVEL})`);
-  const s = seat({ t: 'join', code, account: 'bot-3.brawler' }, me, LEVEL, {
-    room: (x) => setTimeout(() => x.send({ t: 'chat', text: `${me.name} here (${LEVEL} bot). Press Start when ready!` }), 1000),
-    over: (x) => {
-      games++;
-      if (games > 1) return void setTimeout(x.leave, 3000);
-      setTimeout(() => !asked && x.leave(), 30_000);
-    },
-    rematch: (x) => { asked = true; if (games === 1) x.send({ t: 'rematch' }); },
-    gone: (x) => { if (!x.live) x.leave(); }, // mid-fight drop: they may rejoin, else the server forfeits them
-  });
-}
-
-setInterval(() => {
-  if (!on('CHALLENGER')) return;
-  const now = Date.now(), live = new Set(rows.map((r) => r.code));
-  for (const c of waiting.keys()) if (!live.has(c)) waiting.delete(c);
-  for (const c of taken) if (!live.has(c)) taken.delete(c);
-  for (const r of rows) {
-    if (!joinable(r, 0, 0)) { waiting.delete(r.code); continue; }
-    if (!waiting.has(r.code)) waiting.set(r.code, now);
-    if (!taken.has(r.code) && joinable(r, now - waiting.get(r.code)!, JOIN_AFTER)) challenge(r.code);
-  }
-}, 1000);
 
 /* ---------- commentator ---------- */
 
@@ -224,13 +189,12 @@ function lobby() {
     const m = JSON.parse(String(e.data));
     if (m.t === 'ping') return ws.send('{"t":"pong"}');
     if (m.t !== 'lobby') return;
-    rows = m.rooms;
-    if (on('COMMENTATOR')) for (const row of rows) if (row.status === 'live' && !rooms.has(row.code)) watch(row.code);
+    if (on('COMMENTATOR')) for (const row of m.rooms) if (row.status === 'live' && !rooms.has(row.code)) watch(row.code);
   };
   let down = false;
-  ws.onclose = ws.onerror = () => { if (!down) { down = true; rows = []; log('lobby down, reconnecting'); setTimeout(lobby, 3000); } };
+  ws.onclose = ws.onerror = () => { if (!down) { down = true; log('lobby down, reconnecting'); setTimeout(lobby, 3000); } };
 }
 
-log(`bots up: exhibition ${on('EXHIBITION')}, challenger ${on('CHALLENGER')} (${LEVEL}, after ${JOIN_AFTER / 1000} s), commentator ${on('COMMENTATOR')}`);
+log(`bots up: ${HOSTS} host(s) (${LEVEL}), commentator ${on('COMMENTATOR')}`);
 lobby();
-if (on('EXHIBITION')) exhibition();
+for (let n = 1; n <= HOSTS; n++) host(n);
