@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Monster } from '@/lib/genes.ts';
 import { DEMO } from '@/lib/demo.ts';
 import { peekRoom } from '@/lib/lobby.ts';
@@ -75,15 +75,23 @@ export function CreateRoom({ mon }: { mon: Monster }) {
   );
 }
 
-export function JoinByCode({ mon }: { mon: Monster }) {
+export function JoinByCode({ mon, invite }: { mon: Monster; invite?: string }) {
   const arena = useArena();
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(invite?.toUpperCase() ?? '');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const join = async () => {
     setBusy(true);
     try { await joinRoom(arena, code, mon, setMsg); } catch (e) { setMsg(errText(e)); } finally { setBusy(false); }
   };
+  useEffect(() => { // invite link: free rooms join straight away; staked ones need a click so the wallet popup isn't blocked
+    if (!invite) return;
+    peekRoom(invite).then((r) => {
+      if (!r) setMsg('Invite link: room not found or already closed.');
+      else if (r.matchId === null) join();
+      else setMsg(`Invite to a staked room: ${fmt(r.stake)} NEAR. Press Join to stake and enter.`);
+    }, () => {});
+  }, []);
   return (
     <form className="code-join" onSubmit={(e) => { e.preventDefault(); if (code.length === 4) join(); }}>
       <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="CODE" maxLength={4} aria-label="Room code" autoCapitalize="characters" autoComplete="off" spellCheck={false} />

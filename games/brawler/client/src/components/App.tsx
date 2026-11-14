@@ -29,13 +29,13 @@ function useHash() {
 }
 
 function Routes() {
-  const [page = '', arg] = useHash();
+  const [page = '', arg, arg2] = useHash();
   if (page === 'fight') return <Arena key={arg} demo={DEMO ? arg : undefined} />;
   if (page === 'watch' && arg) return <Watch key={arg} code={arg} />;
   if (page === '') return <Title />;
   const body = page === 'demo' ? <DemoIndex />
     : page === 'sim' ? <MarketSim />
-    : page === 'play' ? <Play initial={arg === 'join' ? 'join' : 'create'} />
+    : page === 'play' ? <Play initial={arg === 'join' ? 'join' : 'create'} invite={arg === 'join' ? arg2 : undefined} />
     : page === 'lobby' ? <Lobby />
     : page === 'collection' ? <Collection />
     : page === 'monster' && arg ? <Detail key={arg} id={arg} />

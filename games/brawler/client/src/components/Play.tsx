@@ -30,7 +30,7 @@ function Picker({ groups, value, onPick, label }: { groups: [string, Monster[]][
 const TABS = [['create', 'Create', 'icon-room-public'], ['join', 'Join', 'icon-lobby']] as const;
 type Tab = (typeof TABS)[number][0];
 
-export function Play({ initial = 'create' }: { initial?: Tab }) {
+export function Play({ initial = 'create', invite }: { initial?: Tab; invite?: string }) {
   const { free, local, all } = usePlayable();
   const groups: [string, Monster[]][] = [['On-chain monsters (locked in staked/bettable matches)', free], ['Browser monsters (casual only)', local]];
   const [p1, setP1] = useState('');
@@ -67,7 +67,7 @@ export function Play({ initial = 'create' }: { initial?: Tab }) {
         ) : (
           <div className="play-join">
             <h3 className="row-ico"><Ico n="icon-room-private" />Have a code?</h3>
-            <JoinByCode mon={a} />
+            <JoinByCode mon={a} invite={invite} />
             <p className="note">Joining with <b>{a.name}</b>. Staked rooms ask your wallet to match the host's stake before you enter.</p>
             <RoomList mon={a} />
           </div>

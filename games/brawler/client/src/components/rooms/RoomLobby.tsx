@@ -41,10 +41,11 @@ function SeatCard({ i, who, you, connected, onChange, locked }: {
 export function RoomLobby(p: RoomLobbyProps) {
   const { rs, seat } = p;
   const [pick, setPick] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const host = seat === 0;
   const ready = !!rs.seats[1]?.connected;
-  const copy = () => navigator.clipboard?.writeText(rs.code).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }, () => {});
+  const invite = `${location.origin}${location.pathname}${location.search}#/play/join/${rs.code}`;
+  const copy = (what: 'code' | 'link') => navigator.clipboard?.writeText(what === 'code' ? rs.code : invite).then(() => { setCopied(what); setTimeout(() => setCopied(null), 1500); }, () => {});
   const who = (i: number) => (i === seat ? p.mine : rs.seats[i]); // own card updates instantly, before the server echo
   const card = (i: number) => <SeatCard i={i} who={who(i)} you={i === seat} connected={i === seat || !!rs.seats[i]?.connected} locked={p.locked} onChange={i === seat ? () => setPick(true) : undefined} />;
   return (
@@ -56,7 +57,10 @@ export function RoomLobby(p: RoomLobbyProps) {
         <div className="room-code">
           <small>Room code</small>
           <b>{rs.code}</b>
-          <button type="button" className="chip row-ico" onClick={copy} aria-label={`Copy room code ${rs.code}`}><Ico n="icon-copy" />{copied ? 'Copied!' : 'Copy'}</button>
+          <div className="room-code-actions">
+            <button type="button" className="chip row-ico" onClick={() => copy('code')} aria-label={`Copy room code ${rs.code}`}><Ico n="icon-copy" />{copied === 'code' ? 'Copied!' : 'Copy code'}</button>
+            <button type="button" className="chip row-ico" onClick={() => copy('link')} aria-label="Copy invite link"><Ico n="icon-copy" />{copied === 'link' ? 'Copied!' : 'Copy link'}</button>
+          </div>
         </div>
       </header>
 
