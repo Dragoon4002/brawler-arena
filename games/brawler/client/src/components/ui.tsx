@@ -98,7 +98,7 @@ export function MonsterCard({ m, onClick, selected, href, extra, disabled }: { m
     : <button type="button" className="tile" aria-pressed={selected} disabled={disabled} onClick={onClick}>{body}</button>;
 }
 
-// Title-screen key art: layers loaded as-is from assets/Title Screen (public/title is a symlink to it),
+// Title-screen key art: layers loaded as-is from public/title (1-5.png),
 // back -> front with a parallax depth each. Each image keeps its own aspect, cover-fit into the stage.
 // Follows the pointer, drifts when idle, static under reduced motion.
 // n: file in public/title, d: parallax depth (px), z: zoom about the frame centre (1 = fills the frame; 0 = off)
