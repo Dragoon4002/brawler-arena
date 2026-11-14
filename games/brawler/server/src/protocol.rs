@@ -84,7 +84,11 @@ pub fn start_msg(r: &Room) -> Value {
 pub fn lobby_msg(rooms: &HashMap<String, Room>) -> Value {
     let rows: Vec<Value> = rooms
         .values()
-        .filter(|r| (r.public || r.view) && r.status != Status::Done)
+        .filter(|r| {
+            (r.public || r.view)
+                && r.status != Status::Done
+                && r.seats.iter().any(|s| s.conn.is_some())
+        })
         .map(room_row)
         .collect();
     json!({ "t": "lobby", "rooms": rows })

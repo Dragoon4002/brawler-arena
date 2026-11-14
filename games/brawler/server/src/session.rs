@@ -458,7 +458,7 @@ impl Session {
         }
         if r.status == Status::Waiting {
             st.rooms.remove(&at.code);
-            st.lobby.push(&self.app);
         }
+        st.lobby.push(&self.app);
     }
 }
