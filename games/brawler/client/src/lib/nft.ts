@@ -2,7 +2,7 @@ import { useNearWallet } from 'near-connect-hooks';
 import { sanitize, type Monster } from './genes.ts';
 import { DEMO, demoMonsters } from './demo.ts';
 
-export const MONSTERS_ID: string = process.env.NEXT_PUBLIC_MONSTERS_ID ?? 'brawler-monsters-ed5da3.testnet';
+export const MONSTERS_ID: string = process.env.NEXT_PUBLIC_MONSTERS_ID ?? 'brawler-monsters-5c8e2b.testnet';
 const GAS = '30000000000000', GAS_X = '100000000000000';
 const NEAR = (n: number) => (BigInt(Math.round(n * 1000)) * 10n ** 21n).toString();
 
