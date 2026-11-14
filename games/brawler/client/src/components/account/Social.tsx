@@ -25,6 +25,13 @@ async function derive() {
   return { pk, accountId: keyToImplicitAddress(pk) };
 }
 const exists = (accountId: string) => rpc.viewAccount({ accountId, blockQuery: { finality: 'final' } }).then(() => true, () => false);
+const idToken = async () => (await (auth() as unknown as { client: { getIdTokenClaims(): Promise<{ __raw: string } | undefined> } }).client.getIdTokenClaims())?.__raw;
+async function autoFund(accountId: string) {
+  const res = await fetch('/api/fastauth/fund', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ idToken: await idToken() }) });
+  if (!res.ok || (await res.json()).accountId !== accountId) return false;
+  for (let i = 0; i < 15; i++) { if (await exists(accountId)) return true; await new Promise((r) => setTimeout(r, 1000)); }
+  return false;
+}
 
 // built before the click so the Auth0 popup opens inside the user gesture
 async function prepare(accountId: string, pk: string) {
@@ -91,7 +98,13 @@ function SocialDialog({ onClose, onWallet, onDone }: { onClose: () => void; onWa
     Promise.all([fetch('/api/fastauth').then((r) => r.json()).then((j) => !!j.ready, () => false), auth().isLoggedIn()]).then(([ready, loggedIn]) => setPre({ ready, loggedIn }));
   }, []);
   const fail = (e: unknown) => setStep({ s: 'error', msg: (e as Error).message || String(e) });
-  const toAccount = async (accountId: string, pk: string) => setStep((await exists(accountId)) ? { s: 'activate', prep: await prepare(accountId, pk) } : { s: 'fund', accountId, pk });
+  const toAccount = async (accountId: string, pk: string) => {
+    if (!(await exists(accountId))) {
+      setStep({ s: 'busy', msg: 'Creating your account…' });
+      if (!(await autoFund(accountId).catch(() => false))) return setStep({ s: 'fund', accountId, pk });
+    }
+    setStep({ s: 'activate', prep: await prepare(accountId, pk) });
+  };
   const login = async () => {
     try {
       if (!pre?.ready) throw new Error(RELAYER_MISSING);
