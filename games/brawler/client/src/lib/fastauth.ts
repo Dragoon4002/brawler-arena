@@ -5,7 +5,7 @@ export const FASTAUTH = {
   domain: process.env.NEXT_PUBLIC_FASTAUTH_DOMAIN ?? 'login.testnet.fast-auth.com',
   contractId: process.env.NEXT_PUBLIC_FASTAUTH_CONTRACT_ID ?? 'fast-auth.testnet',
   mpcId: process.env.NEXT_PUBLIC_FASTAUTH_MPC_ID ?? 'v1.signer-prod.testnet',
-  rpc: process.env.NEXT_PUBLIC_FASTAUTH_RPC ?? 'https://rpc.testnet.near.org',
+  rpc: process.env.NEXT_PUBLIC_FASTAUTH_RPC ?? 'https://test.rpc.fastnear.com',
 };
 export const FAUCET_URL = 'https://docs.near.org/getting-started/faucet';
 export const guardId = (domain = FASTAUTH.domain) => `jwt#https://${domain}/`;
