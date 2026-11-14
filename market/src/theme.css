@@ -1,0 +1,38 @@
+/* tokens copied from brawler theme.css */
+:root {
+  --sky-0: #140f24; --sky-1: #2a1d47; --sky-2: #5b3a73; --sky-3: #e58f6a;
+  --panel: #231a3c; --ink: #0c0816; --cream: #f6ecd9; --muted: #b9a9cf;
+  --ember: #ff8a3d; --ember-hi: #ffb168;
+  --font-display: 'Lilita One', 'Trebuchet MS', sans-serif;
+  --font-body: 'Nunito', system-ui, sans-serif;
+  --r: 10px; --outline: 3px solid var(--ink); --drop: 0 5px 0 var(--ink);
+}
+* { box-sizing: border-box; }
+html { background: var(--sky-0); }
+body {
+  margin: 0; min-height: 100vh; color: var(--cream); font: 17px var(--font-body); overflow-x: clip;
+  background: linear-gradient(180deg, var(--sky-0) 0%, var(--sky-1) 45%, var(--sky-2) 78%, var(--sky-3) 100%) fixed;
+}
+a { color: inherit; }
+h1, h2 { font-family: var(--font-display); font-weight: 400; margin: 0 0 8px; }
+h1 { font-size: clamp(36px, 7vw, 56px); }
+.wrap { width: min(100% - 32px, 1180px); margin: 0 auto; padding: 32px 0; display: grid; gap: 24px; }
+.sub { color: var(--muted); margin: 0 0 12px; }
+.split { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); align-items: start; }
+.games { display: grid; gap: 16px; }
+.slab { background: var(--panel); border: var(--outline); border-radius: var(--r); box-shadow: var(--drop); padding: 20px; display: grid; gap: 12px; }
+.game { text-decoration: none; }
+.game:hover, .game:focus-visible { outline: 3px solid var(--ember-hi); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 10px; }
+input { flex: 1 1 120px; min-height: 44px; padding: 8px 12px; border: var(--outline); border-radius: 8px; background: var(--sky-0); color: var(--cream); font: inherit; }
+.btn {
+  min-height: 44px; padding: 8px 18px; border: var(--outline); border-radius: var(--r); box-shadow: var(--drop);
+  background: var(--ember); color: var(--ink); font: 20px var(--font-display); cursor: pointer; justify-self: start; text-align: center;
+}
+.btn:hover { background: var(--ember-hi); }
+.btn:disabled { opacity: 0.6; cursor: default; }
+.btn.ghost { background: transparent; color: var(--cream); }
+:focus-visible { outline: 3px solid var(--ember-hi); outline-offset: 2px; }
