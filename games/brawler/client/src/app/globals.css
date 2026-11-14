@@ -583,7 +583,7 @@ a.lb-who:hover b { color: var(--gold); text-decoration: underline; }
 .funds-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .funds-actions .btn { width: 100%; }
 
-.hub-practice { --bh: 64px; font-size: 24px; align-self: center; }
+.hub-practice { --bh: 64px; font-size: 28px; }
 .practice-hint { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); font-size: 12px; opacity: 0.85; pointer-events: none; white-space: nowrap; }
 
 .touchpad { position: fixed; inset: auto 0 0; display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
