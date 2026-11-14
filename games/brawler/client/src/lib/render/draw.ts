@@ -82,6 +82,22 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     cam.z += (z - cam.z) * 0.08;
   }
 
+  // Floating label over each fighter, constant on-screen size whatever the camera zoom.
+  function nameTag(x: number, y: number, i: number) {
+    const you = NAMES[i].endsWith(' (you)'), acc = ACCOUNTS[i];
+    const base = isBot(acc) ? `${NAMES[i]} · bot` : acc ? (acc.length > 22 ? acc.slice(0, 20) + '…' : acc) : NAMES[i].replace(' (you)', '');
+    const text = you ? `You · ${base}` : base;
+    ctx.save();
+    ctx.translate(x, y); ctx.scale(1 / cam.z, 1 / cam.z);
+    ctx.font = "800 16px Nunito, system-ui"; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + 20;
+    ctx.fillStyle = 'rgba(12,8,22,0.8)'; ctx.strokeStyle = LOOKS[i].body; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.roundRect(-w / 2, -14, w, 28, 14); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-6, 14); ctx.lineTo(6, 14); ctx.lineTo(0, 22); ctx.closePath(); ctx.fillStyle = LOOKS[i].body; ctx.fill();
+    ctx.fillStyle = '#fff3dc'; ctx.fillText(text, 0, 1);
+    ctx.restore();
+  }
+
   function fighters(s: GameState) {
     s.fighters.forEach((f, i) => {
       if (f.state === 'dead') return;
@@ -97,6 +113,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       else if (h) drawHero(ctx, p, h, flash, TINTS[i]);
       else drawMonster(ctx, p, LOOKS[i], flash);
       ctx.restore();
+      nameTag(f.x, f.y - HURT_H - 30, i);
 
       if (f.state === 'block') { // shield arc on the guarded (front) side
         ctx.save();
