@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sky-0: #140f24;
+  --color-sky-1: #2a1d47;
+  --color-sky-2: #5b3a73;
+  --color-ink: #0c0816;
+  --color-panel: #231a3c;
+  --color-panel-2: #2e2350;
+  --color-cream: #f6ecd9;
+  --color-muted: #b9a9cf;
+  --color-ember: #ff8a3d;
+  --color-ember-hi: #ffb168;
+  --color-gold: #ffd166;
+  --color-teal: #3fc1b0;
+  --color-danger: #ff5d6c;
+  --color-up: #2fd47a;
+  --color-down: #ff6b6b;
+  --color-str: #ff7a59;
+  --color-dex: #ffd166;
+  --color-def: #6fa8ff;
+  --color-spd: #5be0a6;
+  --font-display: var(--font-lilita), "Trebuchet MS", sans-serif;
+  --font-body: var(--font-nunito), system-ui, sans-serif;
+  --shadow-drop: 0 5px 0 var(--color-ink);
+  --shadow-drop-sm: 0 3px 0 var(--color-ink);
+}
+
+html { background: var(--color-sky-0); color-scheme: dark; }
+body {
+  min-height: 100vh;
+  color: var(--color-cream);
+  font-family: var(--font-body);
+  background: var(--color-sky-0);
+  overflow-x: clip;
+}
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(60rem 30rem at 50% -8rem, rgb(255 138 61 / 0.16), transparent 70%),
+    radial-gradient(50rem 40rem at 100% 100%, rgb(91 58 115 / 0.35), transparent 70%),
+    linear-gradient(rgb(246 236 217 / 0.035) 1px, transparent 1px) 0 0 / 40px 40px,
+    linear-gradient(90deg, rgb(246 236 217 / 0.035) 1px, transparent 1px) 0 0 / 40px 40px,
+    var(--color-sky-0);
+}
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; line-height: 1.05; text-wrap: balance; }
+:focus-visible { outline: 3px solid var(--color-gold); outline-offset: 3px; }
+input, select, textarea { min-width: 0; }

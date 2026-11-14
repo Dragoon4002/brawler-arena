@@ -2,7 +2,6 @@
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY market/package.json market/
 COPY games/brawler/client/package.json games/brawler/client/
 COPY packages/platform/package.json packages/platform/
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund

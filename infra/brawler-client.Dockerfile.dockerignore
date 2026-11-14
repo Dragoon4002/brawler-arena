@@ -1,7 +1,6 @@
 **
 !package.json
 !package-lock.json
-!market/package.json
 !games/brawler/client/**
 !packages/platform/**
 **/node_modules

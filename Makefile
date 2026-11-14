@@ -2,7 +2,7 @@ COMPOSE := docker compose -f infra/compose.yml
 
 TF := terraform -chdir=infra/terraform
 
-.PHONY: dev down logs test wasm e2e deploy-infra push-image push-client push-agents deploy
+.PHONY: dev down logs test wasm e2e deploy-infra push-image push-client push-agents push-market deploy
 
 dev:
 	$(COMPOSE) up --build -d
@@ -46,7 +46,11 @@ push-agents:
 	docker buildx build --platform $(PLATFORM) -f infra/agents.Dockerfile -t brawler-agents --load .
 	docker save brawler-agents | gzip | ssh ubuntu@$$($(TF) output -raw public_ip) 'gunzip | sudo docker load'
 
+push-market:
+	docker buildx build --platform $(PLATFORM) -f infra/market.Dockerfile -t brawler-market --load .
+	docker save brawler-market | gzip | ssh ubuntu@$$($(TF) output -raw public_ip) 'gunzip | sudo docker load'
+
 # extra flags: make deploy ANSIBLE_ARGS="-e @infra/ansible/secrets.yml --ask-vault-pass"
-deploy: push-image push-client push-agents
+deploy: push-image push-client push-agents push-market
 	ANSIBLE_CONFIG=infra/ansible/ansible.cfg ansible-playbook infra/ansible/playbook.yml \
 		-i "$$($(TF) output -raw public_ip)," -e domain="$$($(TF) output -raw domain)" $(ANSIBLE_ARGS)
