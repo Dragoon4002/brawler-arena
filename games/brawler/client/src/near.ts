@@ -9,6 +9,7 @@ export const GAME = 'brawler';
 const GAS = '30000000000000';
 const GAS_X = '100000000000000'; // monster lock xcc
 const GAS_T = '150000000000000'; // enter_tournament needs 150 Tgas
+const ONE_YOCTO = '1'; // spend calls need full-access key -> wallet confirm
 
 export interface MatchView {
   id: number; game: string; host: string; guest: string | null; stake: string; bettable: boolean;
@@ -53,22 +54,22 @@ export function useArena() {
     // null = monster lock failed, stake refunded
     createMatch: async (bettable: boolean, stakeYocto: string, monsterId?: string): Promise<number | null> => {
       await need(stakeYocto);
-      const r = await call('create_match', { game: GAME, stake: stakeYocto, bettable, monster_id: monsterId ?? null }, '0', monsterId ? GAS_X : GAS);
+      const r = await call('create_match', { game: GAME, stake: stakeYocto, bettable, monster_id: monsterId ?? null }, ONE_YOCTO, monsterId ? GAS_X : GAS);
       return r == null ? null : Number(r);
     },
     joinMatch: async (id: number, stakeYocto: string, monsterId?: string) => {
       await need(stakeYocto);
-      return call('join_match', { match_id: id, monster_id: monsterId ?? null }, '0', monsterId ? GAS_X : GAS);
+      return call('join_match', { match_id: id, monster_id: monsterId ?? null }, ONE_YOCTO, monsterId ? GAS_X : GAS);
     },
     listTournaments: (from = 0, limit = 30) => view<TournamentView[]>('list_tournaments', { from, limit, game: GAME }),
     getTournament: (id: number) => view<TournamentView | null>('get_tournament', { id }),
     createTournament: async (size: number, feeYocto: string, bettable: boolean) =>
       Number(await call('create_tournament', { game: GAME, size, entry_fee: feeYocto, bettable }, '1')),
-    enterTournament: async (id: number, monsterId: string, feeYocto: string) => { await need(feeYocto); return call('enter_tournament', { id, monster_id: monsterId }, '0', GAS_T); },
+    enterTournament: async (id: number, monsterId: string, feeYocto: string) => { await need(feeYocto); return call('enter_tournament', { id, monster_id: monsterId }, ONE_YOCTO, GAS_T); },
     claimTournament: (id: number) => call('claim_tournament', { id }),
     cancelTournament: (id: number) => call('cancel_tournament', { id }),
     cancelMatch: (id: number) => call('cancel_match', { match_id: id }),
-    buy: async (id: number, side: number, yocto: string, minOut: string, _meta?: { card: number; dir: 'long' | 'short' }) => { await need(yocto); return call('buy', { match_id: id, side, amount: yocto, min_out: minOut }); },
+    buy: async (id: number, side: number, yocto: string, minOut: string, _meta?: { card: number; dir: 'long' | 'short' }) => { await need(yocto); return call('buy', { match_id: id, side, amount: yocto, min_out: minOut }, ONE_YOCTO); },
     // my bets on match, oldest first
     getLots: async (id: number, account: string): Promise<LotView[]> =>
       (await view<BetView[]>('get_bets_of', { match_id: id, account_id: account })).map((b) => ({ id: b.id, side: b.side, card: b.side, dir: 'long' as const, shares: b.shares, cost: b.amount })),
