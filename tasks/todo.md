@@ -114,5 +114,11 @@ Est: ~1-2 days of sessions.
 - [x] /godot React page + near_bridge.gd postMessage bridge (tested with stub in demo mode)
 - [x] Headless: 1800 frames random demo fight, 0 runtime errors; rendered fight + menu frames checked
 - [x] `npm run godot:build` (GODOT=<binary>) -> client/public/godot/game/
-- [ ] Web export templates 4.7.2 not installed -> export blocked
+- [x] Web templates installed (nothreads only); export builds; /godot boots game in Chrome, in-game Connect + Create room round-trip via bridge (demo)
 - [ ] Online play, TS<->GD sim parity test, real-wallet test
+
+## Image heroes (web): cutout rig vs sprite sheet (lortor, torfen)
+- [x] Cutout rig: Blender cut (games/brawler/sprites/cutout/cut.py + <hero>.json) -> client/public/chars/<hero>/cutout/; render/cutout.ts drives parts with rig.ts poses; `?p1=lortor&p2=torfen`
+- [x] Verified: all poses + attack strikes (scratch gallery), demo bot fight renders
+- [x] Sprite sheet (Blender mesh-deform renders, sprites/build.py, render/sheet.ts) -> client/public/chars/<hero>/sheet.*; `&style=sheet`
+- [ ] User picks preferred style
