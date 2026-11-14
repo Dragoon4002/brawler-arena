@@ -1,0 +1,67 @@
+//! DNA trust boundary: port of client genes.ts sanitize + statsOf.
+//! ponytail: breed/randomDna stay in contract genes.rs (needs #[near] serializers); merge if a 3rd copy appears.
+use crate::{js_max, js_min, js_round, Stats};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Dna { pub str: u16, pub dex: u16, pub def: u16, pub spd: u16, pub hue: u16, pub accent: u16, pub horn: u16, pub tail: u16, pub pattern: u16, pub eye: u16, pub size: u16 }
+
+/// mulberry32, same as TS rng().
+struct Rng(u32);
+impl Rng {
+    fn below(&mut self, n: u32) -> u32 {
+        self.0 = self.0.wrapping_add(0x6d2b79f5);
+        let mut t = self.0;
+        t = (t ^ (t >> 15)).wrapping_mul(t | 1);
+        t ^= t.wrapping_add((t ^ (t >> 7)).wrapping_mul(t | 61));
+        (((t ^ (t >> 14)) as u64 * n as u64) >> 32) as u32
+    }
+}
+
+/// JS `+v` (Number coercion). None = NaN.
+fn num(v: Option<&Value>) -> Option<f64> {
+    let n = match v? {
+        Value::Null => 0.,
+        Value::Bool(b) => *b as u8 as f64,
+        Value::Number(n) => n.as_f64()?,
+        Value::String(s) => { let s = s.trim(); if s.is_empty() { 0. } else { s.parse().ok()? } }
+        _ => return None, // ponytail: JS coerces [5] -> 5, treated NaN here; any result still in range
+    };
+    n.is_finite().then_some(n)
+}
+
+/// Clamp untrusted DNA into valid ranges, stats summed to 22.
+pub fn sanitize(x: &Value) -> Dna {
+    let n = |k: &str, lo: f64, hi: f64, d: u16| num(x.get(k)).map_or(d, |v| js_max(lo, js_min(hi, js_round(v))) as u16);
+    let mut s = [n("str", 3., 9., 6), n("dex", 3., 9., 5), n("def", 3., 9., 5), n("spd", 3., 9., 6)];
+    let mut sum: u16 = s.iter().sum();
+    let r = &mut Rng(1);
+    while sum != 22 {
+        let k = r.below(4) as usize;
+        if sum > 22 && s[k] > 3 { s[k] -= 1; sum -= 1; } else if sum < 22 && s[k] < 9 { s[k] += 1; sum += 1; }
+    }
+    Dna {
+        str: s[0], dex: s[1], def: s[2], spd: s[3],
+        hue: n("hue", 0., 359., 170), accent: n("accent", 0., 359., 40),
+        horn: n("horn", 0., 3., 0), tail: n("tail", 0., 2., 0), pattern: n("pattern", 0., 2., 0), eye: n("eye", 0., 3., 0),
+        size: n("size", 90., 115., 100),
+    }
+}
+
+pub fn stats_of(d: &Dna) -> Stats { Stats { str: d.str as f64, dex: d.dex as f64, def: d.def as f64, spd: d.spd as f64 } }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn sanitize_clamps_and_sums() {
+        let d = sanitize(&json!({ "str": 99, "dex": -4, "def": "7", "spd": null, "hue": 400.4, "size": 2 }));
+        assert_eq!(d.str + d.dex + d.def + d.spd, 22);
+        assert!([d.str, d.dex, d.def, d.spd].iter().all(|v| (3..=9).contains(v)));
+        assert_eq!((d.hue, d.accent, d.size), (359, 40, 90));
+        assert_eq!(sanitize(&Value::Null), sanitize(&json!({})));
+    }
+}

@@ -7,3 +7,4 @@ dist
 /assets/
 /games/brawler/client/public/ui/
 .env*
+/target/
