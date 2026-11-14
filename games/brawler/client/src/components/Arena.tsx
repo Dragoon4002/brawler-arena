@@ -35,6 +35,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
   const [status, setStatus] = useState('');
   const [live, setLive] = useState(false);
   const [room, setRoom] = useState<{ code: string; matchId: number | null; bettable: boolean; seat: number } | null>(null);
+  const [names, setNames] = useState<string[]>([]);
   const [over, setOver] = useState<{ winner: number | null; reason: string; seat: number } | null>(null);
   const [claimMsg, setClaimMsg] = useState('');
   const [settled, setSettled] = useState(false);
@@ -52,7 +53,9 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
       if (demo === 'waiting') return;
       setLive(true); setSettled(true);
       if (demo !== 'fight') setOver({ winner: demo === 'void' ? null : demo === 'victory' ? 0 : 1, reason: demo === 'void' ? 'both left' : 'ko', seat: 0 });
-      const g = startBotFight(canvas.current!, [asPlayer(s.mon), asPlayer(monsters()[1] ?? s.mon)], s.stage);
+      const players = [asPlayer(s.mon), asPlayer(monsters()[1] ?? s.mon)];
+      setNames(players.map((p) => p.name));
+      const g = startBotFight(canvas.current!, players, s.stage);
       return () => g.stop();
     }
     let seat = -1;
@@ -66,10 +69,10 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
     const hooks = {
       status: setStatus,
       room: (r: { code: string; matchId: number | null; bettable: boolean; seat: number }) => { seat = r.seat; setRoom(r); },
-      started: () => { setLive(true); setOver(null); setRm((x) => ({ ...x, asked: false, wants: false })); },
+      started: (players: Player[]) => { setNames(players.map((p) => p.name)); setLive(true); setOver(null); setRm((x) => ({ ...x, asked: false, wants: false })); },
       rematch: () => setRm((x) => ({ ...x, wants: true })),
       left: () => setRm((x) => ({ ...x, gone: true })),
-      over: (winner: number | null, reason: string) => setTimeout(() => setOver({ winner, reason, seat }), reason === 'ko' ? 1800 : 0),
+      over: (winner: number | null, reason: string) => setTimeout(() => setOver({ winner, reason, seat }), reason === 'ko' ? 1000 : 0),
       result: (winner: number, kos: number[], st: number) => recordResult(s.mon.id, winner === st, kos[st], 'online rival', 'online'),
     };
     const game = startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : s.kind === 'match' ? { t: 'match', matchId: s.matchId, account: s.account } : { t: 'join', code: s.code, account: s.account, matchId: s.matchId }, asPlayer(s.mon), s.stage, hooks, sign);
@@ -150,7 +153,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
         <div className="arena-overlay">
           <div className="slab waiting" role="status">
             <img className="title-img" src={asset(over.winner === null ? 'title-void' : over.winner === over.seat ? 'title-victory' : 'title-defeat')} alt={over.winner === null ? 'Match void' : over.winner === over.seat ? 'Victory' : 'Defeat'} />
-            <p>{over.winner === null ? `No result (${over.reason}). Stakes and bets are refunded.` : over.reason === 'ko' ? 'Three knockouts.' : `Won by ${over.reason}.`}</p>
+            <p>{over.winner === null ? `No result (${over.reason}). Stakes and bets are refunded.` : <><b>{names[over.winner] ?? 'Winner'}</b> wins {over.reason === 'ko' ? 'by three knockouts' : `by ${over.reason}`}.</>}</p>
             {room?.matchId != null && s?.kind !== 'match' && (over.winner === over.seat || over.winner === null) && (
               <>
                 {!settled && <p className="note">Posting the result on-chain…</p>}

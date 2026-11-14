@@ -26,7 +26,7 @@ const WS = location.protocol === 'https:' ? 'wss' : 'ws';
 export const SERVER = params.get('server') ?? process.env.NEXT_PUBLIC_SERVER_URL ??
   (process.env.NODE_ENV === 'development' ? `${WS}://${location.hostname}:8787` : `${WS}://${location.host}`);
 
-function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage: StageId, hooks: Hooks, tap?: (inputs: number[]) => void) {
+function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage: StageId, hooks: Hooks, tap?: (inputs: number[], end: boolean) => void) {
   const renderer = createRenderer(canvas);
   const state: GameState = newGame(players.map((p) => statsOf(p.dna)), stage);
   let raf = 0;
@@ -37,8 +37,8 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
 
   function advance(inputs: number[]) {
     if (state.winner >= 0) return; // match is over; server verdict decides
-    tap?.(inputs);
     step(state, inputs);
+    tap?.(inputs, state.winner >= 0);
     renderer.onEvents(state.events);
     playEvents(state, seat);
     if (state.winner >= 0) hooks.result?.(state.winner, state.fighters.map((_, i) => 3 - state.fighters[1 - i].stocks), seat);
@@ -53,7 +53,7 @@ function loop(canvas: HTMLCanvasElement, players: Player[], seat: number, stage:
       if (net && !banner) net.tick(readInput, advance, () => hash(state));
       else if (spectate) spectate(advance, state);
     }
-    const b = banner || (state.winner >= 0 ? `${players[state.winner].name} wins` : net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
+    const b = banner || (state.winner >= 0 ? '' : net?.desync ? 'DESYNC detected' : net?.lagging ? 'waiting for opponent…' : '');
     renderer.draw(state, b, link);
     raf = requestAnimationFrame(frame);
   }
@@ -99,9 +99,9 @@ export function startOnline(canvas: HTMLCanvasElement, first: ({ t: 'host' } & H
       const players = chain ?? (seat === 0 ? [me, theirs] : [theirs, me]);
       // Mirror confirmed inputs to the server referee (packed host<<16|guest, 6-frame batches) + 1 s heartbeat.
       let batch: number[] = [], f0 = 0;
-      const tap = (ins: number[]) => {
+      const tap = (ins: number[], end: boolean) => {
         batch.push((ins[0] << 16) | ins[1]);
-        if (batch.length >= 6) { sock.send(JSON.stringify({ t: 'tape', f0, ins: batch })); f0 += batch.length; batch = []; }
+        if (batch.length >= 6 || end) { sock.send(JSON.stringify({ t: 'tape', f0, ins: batch })); f0 += batch.length; batch = []; }
       };
       hb = setInterval(() => sock.readyState === WebSocket.OPEN && sock.send('{"t":"hb"}'), 1000);
       game = loop(canvas, players, seat, seat === 0 ? stage : theirStage, hooks, tap);
