@@ -39,7 +39,7 @@ function Toaster() {
   );
 }
 
-const NAV = [["/", "Market"], ["/search", "Browse"], ["/create", "Create"], ["/me", "My stuff"], ["/economy", "Economy"]] as const;
+const NAV = [["/", "Market"], ["/search", "Browse"], ["/collection", "Collections"], ["/create", "Create"], ["/me", "My stuff"], ["/economy", "Economy"]] as const;
 export function Shell({ children }: { children: ReactNode }) {
   const a = useAssets();
   const path = usePathname();
