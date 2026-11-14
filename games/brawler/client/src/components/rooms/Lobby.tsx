@@ -7,8 +7,10 @@ import { monsters } from '@/lib/store.ts';
 import { errText } from '@/lib/format.ts';
 import { asset, BotTag, Ico, Portrait, STAGE_ICON } from '@/components/ui.tsx';
 import { joinRoom } from './OnlineStart.tsx';
+import { useChainDetails } from '@/lib/chain.ts';
 
 function RoomCard({ r, onJoin }: { r: LobbyRoom; onJoin: () => void }) {
+  const { u } = useChainDetails();
   const [a, b] = r.players;
   return (
     <article className="tile room-card">
@@ -21,12 +23,12 @@ function RoomCard({ r, onJoin }: { r: LobbyRoom; onJoin: () => void }) {
         {r.status === 'live' ? <img className="tag-img" src={asset('tag-live')} alt="Live" /> : <span className="chip row-ico"><Ico n="icon-timer" />Waiting</span>}
         {!r.pub && <span className="chip row-ico"><Ico n="icon-lock" />Private, watch only</span>}
         <span className="chip row-ico"><Ico n={STAGE_ICON[r.stage]} />{STAGES[r.stage].name}</span>
-        {r.stake !== '0' && <span className="chip row-ico"><Ico n="coin" />Stake {fmt(r.stake)} NEAR</span>}
+        {r.stake !== '0' && <span className="chip row-ico"><Ico n="coin" />Stake {fmt(r.stake)} {u}</span>}
         {r.bettable && <span className="chip row-ico"><Ico n="icon-bet" />Bets open</span>}
         {r.watchers > 0 && <span className="chip row-ico"><Ico n="icon-watch" />{r.watchers} watching</span>}
       </div>
       <div className="row">
-        {r.status === 'waiting' && r.pub && <button className="btn" onClick={onJoin}><span><Ico n="icon-play" />{r.stake !== '0' ? `Join · ${fmt(r.stake)} NEAR` : 'Join fight'}</span></button>}
+        {r.status === 'waiting' && r.pub && <button className="btn" onClick={onJoin}><span><Ico n="icon-play" />{r.stake !== '0' ? `Join · ${fmt(r.stake)} ${u}` : 'Join fight'}</span></button>}
         <a className="btn alt" href={`/watch/${r.code}`}><span><Ico n={r.bettable ? 'icon-bet' : 'icon-watch'} />{r.bettable ? 'Watch and bet' : 'Watch'}</span></a>
       </div>
     </article>

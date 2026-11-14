@@ -5,6 +5,7 @@ import { fmt } from '@/lib/near.ts';
 import type { ChatLine, RoomState } from '@/lib/session.ts';
 import { ArenaBackdrop, asset, BotTag, HubDialog, Ico, Portrait, STAGE_ICON, StageThumb, TYPE_ICON } from '@/components/ui.tsx';
 import { Chat } from './Chat.tsx';
+import { useChainDetails } from '@/lib/chain.ts';
 
 export interface RoomLobbyProps {
   rs: RoomState; seat: number; mine: Monster; options: Monster[]; locked: boolean; status: string;
@@ -39,6 +40,7 @@ function SeatCard({ i, who, you, connected, onChange, locked }: {
 }
 
 export function RoomLobby(p: RoomLobbyProps) {
+  const { u } = useChainDetails();
   const { rs, seat } = p;
   const [pick, setPick] = useState(false);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
@@ -71,7 +73,7 @@ export function RoomLobby(p: RoomLobbyProps) {
         <section className="room-main slab" aria-label="Fighters">
           <div className="row room-chips">
             <span className="chip row-ico"><Ico n={rs.pub ? 'icon-room-public' : 'icon-room-private'} />{rs.pub ? 'Public' : 'Private'}</span>
-            {rs.stake !== '0' ? <span className="chip gold row-ico"><Ico n="coin" />Stake {fmt(rs.stake)} NEAR each</span> : <span className="chip row-ico">Friendly · no stake</span>}
+            {rs.stake !== '0' ? <span className="chip gold row-ico"><Ico n="coin" />Stake {fmt(rs.stake)} {u} each</span> : <span className="chip row-ico">Friendly · no stake</span>}
             {rs.bettable && <span className="chip gold row-ico"><Ico n="icon-bet" />Open for bets</span>}
             {rs.spectators > 0 && <span className="chip row-ico"><Ico n="icon-watch" />{rs.spectators} watching</span>}
           </div>

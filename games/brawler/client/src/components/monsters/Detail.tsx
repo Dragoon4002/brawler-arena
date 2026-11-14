@@ -8,6 +8,7 @@ import { useMons } from '@/hooks/useMons.ts';
 import { Ico, Portrait, Stats, TYPE_ICON } from '@/components/ui.tsx';
 import { Badges } from './Badges.tsx';
 import { GENE_NAMES } from './text.ts';
+import { useChainDetails } from '@/lib/chain.ts';
 
 const geneRows = (d: Dna) => [
   ['Horns', GENE_NAMES.horn[d.horn]], ['Tail', GENE_NAMES.tail[d.tail]], ['Hide', GENE_NAMES.pattern[d.pattern]],
@@ -15,6 +16,7 @@ const geneRows = (d: Dna) => [
 ];
 
 function Trade({ m, me, reload }: { m: NftMonster; me: string; reload: () => void }) {
+  const { u } = useChainDetails();
   const api = useMonsters();
   const { signIn } = useWallet();
   const act = useAct(reload);
@@ -34,19 +36,19 @@ function Trade({ m, me, reload }: { m: NftMonster; me: string; reload: () => voi
           {held && <p className="note">Busy right now (in a match or rented out), so it cannot be listed or offered.</p>}
           <div className="row">
             {m.price ? (
-              <><span className="chip gold row-ico"><Ico n="coin" />Listed at {fmt(m.price)} NEAR</span>
+              <><span className="chip gold row-ico"><Ico n="coin" />Listed at {fmt(m.price)} {u}</span>
                 <button className="btn ghost" disabled={act.busy} onClick={() => act.run(() => api.delist(m.id), 'Listing removed.')}><span><Ico n="icon-close" />Delist</span></button></>
             ) : (
-              <><label className="row">Price <input type="number" min="0" step="0.1" value={price} onChange={(e) => setPrice(e.target.value)} aria-label="Sale price in NEAR" style={{ width: 100 }} /> NEAR</label>
+              <><label className="row">Price <input type="number" min="0" step="0.1" value={price} onChange={(e) => setPrice(e.target.value)} aria-label={`Sale price in ${u}`} style={{ width: 100 }} /> {u}</label>
                 <button className="btn" disabled={act.busy || held || !(+price > 0)} onClick={() => act.run(() => api.list(m.id, toYocto(price)), 'Listed for sale.')}><span><Ico n="coin" />List for sale</span></button></>
             )}
           </div>
           <div className="row">
             {m.rentOffer ? (
-              <><span className="chip gold row-ico"><Ico n="icon-timer" />Rent {fmt(m.rentOffer.pricePerDay)} NEAR/day, max {m.rentOffer.maxDays} days</span>
+              <><span className="chip gold row-ico"><Ico n="icon-timer" />Rent {fmt(m.rentOffer.pricePerDay)} {u}/day, max {m.rentOffer.maxDays} days</span>
                 <button className="btn ghost" disabled={act.busy} onClick={() => act.run(() => api.cancelRent(m.id), 'Offer cancelled.')}><span><Ico n="icon-close" />Cancel offer</span></button></>
             ) : (
-              <><label className="row">Per day <input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} aria-label="Rent per day in NEAR" style={{ width: 90 }} /> NEAR</label>
+              <><label className="row">Per day <input type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} aria-label={`Rent per day in ${u}`} style={{ width: 90 }} /> {u}</label>
                 <label className="row">Max days <input type="number" min="1" step="1" value={maxDays} onChange={(e) => setMaxDays(e.target.value)} aria-label="Maximum rental days" style={{ width: 70 }} /></label>
                 <button className="btn alt" disabled={act.busy || held || !(+rate > 0) || !(+maxDays >= 1)} onClick={() => act.run(() => api.offerRent(m.id, toYocto(rate), Math.floor(+maxDays)), 'Rent offer published.')}><span><Ico n="icon-timer" />Offer for rent</span></button></>
             )}
@@ -54,12 +56,12 @@ function Trade({ m, me, reload }: { m: NftMonster; me: string; reload: () => voi
         </>
       ) : (
         <>
-          {m.price && <div className="row"><b className="row-ico"><Ico n="coin" />{fmt(m.price)} NEAR</b>
+          {m.price && <div className="row"><b className="row-ico"><Ico n="coin" />{fmt(m.price)} {u}</b>
             <button className="btn big" disabled={act.busy} onClick={() => gate(() => api.buy(m.id, m.price!), 'Bought! It is yours now.')}><span><Ico n="coin" />Buy</span></button></div>}
           {m.rentOffer && !rented && !m.price && (
             <div className="row">
               <label className="row">Days <input type="number" min="1" max={m.rentOffer.maxDays} step="1" value={days} onChange={(e) => setDays(e.target.value)} aria-label="Days to rent" style={{ width: 70 }} /> (max {m.rentOffer.maxDays})</label>
-              <b className="row-ico"><Ico n="coin" />{fmt((BigInt(m.rentOffer.pricePerDay) * BigInt(d)).toString())} NEAR total</b>
+              <b className="row-ico"><Ico n="coin" />{fmt((BigInt(m.rentOffer.pricePerDay) * BigInt(d)).toString())} {u} total</b>
               <button className="btn alt" disabled={act.busy || m.lockedUntil > now} onClick={() => gate(() => api.rent(m.id, d, (BigInt(m.rentOffer!.pricePerDay) * BigInt(d)).toString()), 'Rented. You can fight with it now.')}><span><Ico n="icon-timer" />Rent for {d} day{d > 1 ? 's' : ''}</span></button>
             </div>
           )}
@@ -71,6 +73,7 @@ function Trade({ m, me, reload }: { m: NftMonster; me: string; reload: () => voi
 }
 
 function VaultPanel({ m, me }: { m: NftMonster; me: string }) {
+  const { u, who } = useChainDetails();
   const api = useMonsters();
   const { signIn } = useWallet();
   const [v, reload] = useLoad(() => api.vault(m.id), [m.id]);
@@ -83,19 +86,19 @@ function VaultPanel({ m, me }: { m: NftMonster; me: string }) {
       <h2 className="row-ico"><Ico n="coin-stack" />Monster vault</h2>
       <p className="sub">Rent earnings and deposits stay in the NFT. Whoever holds it can withdraw. Frozen while it is listed, so a buyer gets what they see.</p>
       <dl className="kv">
-        <dt>Balance</dt><dd className="row-ico"><Ico n="coin" />{fmt(v.balance)} NEAR</dd>
-        <dt>Earned</dt><dd>{fmt(v.earned)} NEAR</dd>
-        <dt>Paid out</dt><dd>{fmt(v.paid_out)} NEAR</dd>
+        <dt>Balance</dt><dd className="row-ico"><Ico n="coin" />{fmt(v.balance)} {u}</dd>
+        <dt>Earned</dt><dd>{fmt(v.earned)} {u}</dd>
+        <dt>Paid out</dt><dd>{fmt(v.paid_out)} {u}</dd>
       </dl>
       <div className="row">
         {owner && <button className="btn" disabled={act.busy || !!m.price || v.balance === '0'} onClick={() => act.run(() => api.vaultWithdraw(m.id), 'Withdrawn to your wallet.')}><span><Ico n="coin" />Withdraw all</span></button>}
-        <label className="row"><input type="number" min="0" step="0.1" value={amt} onChange={(e) => setAmt(e.target.value)} aria-label="Deposit in NEAR" style={{ width: 90 }} /> NEAR</label>
+        <label className="row"><input type="number" min="0" step="0.1" value={amt} onChange={(e) => setAmt(e.target.value)} aria-label={`Deposit in ${u}`} style={{ width: 90 }} /> {u}</label>
         <button className="btn ghost" disabled={act.busy || !(+amt > 0)} onClick={() => (me ? act.run(() => api.vaultDeposit(m.id, toYocto(amt)), 'Vault funded.') : signIn())}><span>Fund vault</span></button>
       </div>
       {v.log.length > 0 && (
         <ul className="hist">
           {[...v.log].reverse().map((e, i) => (
-            <li key={i}><span className="chip">{e.kind}</span><span>{short(e.who)}</span>{e.amount !== '0' && <span>{fmt(e.amount)} NEAR</span>}<small>{when(e.at_ms)}</small></li>
+            <li key={i}><span className="chip">{e.kind}</span><span>{who(e.who, me)}</span>{e.amount !== '0' && <span>{fmt(e.amount)} {u}</span>}<small>{when(e.at_ms)}</small></li>
           ))}
         </ul>
       )}
@@ -124,6 +127,7 @@ function History({ rows }: { rows: HistoryEntry[] }) {
 export function Detail({ id }: { id: string }) {
   const api = useMonsters();
   const me = useWallet().signedAccountId ?? '';
+  const { who } = useChainDetails();
   const [data, reload, err] = useLoad(async () => ({ m: await api.get(id) }), [id]);
   const [hist] = useLoad(() => api.history(id).catch(() => [] as HistoryEntry[]), [id]);
   const m = data?.m;
@@ -149,7 +153,7 @@ export function Detail({ id }: { id: string }) {
             <dl className="kv" style={{ marginTop: 14 }}>
               <dt>Record</dt><dd className="row-ico"><Ico n="trophy" />{m.record.w} wins, {m.record.l} losses</dd>
               <dt>Knockouts</dt><dd className="row-ico"><Ico n="ko" />{m.record.ko}</dd>
-              <dt>Owner</dt><dd style={{ overflowWrap: 'anywhere' }}>{m.owner === me ? 'You' : m.owner}</dd>
+              <dt>Owner</dt><dd style={{ overflowWrap: 'anywhere' }}>{who(m.owner, me)}</dd>
               <dt>Hatched</dt><dd>{new Date(m.born).toLocaleDateString()}</dd>
             </dl>
           </section>

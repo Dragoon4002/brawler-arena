@@ -6,6 +6,7 @@ import { fmt, toYocto, useArena } from '@/lib/near.ts';
 import { errText } from '@/lib/format.ts';
 import { prepareFight } from '@/components/Arena.tsx';
 import { Ico } from '@/components/ui.tsx';
+import { unit, useChainDetails } from '@/lib/chain.ts';
 
 type Arena = ReturnType<typeof useArena>;
 
@@ -24,13 +25,15 @@ export async function joinRoom(arena: Arena, code: string, mon: Monster, say: (t
   if (r.matchId !== null) {
     if (!arena.ready) return say('Betting contract not configured on this build.');
     if (r.players[0]?.account === arena.account) return say('You are the host of that room.');
-    say(r.stake === '0' ? 'Confirm the join in your wallet…' : `Joining stakes ${fmt(r.stake)} NEAR from your balance (matches the host; winner takes both). Confirm in your wallet…`);
+    const u = unit();
+    say(r.stake === '0' ? 'Confirm the join in your wallet…' : `Joining stakes ${fmt(r.stake)} ${u} from your balance (matches the host; winner takes both). Confirm in your wallet…`);
     if ((await arena.joinMatch(r.matchId, r.stake, chainId(mon))) !== true && !DEMO) return say(BUSY); // demo returns null
   }
   prepareFight({ kind: 'join', mon, code: r.code, stage: r.stage, account: arena.account ?? '', matchId: r.matchId });
 }
 
 export function CreateRoom({ mon }: { mon: Monster }) {
+  const { on, u } = useChainDetails();
   const arena = useArena();
   const [pub, setPub] = useState(true);
   const [bettable, setBettable] = useState(false);
@@ -62,12 +65,12 @@ export function CreateRoom({ mon }: { mon: Monster }) {
       <div className="play-form">
         <label className="stake-field">
           <span className="row-ico"><Ico n="coin-stack" />Stake</span>
-          <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" value={stake} onChange={(e) => setStake(e.target.value)} aria-describedby="stake-help" /><b>NEAR</b></span>
+          <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" value={stake} onChange={(e) => setStake(e.target.value)} aria-describedby="stake-help" /><b>{u}</b></span>
         </label>
         <div className="stake-presets" role="group" aria-label="Quick stake">
-          {['0', '0.5', '1', '5'].map((v) => <button key={v} type="button" className="chip" aria-pressed={stake === v} onClick={() => setStake(v)}>{v === '0' ? 'Free' : `${v} NEAR`}</button>)}
+          {['0', '0.5', '1', '5'].map((v) => <button key={v} type="button" className="chip" aria-pressed={stake === v} onClick={() => setStake(v)}>{v === '0' ? 'Free' : `${v} ${u}`}</button>)}
         </div>
-        <p id="stake-help" className="note">{st ? `Your opponent matches ${stake} NEAR. Winner takes both, minus 0.1%.` : bettable ? 'No stake: only spectators bet.' : '0 = friendly match, nothing on-chain.'}</p>
+        <p id="stake-help" className="note">{st ? `Your opponent matches ${stake} ${u}. Winner takes both, minus 0.1%.` : bettable ? 'No stake: only spectators bet.' : on ? '0 = friendly match, nothing on-chain.' : '0 = friendly match, no stakes.'}</p>
         <fieldset className="seg" aria-label="Visibility">
           <legend>Visibility</legend>
           <label><input type="radio" name="vis" checked={pub} onChange={() => setPub(true)} /><span className="row-ico"><Ico n="icon-room-public" />Public</span><small>Listed in the lobby</small></label>
@@ -80,13 +83,13 @@ export function CreateRoom({ mon }: { mon: Monster }) {
         <h3>Match ticket</h3>
         <dl>
           <dt>Fighter</dt><dd>{mon.name}</dd>
-          <dt>Your stake</dt><dd>{st ? `${stake} NEAR` : 'Free'}</dd>
-          <dt>Winner gets</dt><dd className="gold">{st ? `${+(st * 2 * 0.999).toFixed(4)} NEAR` : 'Bragging rights'}</dd>
+          <dt>Your stake</dt><dd>{st ? `${stake} ${u}` : 'Free'}</dd>
+          <dt>Winner gets</dt><dd className="gold">{st ? `${+(st * 2 * 0.999).toFixed(4)} ${u}` : 'Bragging rights'}</dd>
           <dt>Room</dt><dd>{pub ? 'Listed in lobby' : view ? 'Code only · watchable' : 'Code only'}</dd>
           <dt>Spectator bets</dt><dd>{bettable ? 'On' : 'Off'}</dd>
         </dl>
         <button className="btn big" disabled={busy} onClick={create}><span><Ico n={!arena.account ? 'icon-wallet' : onChain ? 'coin' : 'icon-check'} />{!arena.account ? 'Connect wallet' : onChain ? 'Create and stake' : 'Create room'}</span></button>
-        {onChain && <p className="note">Needs a wallet signature{st ? `; ${stake} NEAR is held until the fight ends` : ''}.</p>}
+        {onChain && <p className="note">Needs a wallet signature{st ? `; ${stake} ${u} is held until the fight ends` : ''}.</p>}
         {msg && <p className="note" role="status">{msg}</p>}
       </aside>
     </div>
@@ -94,6 +97,7 @@ export function CreateRoom({ mon }: { mon: Monster }) {
 }
 
 export function JoinByCode({ mon, invite }: { mon: Monster; invite?: string }) {
+  const { u } = useChainDetails();
   const arena = useArena();
   const [code, setCode] = useState(invite?.toUpperCase() ?? '');
   const [msg, setMsg] = useState('');
@@ -107,7 +111,7 @@ export function JoinByCode({ mon, invite }: { mon: Monster; invite?: string }) {
     peekRoom(invite).then((r) => {
       if (!r) setMsg('Invite link: room not found or already closed.');
       else if (r.matchId === null) join();
-      else setMsg(`Invite to a staked room: ${fmt(r.stake)} NEAR. Press Join to stake and enter.`);
+      else setMsg(`Invite to a staked room: ${fmt(r.stake)} ${u}. Press Join to stake and enter.`);
     }, () => {});
   }, []);
   return (

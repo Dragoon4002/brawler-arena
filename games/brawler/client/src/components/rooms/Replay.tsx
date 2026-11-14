@@ -4,6 +4,7 @@ import { CONTRACT_ID, useArena, type MatchView } from '@/lib/near.ts';
 import { SERVER, startReplay } from '@/lib/session.ts';
 import { simulate, tapeHash, type Tape } from '@/lib/tape.ts';
 import { Ico } from '@/components/ui.tsx';
+import { useChainDetails } from "@/lib/chain.ts";
 
 const HTTP = SERVER.replace(/^ws/, 'http');
 const SPEEDS = [1, 2];
@@ -12,6 +13,7 @@ interface Check { winner: number | null; hash: string; chain: MatchView | null |
 
 // /replay/<key>: re-run the server's input tape locally, prove winner + tape hash, then play it back.
 export function Replay({ tapeKey }: { tapeKey: string }) {
+  const { on } = useChainDetails();
   const canvas = useRef<HTMLCanvasElement>(null);
   const arena = useArena();
   const [tape, setTape] = useState<Tape | null>(null);
@@ -77,6 +79,7 @@ export function Replay({ tapeKey }: { tapeKey: string }) {
               <Row ok={!!winnerOk} label="Winner">
                 Re-run: <b>{tape.reason === 'ko' ? name(check.winner) : check.winner === null ? 'no KO in tape' : `KO by ${name(check.winner)}`}</b> · recorded: <b>{name(tape.winner)}</b> ({tape.reason})
               </Row>
+              {!on ? <Row ok={check.hash === tape.tape_hash} label="Replay">{check.hash === tape.tape_hash ? 'Matches the recorded fight.' : 'Does not match the record.'}</Row> : <>
               <Row ok={check.hash === tape.tape_hash} label="Tape hash vs server record">
                 <code>{check.hash.slice(0, 16)}…</code> {check.hash === tape.tape_hash ? 'matches' : `≠ ${tape.tape_hash.slice(0, 16)}…`}
               </Row>
@@ -87,6 +90,7 @@ export function Replay({ tapeKey }: { tapeKey: string }) {
                 </Row>
               )}
               <li className="note">{tape.frames.length} frames · {tape.stage} · hash = sha256(stage ‖ 0x00 ‖ frames u32 LE)</li>
+              </>}
             </ul>
           )}
         </section>
