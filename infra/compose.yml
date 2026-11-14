@@ -11,3 +11,9 @@ services:
       REFEREE_ID: ${REFEREE_ID:-}
       REFEREE_KEY: ${REFEREE_KEY:-}
     restart: unless-stopped
+
+  brawler-client:
+    image: brawler-client
+    build: { context: .., dockerfile: infra/brawler-client.Dockerfile }
+    ports: ["${CLIENT_PORT:-3000}:3000"]
+    restart: unless-stopped
