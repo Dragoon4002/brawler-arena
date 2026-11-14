@@ -10,3 +10,10 @@ dist
 target/
 .next/
 out/
+
+# terraform state/vars, rendered Caddyfile, ansible secrets
+.terraform/
+*.tfstate*
+*.tfvars
+/infra/Caddyfile
+/infra/ansible/secrets.yml

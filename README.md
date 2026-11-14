@@ -31,6 +31,22 @@ npm run dev -w @xyz/market
 - Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
 - New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?)` on platform.
 
+## Deploy to AWS
+
+Single EC2 (rooms are in-memory, so exactly one instance) + Caddy for TLS. Needs `terraform`, `ansible`, AWS creds, a domain.
+
+```sh
+cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars   # set ssh_cidr, domain, route53_zone_id?
+make deploy-infra                     # EC2 + EIP + SG (+ Route53 A record)
+# no route53_zone_id? point an A record for <domain> at `terraform -chdir=infra/terraform output -raw public_ip`
+export CONTRACT_ID=... MONSTERS_ID=... REFEREE_ID=... REFEREE_KEY=...   # or ansible-vault secrets.yml via ANSIBLE_ARGS
+make deploy                           # docker + repo (repo_version, default main) + compose up
+```
+
+- DNS must resolve to the EIP before `make deploy`, or Caddy can't get a cert.
+- Client: `NEXT_PUBLIC_SERVER_URL=wss://<domain>` in Vercel, or `?server=wss://<domain>` for a quick test.
+- Redeploy: `make deploy ANSIBLE_ARGS="-e repo_version=<sha>"`. Remote state: add an `s3` backend in `versions.tf` (optional).
+
 ## Controls
 
 | | Move / aim | Jump | Light | Heavy | Dodge |
