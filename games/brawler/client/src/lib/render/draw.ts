@@ -2,6 +2,8 @@
 import { STAGES, HURT_H, MAX_HP, hitboxOf, type GameState, type SimEvent, type StageId } from '../sim/sim.ts';
 import { paintBackground, paintStage, paintFront } from './stage.ts';
 import { drawMonster, poseFor, type Look } from './rig.ts';
+import { drawHero, hero } from './cutout.ts';
+import { drawSheet, sheet } from './sheet.ts';
 import { lookOf, randomDna } from '../genes.ts';
 
 export const W = 1280, H = 720;
@@ -20,6 +22,8 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   const squash = [0, 0];
   let showBoxes = false;
   let stageId: StageId = 'ember';
+  // ?p1=lortor&p2=torfen swaps a seat's vector monster for an image hero (art test); &style=sheet uses the sprite sheet.
+  const q = new URLSearchParams(location.search), HEROES = [q.get('p1'), q.get('p2')], SHEET = q.get('style') === 'sheet';
   const onKey = (e: KeyboardEvent) => { if (e.code === 'Backquote') showBoxes = !showBoxes; };
   addEventListener('keydown', onKey);
 
@@ -84,7 +88,11 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       ctx.translate(f.x, f.y);
       if (f.invuln > 0 && Math.floor(s.frame / 4) % 2) ctx.globalAlpha = f.state === 'dodge' ? 0.55 : 0.35;
       ctx.scale(f.facing * (1 + squash[i]), 1 - squash[i]);
-      drawMonster(ctx, p, LOOKS[i], f.hitlag > 0 && f.state === 'hitstun');
+      const flash = f.hitlag > 0 && f.state === 'hitstun', name = HEROES[i];
+      const sh = name && SHEET ? sheet(name) : null, h = name && !SHEET ? hero(name) : null;
+      if (sh) drawSheet(ctx, sh, f, s.frame, p.r, flash);
+      else if (h) drawHero(ctx, p, h, flash);
+      else drawMonster(ctx, p, LOOKS[i], flash);
       ctx.restore();
 
       if (f.state === 'block') { // shield arc on the guarded (front) side

@@ -1,0 +1,58 @@
+// Cutout heroes: image parts cut in Blender (games/brawler/sprites/cutout/cut.py) driven by the same Pose as rig.ts.
+// The source art is the idle pose, so every bone rotates by (pose - POSES.idle). Render-only.
+import { POSES, type Pose } from './rig.ts';
+
+type V = [number, number];
+interface Part { name: string; bone: keyof Pose | 'cape'; parent: string | null; pivot: V; at: V; img: HTMLImageElement }
+interface Hero { feet: V; hip: V; height: number; parts: Part[]; byName: Map<string, Part> }
+
+const I = POSES.idle;
+const HEIGHT = 100; // game units for the full image height
+const heroes = new Map<string, Hero | null>();
+
+// Starts loading on first call; null until every part image is ready (caller falls back to the vector rig).
+export function hero(name: string): Hero | null {
+  if (!heroes.has(name)) {
+    heroes.set(name, null);
+    const dir = `/chars/${name}/cutout/`;
+    fetch(dir + 'rig.json').then((r) => r.json()).then(async (h: Hero) => {
+      await Promise.all(h.parts.map((p) => { p.img = new Image(); p.img.src = `${dir}${p.name}.png`; return p.img.decode(); }));
+      h.byName = new Map(h.parts.map((p) => [p.name, p]));
+      heroes.set(name, h);
+    }).catch((e) => console.warn('cutout hero', name, e));
+  }
+  return heroes.get(name) ?? null;
+}
+
+// Canvas rotation for a part. Limbs: + pose angle = toward facing = counter-clockwise on canvas.
+// Arms hang off the torso but their pose angles are world angles, so undo the torso lean.
+function rot(p: Pose, bone: Part['bone']): number {
+  const dt = p.t - I.t;
+  switch (bone) {
+    case 't': return dt;
+    case 'h': return p.h - I.h;
+    case 'cape': return (p.tail - I.tail) * 0.35;
+    case 'fu': case 'bu': return -(p[bone] - I[bone]) - dt;
+    default: return -(p[bone] - I[bone]);
+  }
+}
+
+function place(ctx: CanvasRenderingContext2D, h: Hero, part: Part, p: Pose) {
+  if (part.parent) place(ctx, h, h.byName.get(part.parent)!, p);
+  const [x, y] = part.pivot;
+  ctx.translate(x, y); ctx.rotate(rot(p, part.bone)); ctx.translate(-x, -y);
+}
+
+// Fighter-local space: origin at feet, facing right (same contract as drawMonster).
+export function drawHero(ctx: CanvasRenderingContext2D, p: Pose, h: Hero, flash: boolean) {
+  const k = HEIGHT / h.height;
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.translate(-h.feet[0], -h.feet[1] + (p.y - I.y) / k);
+  if (p.r) { ctx.translate(...h.hip); ctx.rotate(p.r); ctx.translate(-h.hip[0], -h.hip[1]); }
+  if (flash) ctx.filter = 'brightness(0) invert(1)';
+  for (const part of h.parts) {
+    ctx.save(); place(ctx, h, part, p); ctx.drawImage(part.img, ...part.at); ctx.restore();
+  }
+  ctx.restore();
+}
