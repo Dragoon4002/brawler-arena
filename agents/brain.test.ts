@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { heuristic, parseJson, template, validate, winProb, type View } from './brain.ts';
+import { heuristic, template, validate, winProb, type View } from './brain.ts';
 
 const B = { minBet: 0.01, maxBet: 0.1, left: 0.3 };
 const v = (s0: number, d0: number, s1: number, d1: number, price0 = 0.5): View =>
@@ -17,12 +17,6 @@ test('validate', () => {
     assert.equal(validate(bad, B), null, JSON.stringify(bad));
   assert.equal(validate({ action: 'hold' }, B)!.action, 'hold');
   assert.equal(validate({ action: 'buy', side: 0, amount: 1, reason: 'a'.repeat(500) }, B)!.reason.length, 120);
-});
-
-test('parseJson', () => {
-  assert.deepEqual(parseJson('Sure!\n```json\n{"action":"hold"}\n```'), { action: 'hold' });
-  assert.equal(parseJson('no json'), null);
-  assert.equal(parseJson('{bad'), null);
 });
 
 test('winProb', () => {

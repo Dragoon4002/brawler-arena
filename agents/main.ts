@@ -1,13 +1,12 @@
 // AI bettors + commentator for Brawler Arena. Watches live rooms, replays the input tape with the client sim,
-// asks NEAR AI Cloud (or a heuristic) for trades/commentary, buys on-chain, chats rationale into the room.
+// picks trades with per-persona rules, buys on-chain, chats rationale into the room.
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { Account, JsonRpcProvider, nearToYocto, yoctoToNear } from 'near-api-js';
 import { newGame, step, type GameState } from '../games/brawler/client/src/lib/sim/sim.ts';
 import { sanitize, statsOf } from '../games/brawler/client/src/lib/genes.ts';
 import { STAGE_IDS } from '../games/brawler/client/src/lib/stages.ts';
-import { PERSONAS, commentPrompt, heuristic, parseJson, prompt, template, validate, type Budget, type Decision, type Moment, type Persona, type View } from './brain.ts';
-import { LLM_ON, MODEL, chat } from './llm.ts';
+import { PERSONAS, heuristic, template, type Budget, type Moment, type Persona, type View } from './brain.ts';
 
 const env = process.env;
 const SERVER = env.SERVER_URL ?? 'wss://65-0-237-185.sslip.io';
@@ -17,7 +16,7 @@ const EXPOSURE = Number(env.MAX_EXPOSURE ?? 0.3); // NEAR per agent per match
 const MAX_BET = Number(env.MAX_BET ?? 0.1);
 const TRADE_GAP = Number(env.TRADE_GAP_S ?? 15) * 1000;
 const SAY_GAP = 6000;
-const CASTER = env.COMMENTATOR_NAME ?? 'AI Commentator';
+const CASTER = env.COMMENTATOR_NAME ?? 'Bot Commentator';
 const CREDS = env.CREDENTIALS_DIR ?? `${homedir()}/.near-credentials/testnet`;
 const GAS = 30_000_000_000_000n;
 
@@ -32,9 +31,9 @@ const log = (...a: unknown[]) => console.log(new Date().toISOString().slice(11, 
 interface Bettor { persona: Persona; id: string; acct: Account | null }
 const spec: Record<string, string | { account: string; key?: string }> = env.AGENT_ACCOUNTS
   ? JSON.parse(env.AGENT_ACCOUNTS)
-  : Object.fromEntries(Object.keys(PERSONAS).map((p) => [p, `ai-${p.toLowerCase()}.${CONTRACT}`]));
+  : Object.fromEntries(PERSONAS.map((p) => [p, `ai-${p.toLowerCase()}.${CONTRACT}`]));
 const keyOf = (id: string) => { try { return JSON.parse(readFileSync(`${CREDS}/${id}.json`, 'utf8')).private_key as string; } catch { return null; } };
-const bettors: Bettor[] = Object.entries(spec).filter(([p]) => p in PERSONAS).map(([p, s]) => {
+const bettors: Bettor[] = Object.entries(spec).filter(([p]) => (PERSONAS as readonly string[]).includes(p)).map(([p, s]) => {
   const id = typeof s === 'string' ? s : s.account;
   const key = (typeof s === 'string' ? null : s.key) ?? keyOf(id);
   if (!key && !DRY) log(`[${p}] no key for ${id}, disabled (dry-run only)`);
@@ -106,7 +105,7 @@ function watch(code: string, row: any) {
     } else if (m.t === 'over') {
       r.done = true;
       queue(r, 'over', 0, m.winner);
-      speak(r).finally(() => setTimeout(() => close(r), 2000));
+      speak(r); setTimeout(() => close(r), 2000);
       settle(r);
     }
   });
@@ -150,12 +149,12 @@ async function tick(r: Room) {
   }
 }
 
-async function speak(r: Room) {
+function speak(r: Room) {
   const m = r.pending, now = Date.now();
   if (!m || (now - r.lastSay < SAY_GAP && m.kind !== 'over')) return;
   r.pending = null;
   r.lastSay = now;
-  const line = (await chat(commentPrompt(m)))?.replace(/^["']|["']$/g, '').slice(0, 180) || template(m);
+  const line = template(m);
   log(`[${r.code}] ${CASTER}: ${line}`);
   r.say.get(CASTER)?.(line);
 }
@@ -165,10 +164,8 @@ async function trade(r: Room, b: Bettor) {
   if (!v || Date.now() - st.last < TRADE_GAP) return;
   const budget: Budget = { minBet, maxBet: MAX_BET, left: EXPOSURE - st.spent };
   if (budget.left < minBet) return;
-  const raw = await chat(prompt(b.persona, v, budget), true);
-  const d: Decision = (raw && validate(parseJson(raw), budget)) || heuristic(b.persona, v, budget);
-  const src = raw ? 'llm' : 'heuristic';
-  if (d.action === 'hold') return log(`[${r.code}] ${b.persona} holds (${src}): ${d.reason}`);
+  const d = heuristic(b.persona, v, budget);
+  if (d.action === 'hold') return log(`[${r.code}] ${b.persona} holds: ${d.reason}`);
   const side = r.names[d.side];
   let ok = DRY;
   if (!DRY && b.acct && r.matchId != null) {
@@ -185,8 +182,8 @@ async function trade(r: Room, b: Bettor) {
   if (!ok) return;
   st.spent += d.amount;
   st.last = Date.now();
-  log(`[${r.code}] ${b.persona} ${DRY ? 'WOULD BUY' : 'bought'} ${d.amount} NEAR on ${side} (${src}): ${d.reason}`);
-  r.say.get(b.id)?.(`${DRY ? '(dry-run) ' : ''}[${b.persona} AI] ${d.amount} NEAR on ${side}: ${d.reason}`);
+  log(`[${r.code}] ${b.persona} ${DRY ? 'WOULD BUY' : 'bought'} ${d.amount} NEAR on ${side}: ${d.reason}`);
+  r.say.get(b.id)?.(`${DRY ? '(dry-run) ' : ''}[${b.persona} bot] ${d.amount} NEAR on ${side}: ${d.reason}`);
 }
 
 // Referee settles on-chain shortly after `over`; poll claimable a few times.
@@ -223,7 +220,7 @@ function lobby() {
   ws.onerror = () => {};
 }
 
-log(`agents up: ${LLM_ON ? `NEAR AI Cloud model ${MODEL}` : 'HEURISTIC mode (no NEAR_AI_API_KEY)'}${DRY ? ', DRY_RUN' : ''}, contract ${CONTRACT}`);
+log(`agents up: ${DRY ? 'DRY_RUN' : 'live'}, contract ${CONTRACT}`);
 log('bettors:', bettors.map((b) => `${b.persona}=${b.id}${b.acct ? '' : ' (no key)'}`).join(', '));
 view<{ min_bet: string }>('config', {}).then((c) => { minBet = near(c.min_bet); }, () => {});
 lobby();

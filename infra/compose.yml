@@ -19,7 +19,7 @@ services:
     ports: ["${CLIENT_PORT:-3000}:3000"]
     restart: unless-stopped
 
-  # AI bettors + commentator (NEAR AI Cloud). Opt-in: `docker compose --profile agents up -d`. Env: agents/README.md
+  # Bot bettors + commentator. Opt-in: `docker compose --profile agents up -d`. Env: agents/README.md
   agents:
     profiles: [agents]
     image: brawler-agents
@@ -28,9 +28,6 @@ services:
       SERVER_URL: ${AGENTS_SERVER_URL:-ws://brawler-server:8787}
       CONTRACT_ID: ${CONTRACT_ID:-brawler-platform-5c8e2b.testnet}
       NEAR_RPC: ${NEAR_RPC:-https://test.rpc.fastnear.com}
-      NEAR_AI_API_KEY: ${NEAR_AI_API_KEY:-}
-      NEAR_AI_BASE_URL: ${NEAR_AI_BASE_URL:-https://cloud-api.near.ai/v1}
-      NEAR_AI_MODEL: ${NEAR_AI_MODEL:-deepseek-ai/DeepSeek-V4.1-Flash-1017}
       AGENT_ACCOUNTS: ${AGENT_ACCOUNTS:-}
       CREDENTIALS_DIR: /creds
       DRY_RUN: ${AGENTS_DRY_RUN:-0}

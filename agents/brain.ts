@@ -1,5 +1,3 @@
-// Pure decision logic: personas, prompts, LLM-output validation, heuristic fallback.
-
 export interface Fighter { name: string; stocks: number; damage: number }
 export interface View {
   fighters: [Fighter, Fighter];
@@ -9,12 +7,8 @@ export interface View {
 export interface Budget { minBet: number; maxBet: number; left: number } // NEAR
 export interface Decision { action: 'buy' | 'hold'; side: 0 | 1; amount: number; reason: string }
 
-export const PERSONAS = {
-  Momentum: 'You ride momentum: back whoever is ahead right now, size up when the lead is big. Never fade a leader.',
-  Underdog: 'You love underdogs: buy the trailing fighter when their price is cheap (<40%), betting on comebacks. Small, frequent bets.',
-  Quant: 'You are a cold quant: estimate the true win probability from stocks and damage, only buy when your estimate beats the market price by 8+ points, size by edge.',
-} as const;
-export type Persona = keyof typeof PERSONAS;
+export const PERSONAS = ['Momentum', 'Underdog', 'Quant'] as const;
+export type Persona = typeof PERSONAS[number];
 
 // P(fighter 0 wins) from the scoreboard. 3 stocks each, damage >= 200 costs a stock.
 export function winProb(v: View) {
@@ -49,30 +43,7 @@ export function heuristic(p: Persona, v: View, b: Budget): Decision {
   return validate({ action: 'buy', side, amount: r2(b.minBet + (b.maxBet - b.minBet) * frac), reason }, b) ?? hold('Out of budget');
 }
 
-export function prompt(p: Persona, v: View, b: Budget) {
-  const [A, B] = v.fighters;
-  return [
-    {
-      role: 'system',
-      content: `You are "${p}", an AI bettor in a live prediction market on a 1v1 monster fight (3 stocks each; damage 0-200, 200 = lose a stock; last one standing wins). ${PERSONAS[p]} ` +
-        `Reply with ONLY a JSON object: {"action":"buy"|"hold","side":0|1,"amount":<NEAR number>,"reason":"<one punchy sentence, max 100 chars, for the live chat>"}. ` +
-        `amount must be between ${b.minBet} and ${r2(Math.min(b.maxBet, b.left))}.`,
-    },
-    {
-      role: 'user',
-      content: `t=${Math.round(v.secs)}s. Fighter 0 "${A.name}": ${A.stocks} stocks, ${Math.round(A.damage)} dmg. Fighter 1 "${B.name}": ${B.stocks} stocks, ${Math.round(B.damage)} dmg. ` +
-        `Market: ${A.name} ${Math.round(v.price0 * 100)}%, ${B.name} ${Math.round((1 - v.price0) * 100)}% (price = implied win chance; a share pays 1 NEAR if it wins). Your budget left: ${r2(b.left)} NEAR.`,
-    },
-  ];
-}
-
-// First {...} in the text, parsed. LLMs sometimes wrap JSON in prose or fences.
-export function parseJson(text: string): unknown {
-  const m = text.match(/\{[\s\S]*\}/);
-  try { return m ? JSON.parse(m[0]) : null; } catch { return null; }
-}
-
-// Strict: anything off-schema = null (caller falls back to heuristic). Amount clamped into budget.
+// Amount clamped into budget; null when off-schema or out of budget.
 export function validate(x: any, b: Budget): Decision | null {
   if (!x || typeof x !== 'object') return null;
   const reason = typeof x.reason === 'string' ? x.reason.replace(/\s+/g, ' ').trim().slice(0, 120) : '';
@@ -86,14 +57,6 @@ export function validate(x: any, b: Budget): Decision | null {
 /* ---------- commentator ---------- */
 
 export interface Moment { kind: 'start' | 'ko' | 'swing' | 'comeback' | 'over'; who: number; v: View; winner?: number | null }
-
-export function commentPrompt(m: Moment) {
-  const [A, B] = m.v.fighters;
-  return [
-    { role: 'system', content: 'You are an excitable esports caster for a monster fighting game. Reply with ONE short line of play-by-play or colour commentary (max 120 chars, no hashtags, no quotes).' },
-    { role: 'user', content: `Event: ${m.kind}${m.kind === 'over' ? ` winner=${m.winner == null ? 'none (void)' : m.v.fighters[m.winner].name}` : ` involving ${m.v.fighters[m.who].name}`}. Score: ${A.name} ${A.stocks} stocks/${Math.round(A.damage)} dmg vs ${B.name} ${B.stocks} stocks/${Math.round(B.damage)} dmg. Market has ${A.name} at ${Math.round(m.v.price0 * 100)}%.` },
-  ];
-}
 
 export function template(m: Moment) {
   const f = m.v.fighters, n = f[m.who]?.name, o = f[1 - m.who]?.name;
