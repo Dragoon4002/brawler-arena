@@ -138,7 +138,7 @@ export function Watch({ code }: { code: string }) {
   return (
     <div className="watch" style={colors}>
       <header className="watch-top">
-        <a className="btn ghost watch-back" href="#/lobby"><span><Ico n="icon-back" />Lobby</span></a>
+        <a className="btn ghost watch-back" href="/lobby"><span><Ico n="icon-back" />Lobby</span></a>
         <div className="wwin" aria-label="Who will win?">
           <h1>Who will win?</h1>
           <div className="wwin-row">

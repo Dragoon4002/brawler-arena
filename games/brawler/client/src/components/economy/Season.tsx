@@ -40,7 +40,7 @@ export function Season() {
               const m = mons[id];
               return (
                 <li key={id}>
-                  <a className="lb-row" href={`#/monster/${id}`}>
+                  <a className="lb-row" href={`/monster/${id}`}>
                     <b className={`rank r${i + 1}`}>{i + 1}</b>
                     {m ? <Portrait dna={m.dna} size={56} className="" /> : <span className="lb-ph" />}
                     <span className="lb-who"><b>{m?.name ?? `#${id}`}</b><small title={m?.owner}>{short(m?.owner)}</small></span>

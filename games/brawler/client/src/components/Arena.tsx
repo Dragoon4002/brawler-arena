@@ -9,6 +9,7 @@ import { monsters, recordResult } from '@/lib/store.ts';
 import { usePlayable } from '@/hooks/useMons.ts';
 import { asset, Ico } from '@/components/ui.tsx';
 import { RoomLobby } from '@/components/rooms/RoomLobby.tsx';
+import { go } from '@/lib/nav.ts';
 
 export type FightSetup =
   | { kind: 'host'; mon: Monster; stage: StageId; opts: HostOpts }
@@ -16,18 +17,18 @@ export type FightSetup =
   | { kind: 'match'; mon: Monster; stage: StageId; matchId: number; account: string }; // on-chain (tournament) match via relay `match` msg
 
 let setup: FightSetup | null = null;
-export const prepareFight = (s: FightSetup) => { setup = s; location.hash = '#/fight'; };
+export const prepareFight = (s: FightSetup) => { setup = s; go('/fight'); };
 
 const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna });
 
-// Demo states for #/fight/<state>?demo : waiting (host lobby) | challenger (guest lobby) | fight | victory | defeat | void
+// Demo states for /fight/<state>?demo : waiting (host lobby) | challenger (guest lobby) | fight | victory | defeat | void
 const demoSetup = (): FightSetup => ({ kind: 'host', mon: monsters()[0], stage: 'ember', opts: { pub: true, view: true, bettable: true, matchId: 99, stake: '500000000000000000000000', account: '' } });
 const demoRoom = (mon: Monster, seat: number): RoomState => {
   const me = { name: mon.name, dna: mon.dna, account: 'demo-player.testnet', connected: true }, rival = { ...DEMO_ROOMS[2].players[0], connected: true };
   return { code: 'DEMO', status: 'waiting', stage: 'ember', stake: '500000000000000000000000', matchId: 99, bettable: true, pub: true, view: true, seats: seat ? [rival, me] : [me, rival], spectators: 3 };
 };
 
-// Re-hosting from the end screen keeps the #/fight hash, so bump a key to remount (the fight effect is mount-only).
+// Re-hosting from the end screen keeps the /fight path, so bump a key to remount (the fight effect is mount-only).
 export function Arena({ demo }: { demo?: string }) {
   const [n, setN] = useState(0);
   return <Fight key={n} demo={demo} again={() => setN((x) => x + 1)} />;
@@ -60,7 +61,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
   const [mine, setMine] = useState(s?.mon);
 
   useEffect(() => {
-    if (!s) { location.hash = '#/play'; return; }
+    if (!s) { go('/play'); return; }
     if (demo && s.kind === 'host') {
       const seat = demo === 'challenger' ? 1 : 0;
       setRoom({ code: 'DEMO', matchId: 99, bettable: true, seat });
@@ -79,7 +80,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
     let seat = -1;
     const back = (e: KeyboardEvent) => {
       if (typing(e.target)) return;
-      if (e.code === 'Escape') location.hash = '#/lobby';
+      if (e.code === 'Escape') go('/lobby');
       if (e.code === 'KeyM') setMuted(toggleMute().muted);
       if (e.code === 'KeyR') onR.current?.();
     };
@@ -104,13 +105,13 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
 
   const monRef = useRef(s?.mon as Monster);
   monRef.current = mine ?? monRef.current;
-  useEffect(() => { if (closed) { const t = setTimeout(() => { location.hash = '#/lobby'; }, 4000); return () => clearTimeout(t); } }, [closed]);
+  useEffect(() => { if (closed) { const t = setTimeout(() => { go('/lobby'); }, 4000); return () => clearTimeout(t); } }, [closed]);
 
   const cancel = async () => {
     if (room?.matchId != null && s?.kind === 'host' && !rs?.seats[1]) {
       try { await arena.cancelMatch(room.matchId); } catch { /* user closed wallet; stake can still be reclaimed later */ }
     }
-    location.hash = '#/lobby';
+    go('/lobby');
   };
   useEffect(() => { // wait for the referee's on-chain result before offering the claim
     if (!over || room?.matchId == null) return;
@@ -174,7 +175,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
 
       {!live && !over && s && mine && (closed ? (
         <div className="arena-overlay">
-          <div className="slab" role="alert"><p>{closed} Back to the lobby…</p><a className="btn" href="#/lobby"><span><Ico n="icon-lobby" />Lobby now</span></a></div>
+          <div className="slab" role="alert"><p>{closed} Back to the lobby…</p><a className="btn" href="/lobby"><span><Ico n="icon-lobby" />Lobby now</span></a></div>
         </div>
       ) : room && lobbyRs ? (
         <RoomLobby rs={lobbyRs} seat={room.seat} mine={mine} options={options} locked={locked} status={status} chat={chat}
@@ -205,7 +206,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
                   <span><Ico n="icon-refresh" />{gone ? 'New room (R)' : rm.asked ? 'Waiting for opponent… (R)' : 'Rematch (R)'}</span>
                 </button>
               )}
-              <a className="btn alt" href="#/lobby"><span><Ico n="icon-lobby" />Back to lobby (Esc)</span></a>
+              <a className="btn alt" href="/lobby"><span><Ico n="icon-lobby" />Back to lobby (Esc)</span></a>
             </div>
           </div>
         </div>

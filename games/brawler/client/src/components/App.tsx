@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NearProvider, NETWORK } from '@xyz/platform';
 import { DEMO } from '@/lib/demo.ts';
+import { go, route } from '@/lib/nav.ts';
 import { Account } from '@/components/account/Account.tsx';
 import { Arena } from '@/components/Arena.tsx';
 import { DemoIndex } from '@/components/demo/DemoIndex.tsx';
@@ -18,18 +19,32 @@ import { Lobby } from '@/components/rooms/Lobby.tsx';
 import { Watch } from '@/components/rooms/Watch.tsx';
 import { Title } from '@/components/Title.tsx';
 
-function useHash() {
-  const [h, setH] = useState(location.hash || '#/');
+// old bookmarks used #/path
+if (location.hash.startsWith('#/')) history.replaceState(null, '', location.hash.slice(1) + location.search);
+
+// In-app links switch screens without a reload so the room's WebSocket survives. /godot is a separate Next page.
+function onLinkClick(e: MouseEvent) {
+  if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = (e.target as Element).closest?.('a[href^="/"]');
+  const href = a?.getAttribute('href');
+  if (!a || !href || a.hasAttribute('target') || a.hasAttribute('download') || href.startsWith('/godot')) return;
+  e.preventDefault();
+  go(href);
+}
+
+function usePath() {
+  const [p, setP] = useState(route);
   useEffect(() => {
-    const on = () => { setH(location.hash || '#/'); scrollTo(0, 0); };
-    addEventListener('hashchange', on);
-    return () => removeEventListener('hashchange', on);
+    const on = () => { setP(route()); scrollTo(0, 0); };
+    addEventListener('popstate', on);
+    document.addEventListener('click', onLinkClick);
+    return () => { removeEventListener('popstate', on); document.removeEventListener('click', onLinkClick); };
   }, []);
-  return h.slice(1).split('/').filter(Boolean); // '#/monster/abc' -> ['monster','abc']
+  return p;
 }
 
 function Routes() {
-  const [page = '', arg, arg2] = useHash();
+  const [page = '', arg, arg2] = usePath();
   if (page === 'fight') return <Arena key={arg} demo={DEMO ? arg : undefined} />;
   if (page === 'watch' && arg) return <Watch key={arg} code={arg} />;
   if (page === '') return <Title />;

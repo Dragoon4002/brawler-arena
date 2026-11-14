@@ -30,7 +30,7 @@ export function Breed() {
           <h2>{born.name} hatched</h2>
           <Portrait dna={born.dna} size={260} />
           <p>Generation {born.gen}.</p>
-          <a className="btn" href={`#/monster/${born.id}`}><span><Ico n="icon-monster" />Meet {born.name}</span></a>
+          <a className="btn" href={`/monster/${born.id}`}><span><Ico n="icon-monster" />Meet {born.name}</span></a>
         </section>
       )}
       {a && b && (

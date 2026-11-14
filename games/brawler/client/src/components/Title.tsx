@@ -35,21 +35,21 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
     <div className={`hub ${children ? 'open' : ''}`}>
       <ArenaBackdrop id={stage} className="hub-bg" />
       <header className="hub-top">
-        <a href="#/" aria-label="Home"><Logo className="hub-logo" /></a>
+        <a href="/" aria-label="Home"><Logo className="hub-logo" /></a>
         <div className="hub-counters">
           <span className="hub-count" title="Total wins"><Ico n="trophy" /><i>Wins</i>{wins}</span>
           <span className="hub-count" title="Total knockouts"><Ico n="ko" /><i>KOs</i>{kos}</span>
           {signedAccountId && <button type="button" className="hub-count" onClick={() => setPop('funds')} title="Unified balance, deposit / withdraw"><Ico n="coin" /><i>Balance</i>{balance === null ? '…' : `${fmt(balance)} NEAR`}</button>}
-          <a className="hub-count wallet" href="#/account"><Ico n="icon-wallet" />{signedAccountId || 'Connect wallet'}</a>
-          {DEMO && <a className="hub-count demo" href="/">Demo mode · exit</a>}
+          <a className="hub-count wallet" href="/account"><Ico n="icon-wallet" />{signedAccountId || 'Connect wallet'}</a>
+          {DEMO && <a className="hub-count demo" href="/" target="_self">Demo mode · exit</a>}
         </div>
       </header>
 
       <nav className="hub-side left" aria-label="Monsters">
-        <HubBtn href="#/collection" label="Monsters" icon="icon-monster" badge={list.length} active={page === 'collection'} />
-        <HubBtn href="#/breed" label="Breed" icon="icon-breed" active={page === 'breed'} />
-        <HubBtn href="#/market" label="Market" icon="coin-stack" active={page === 'market'} />
-        <HubBtn href="#/account" label="Account" icon="icon-wallet" active={page === 'account'} />
+        <HubBtn href="/collection" label="Monsters" icon="icon-monster" badge={list.length} active={page === 'collection'} />
+        <HubBtn href="/breed" label="Breed" icon="icon-breed" active={page === 'breed'} />
+        <HubBtn href="/market" label="Market" icon="coin-stack" active={page === 'market'} />
+        <HubBtn href="/account" label="Account" icon="icon-wallet" active={page === 'account'} />
       </nav>
 
       <section className="hub-hero" aria-label="Your monster" inert={!!children}>
@@ -69,14 +69,14 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
       </section>
 
       <nav className="hub-side right" aria-label="Online">
-        <HubBtn href="#/lobby" label="Lobby" icon="icon-lobby" active={page === 'lobby'} />
-        <HubBtn href="#/tournaments" label="Cups" icon="trophy" active={page === 'tournaments'} />
-        <HubBtn href="#/season" label="Season" icon="icon-history" active={page === 'season'} />
+        <HubBtn href="/lobby" label="Lobby" icon="icon-lobby" active={page === 'lobby'} />
+        <HubBtn href="/tournaments" label="Cups" icon="trophy" active={page === 'tournaments'} />
+        <HubBtn href="/season" label="Season" icon="icon-history" active={page === 'season'} />
       </nav>
 
       {children && (
         <main key={page} className={`hub-panel from-${PANEL_FROM[page ?? ''] ?? 'bottom'}`}>
-          <a className="hub-close panel-x" href="#/" aria-label="Close"><Ico n="icon-close" /></a>
+          <a className="hub-close panel-x" href="/" aria-label="Close"><Ico n="icon-close" /></a>
           <div className="page">{children}</div>
         </main>
       )}
@@ -89,7 +89,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
           <b>{STAGES[stage].name}</b>
           <span>{STAGES[stage].blurb}</span>
         </button>
-        <a className="hub-play" href="#/play"><span><Ico n="icon-play" />Play</span></a>
+        <a className="hub-play" href="/play"><span><Ico n="icon-play" />Play</span></a>
       </footer>
 
       {pop === 'mon' && (
@@ -103,7 +103,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
               </button>
             ))}
           </div>
-          <a className="hub-link row-ico" href="#/collection"><Ico n="icon-monster" />Manage collection</a>
+          <a className="hub-link row-ico" href="/collection"><Ico n="icon-monster" />Manage collection</a>
         </HubDialog>
       )}
       {pop === 'funds' && <FundsDialog onClose={() => setPop(null)} />}

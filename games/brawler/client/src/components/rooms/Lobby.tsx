@@ -27,7 +27,7 @@ function RoomCard({ r, onJoin }: { r: LobbyRoom; onJoin: () => void }) {
       </div>
       <div className="row">
         {r.status === 'waiting' && r.pub && <button className="btn" onClick={onJoin}><span><Ico n="icon-play" />{r.stake !== '0' ? `Join · ${fmt(r.stake)} NEAR` : 'Join fight'}</span></button>}
-        <a className="btn alt" href={`#/watch/${r.code}`}><span><Ico n={r.bettable ? 'icon-bet' : 'icon-watch'} />{r.bettable ? 'Watch and bet' : 'Watch'}</span></a>
+        <a className="btn alt" href={`/watch/${r.code}`}><span><Ico n={r.bettable ? 'icon-bet' : 'icon-watch'} />{r.bettable ? 'Watch and bet' : 'Watch'}</span></a>
       </div>
     </article>
   );
@@ -62,7 +62,7 @@ export function Lobby() {
     <>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <div><h1 className="row-ico"><Ico n="icon-lobby" className="ico h" />Lobby</h1><p className="sub">Join an open seat with {mon.name}, or watch any fight for free and back a side.</p></div>
-        <a className="btn" href="#/play"><span><Ico n="icon-room-public" />Create a room</span></a>
+        <a className="btn" href="/play"><span><Ico n="icon-room-public" />Create a room</span></a>
       </div>
       <RoomList mon={mon} />
     </>

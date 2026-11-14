@@ -44,7 +44,7 @@ export function RoomLobby(p: RoomLobbyProps) {
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const host = seat === 0;
   const ready = !!rs.seats[1]?.connected;
-  const invite = `${location.origin}${location.pathname}${location.search}#/play/join/${rs.code}`;
+  const invite = `${location.origin}/play/join/${rs.code}${location.search}`;
   const copy = (what: 'code' | 'link') => navigator.clipboard?.writeText(what === 'code' ? rs.code : invite).then(() => { setCopied(what); setTimeout(() => setCopied(null), 1500); }, () => {});
   const who = (i: number) => (i === seat ? p.mine : rs.seats[i]); // own card updates instantly, before the server echo
   const card = (i: number) => <SeatCard i={i} who={who(i)} you={i === seat} connected={i === seat || !!rs.seats[i]?.connected} locked={p.locked} onChange={i === seat ? () => setPick(true) : undefined} />;

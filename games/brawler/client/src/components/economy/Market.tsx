@@ -8,7 +8,7 @@ import { Ico, Portrait } from '@/components/ui.tsx';
 
 function MarketCard({ m, rent, me }: { m: NftMonster; rent: boolean; me: string }) {
   return (
-    <a className="tile" href={`#/monster/${m.id}`}>
+    <a className="tile" href={`/monster/${m.id}`}>
       <Portrait dna={m.dna} size={180} />
       <div className="tile-head"><h3>{m.name}</h3><span className="chip">Gen {m.gen}</span></div>
       <span className="tile-meta">{m.record.w}W {m.record.l}L · {m.record.ko} KOs</span>

@@ -39,8 +39,8 @@ export function Collection() {
           {act.msg && <p className="note" role="status">{act.msg}</p>}
         </section>
       )}
-      {me && all !== null && !all.length && claimed !== false && <section className="slab"><h3>No monsters yet</h3><p className="sub">Buy or rent one from the <a href="#/market">market</a>.</p></section>}
-      <div className="grid">{list.map((m) => <MonsterCard key={m.id} m={m} href={`#/monster/${m.id}`} extra={<Badges m={m} me={me} />} />)}</div>
+      {me && all !== null && !all.length && claimed !== false && <section className="slab"><h3>No monsters yet</h3><p className="sub">Buy or rent one from the <a href="/market">market</a>.</p></section>}
+      <div className="grid">{list.map((m) => <MonsterCard key={m.id} m={m} href={`/monster/${m.id}`} extra={<Badges m={m} me={me} />} />)}</div>
       {DEMO && <p className="note">{DEMO_NOTE}</p>}
     </>
   );
