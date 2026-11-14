@@ -57,11 +57,12 @@ Practice and watching need no wallet. Anything that moves NEAR needs a NEAR **te
 | Contract | Account | What it does |
 |---|---|---|
 | Platform | [`v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v2.brawler-platform-5c8e2b.testnet) | balances, staked matches, spectator AMM market, tournaments, per-game referee |
-| Monsters + skills | [`v2.brawler-monsters-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v2.brawler-monsters-5c8e2b.testnet) | monster NFTs (hatch, breed, list/buy, rent, match locks) and NEP-245 skills (presales, skill market, `equip`) |
+| Monsters (live) | [`brawler-monsters-5c8e2b.testnet`](https://testnet.nearblocks.io/address/brawler-monsters-5c8e2b.testnet) | monster NFTs: hatch, breed, list/buy, rent, match locks |
+| Monsters + skills | `<monsters+skills account>` (TBD: deploy pending) | same monsters plus NEP-245 skills (presales, skill market, `equip`) from `games/brawler/contract`; replaces the row above when live |
 | Referee | [`referee.v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/referee.v2.brawler-platform-5c8e2b.testnet) | the game server's key; only it can report results |
 | Platform owner | [`brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/brawler-platform-5c8e2b.testnet) | registers games, owns the monsters contract, creator of the "Arena Basics" skills |
 
-Superseded: monsters without skills at `brawler-monsters-5c8e2b.testnet`, platform v1 at `brawler-platform-5c8e2b.testnet`. Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DEPLOYMENTS.md). Skills interface: [`games/brawler/plans/skills-interface.md`](games/brawler/plans/skills-interface.md).
+Superseded: platform v1 at `brawler-platform-5c8e2b.testnet`. Until the skills contract is live, the market app runs with `NEXT_PUBLIC_DEMO=1` and skill steps (7, 8) work in demo mode only. Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DEPLOYMENTS.md). Skills interface: [`games/brawler/plans/skills-interface.md`](games/brawler/plans/skills-interface.md).
 
 ## What's on-chain
 
@@ -150,7 +151,7 @@ The game client and market deploy to Vercel (project roots `games/brawler/client
 cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars   # set ssh_cidr, domain, route53_zone_id?
 make deploy-infra                     # EC2 + EIP + SG (+ Route53 A record)
 # no route53_zone_id? point an A record for <domain> at `terraform -chdir=infra/terraform output -raw public_ip`
-export CONTRACT_ID=v2.brawler-platform-5c8e2b.testnet MONSTERS_ID=v2.brawler-monsters-5c8e2b.testnet REFEREE_ID=referee.v2.brawler-platform-5c8e2b.testnet REFEREE_KEY=...   # or ansible-vault secrets.yml via ANSIBLE_ARGS
+export CONTRACT_ID=v2.brawler-platform-5c8e2b.testnet MONSTERS_ID=brawler-monsters-5c8e2b.testnet REFEREE_ID=referee.v2.brawler-platform-5c8e2b.testnet REFEREE_KEY=...   # or ansible-vault secrets.yml via ANSIBLE_ARGS
 make deploy                           # docker + repo (repo_version, default main) + compose up
 ```
 
