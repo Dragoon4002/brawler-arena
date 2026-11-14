@@ -40,6 +40,7 @@ Practice and watching need no wallet. Anything that moves NEAR needs a NEAR **te
 | Provable fairness | Deterministic sim (no randomness, no clock, no trig). The referee re-simulates the confirmed tape, posts winner + SHA-256 tape hash on-chain; `/replay/<id>` recomputes both in the browser. |
 | Agents / NPCs | Bots (`agents/`) join free rooms on "Call bot" and play over the normal client protocol; a commentator posts play-by-play in chat. Bots never touch money. |
 | Players never notice the chain | Practice, watching and free rooms need no wallet. Stakes come from one in-contract balance, so a match is one call, not a transfer per round. |
+| NEAR Intents | **Balance** → **Add funds from any chain**: pick a token from the live 1Click `/v0/tokens` list (USDC on Base/Arbitrum/Solana, ETH, BTC, SOL first), enter an amount, get a live `dry: true` 1Click quote to NEAR (send, receive, fees, ETA). Funding is off: Intents runs on mainnet only (no testnet) and the game is on testnet, so no deposit address is generated. Browser calls 1Click directly (CORS open, no API key). |
 
 ## NFTs That Do Something track
 
