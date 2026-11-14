@@ -4,7 +4,7 @@ import { paintBackground, paintStage, paintFront } from './stage.ts';
 import { drawMonster, poseFor, type Look } from './rig.ts';
 import { drawHero, hero, heroOf } from './cutout.ts';
 import { drawSheet, sheet } from './sheet.ts';
-import { paintArtBackground, paintArtStage } from './artstage.ts';
+import { paintArtBackground, paintArtStage, paintArtFront } from './artstage.ts';
 import { lookOf, randomDna, type Dna } from '../genes.ts';
 
 export const W = 1280, H = 720;
@@ -194,7 +194,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     const art = paintArtStage(ctx, stageId); // ?art trial: painted platforms replace procedural stage + front layer
     if (!art) paintStage(ctx, stageId, t);
     fighters(s); particles();
-    if (!art) paintFront(ctx, stageId, t);
+    if (art) paintArtFront(ctx, stageId); else paintFront(ctx, stageId, t);
     ctx.restore();
     hud(s, banner, info);
   }
