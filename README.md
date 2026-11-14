@@ -44,6 +44,7 @@ Every row names the place to check it: code, a contract method or a test.
 | Merchant pricing rules in one readable file, with reasons | `agents/pricing.ts` (42 lines, pure function, returns `{ open, ask, bid, why }`); `agents/pricing.test.ts`. The `why` text appears on each merchant listing in the Shop item page and in the Economy log |
 | Prices move with supply and demand, and a broke merchant closes | `pricing.ts`: more stock means a lower ask; cash under the floor means `open: false` ("Broke: … no restocking") until sales refill it |
 | Fast-forward: a week of trading in about a minute | Shop → **Economy** (`market/app/economy/page.tsx`): simulated players trade with Smithy and Alchemist for 7 days in about a minute, using the same `pricing.ts` |
+| Play feeds the economy | Source: every on-chain win drops 1 Common skill unit to the winner's owner (`mt_mint`, test `win_drops_common_to_winner_owner`). Sink: each equipped unit lasts 20 fights, then burns (`mt_burn`); `skill_wear(token_id)` shows fights left, and so does the Skills screen |
 | Economy changes gameplay | Equipped skills change the fight. The same rules run in the TS sim and the Rust referee, with golden tests (`games/brawler/sim/tests/golden.rs`). The server reads skills from `get_monster`, never from the client |
 | Trustless staked matches | `contracts/platform/src/lib.rs`: `create_match`, `join_match`, `settle` (signed attestation, replay-protected), `report_result` fallback after 5 min; tests `anyone_settles_with_referee_signature`, `settle_rejects_bad_or_reused_attestations`, `settle_a_conserves` |
 | Prediction market per fight | Platform `place_order` / `cancel_order` / `claim`: a binary order book, every fill pairs two traders, no house money |
@@ -165,7 +166,7 @@ Games track:
 - **Investing in a broke merchant** is not built. A broke merchant reopens when sales refill its cash.
 - **Merchants are rule-based agents** (`agents/pricing.ts`) on purpose, so their prices are readable and reproducible. No LLM.
 - **The fast-forward is an off-chain simulation** with simulated players, built on the same pricing file. The live merchants trade on testnet.
-- **There is no gathering loop.** Skills enter through presale mints and leave through trades. Match drops and skill wear are designed in `games/brawler/plans/tracks.md` but not built.
+- **Drops and wear are simple.** Every on-chain win drops one Common skill unit to the winner's owner, picked at random from Common types with supply left. Every equipped unit burns after 20 fights. There are no drop tables per rarity, and wear is tracked per (monster, skill) pair, so a unit moved to another monster starts fresh.
 - **NEP-245 is partial.** Transfers, batch transfers, balance and supply views and events are in; `mt_transfer_call` and approvals are not.
 - **NEAR Intents is mainnet-only**, so on testnet the app shows a live quote with funding disabled.
 
@@ -207,7 +208,7 @@ Deploy log and end-to-end transactions: [`contracts/DEPLOYMENTS.md`](contracts/D
 
 | Suite | Command | Covers | Last run (2026-11-14) |
 |---|---|---|---|
-| Monsters + skills contract | `cd games/brawler/contract && cargo test` | NEP-171/245, royalties, rentals, vaults, locks, transfer threat model | 64 passed |
+| Monsters + skills contract | `cd games/brawler/contract && cargo test` | NEP-171/245, royalties, rentals, vaults, drops, wear, locks, transfer threat model | 67 passed |
 | Platform contract | `cd contracts/platform && cargo test` | signed settle, replay protection, conservation of funds, order book, tournaments, locks | 62 passed |
 | Sim parity | `cargo test --workspace` | Rust referee matches the TS sim frame for frame (golden vectors) | |
 | Merchants and bots | `cd agents && npm test` | pricing rules, broke-merchant closing, bot brain | 7 passed |
