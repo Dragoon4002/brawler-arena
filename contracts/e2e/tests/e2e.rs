@@ -285,14 +285,16 @@ async fn monsters_lock_record_unlock() -> anyhow::Result<()> {
 #[tokio::test]
 async fn betting_settle_and_refund() -> anyhow::Result<()> {
     let e = setup().await?;
-    fails(create(&e, &e.alice, "brawler", 0, true, None).await, "House can't fund bets");
+    fails(create(&e, &e.alice, "brawler", 0, true, None).await, "Bettable rooms need stake");
+    deposit(&e, &e.alice, 1).await;
+    fails(create(&e, &e.alice, "brawler", N / 10, true, None).await, "House can't fund bets");
     ok(e.owner.call(e.p.id(), "fund").deposit(NearToken::from_near(20)).transact().await?);
     deposit(&e, &e.carol, 3).await;
-    deposit(&e, &e.alice, 1).await;
-    let total = || async { bal(&e, &e.carol).await + bal(&e, &e.alice).await + treasury(&e).await };
+    deposit(&e, &e.bob, 1).await;
+    let total = || async { bal(&e, &e.carol).await + bal(&e, &e.alice).await + bal(&e, &e.bob).await + treasury(&e).await };
     let t0 = total().await;
 
-    let id = clean(create(&e, &e.alice, "brawler", 0, true, None).await).json::<Option<u64>>()?.unwrap();
+    let id = clean(create(&e, &e.alice, "brawler", N / 10, true, None).await).json::<Option<u64>>()?.unwrap();
     let buy = |who: &Account, id: u64, amt: u128, min: u128| {
         who.call(e.p.id(), "buy").args_json(json!({"match_id": id, "side": 0, "amount": amt.to_string(), "min_out": min.to_string()})).deposit(Y1).transact()
     };
@@ -310,15 +312,18 @@ async fn betting_settle_and_refund() -> anyhow::Result<()> {
 
     clean(result(&e, &e.referee, id, Some(0), [3, 0]).await);
     assert_eq!(n(&clean(claim(&e, &e.carol, id).await).json::<Value>()?), q, "1 NEAR per winning share");
+    clean(claim(&e, &e.alice, id).await);
     assert_eq!(total().await, t0, "conservation after settle");
 
     // void -> bettor gets net paid back
-    let id2 = clean(create(&e, &e.alice, "brawler", 0, true, None).await).json::<Option<u64>>()?.unwrap();
+    let id2 = clean(create(&e, &e.alice, "brawler", N / 10, true, None).await).json::<Option<u64>>()?.unwrap();
     clean(join(&e, &e.bob, id2, None).await);
     clean(buy(&e.carol, id2, N / 2, 0).await?);
     clean(result(&e, &e.referee, id2, None, [0, 0]).await);
     let fee = N / 2 * FEE_BPS / 10_000;
     assert_eq!(n(&clean(claim(&e, &e.carol, id2).await).json::<Value>()?), N / 2 - fee);
+    clean(claim(&e, &e.alice, id2).await);
+    clean(claim(&e, &e.bob, id2).await);
     assert_eq!(total().await, t0, "conservation after refund");
     Ok(())
 }

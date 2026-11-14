@@ -94,6 +94,7 @@ pub struct Match {
     advances: u8,       // tournament: seat that moved on
     monsters: [Option<Lock>; 2],
     tournament: Option<(u64, u8, u8)>, // (id, round, slot)
+    tape_hash: Option<String>,
 }
 
 #[near(serializers = [borsh])]
@@ -158,6 +159,7 @@ pub struct MatchView {
     pub started_ms: u64,
     pub monsters: [Option<String>; 2],
     pub tournament: Option<u64>,
+    pub tape_hash: Option<String>,
 }
 
 #[near(serializers = [json])]
@@ -300,10 +302,13 @@ impl Arena {
         assert_one_yocto();
         let host = env::predecessor_account_id();
         let g = self.game(&game);
-        require!(!bettable || self.treasury >= self.seed, "House can't fund bets right now");
+        // house seed capped at stake: 0-stake rooms can't tie up or bleed treasury
+        require!(!bettable || stake.0 >= self.min_bet, "Bettable rooms need stake >= min bet");
+        let seed = self.seed_for(stake.0, bettable);
+        require!(self.treasury >= seed, "House can't fund bets right now");
         self.debit(&host, stake.0);
         let Some(mon) = monster_id else {
-            return PromiseOrValue::Value(Some(self.open_match(game, host, stake.0, bettable, None)));
+            return PromiseOrValue::Value(Some(self.open_match(game, host, stake.0, seed, None)));
         };
         let until = now_ms() + MATCH_LOCK_MS;
         PromiseOrValue::Promise(lock(&g, &mon, &host, until).then(
@@ -315,8 +320,9 @@ impl Arena {
     #[private]
     pub fn on_create(&mut self, game: String, host: AccountId, stake: U128, bettable: bool, monster_id: String, until_ms: u64) -> Option<u64> {
         let locked = promise_ok();
-        if locked && (!bettable || self.treasury >= self.seed) {
-            return Some(self.open_match(game, host, stake.0, bettable, Some((monster_id, until_ms))));
+        let seed = self.seed_for(stake.0, bettable);
+        if locked && self.treasury >= seed {
+            return Some(self.open_match(game, host, stake.0, seed, Some((monster_id, until_ms))));
         }
         self.bounce(&game, host, stake.0, locked.then_some((monster_id, until_ms)));
         None
@@ -359,7 +365,7 @@ impl Arena {
         require!(env::predecessor_account_id() == m.host, "Only host");
         require!(m.status == Status::Open, "Match not open");
         self.finish(match_id, Status::Refund);
-        self.after(match_id);
+        self.after(match_id, [0, 0]);
         if self.get_match_internal(match_id).stake > 0 {
             self.claim(match_id);
         }
@@ -412,11 +418,15 @@ impl Arena {
         }
     }
 
-    /// `kos[i]` = KOs by seat i (asset record only).
-    pub fn report_result(&mut self, match_id: u64, winner: Option<u8>, kos: Option<[u8; 2]>) {
+    /// `kos[i]` = KOs by seat i (asset record; void bracket match: more KOs advances). `tape_hash` = sha256 hex of replay.
+    pub fn report_result(&mut self, match_id: u64, winner: Option<u8>, kos: Option<[u8; 2]>, tape_hash: Option<String>) {
         let m = self.get_match_internal(match_id);
         self.only_referee(&m.game);
         require!(m.status == Status::Live, "Match not live");
+        if let Some(h) = &tape_hash {
+            require!(h.len() == 64 && h.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')), "Bad tape_hash");
+        }
+        self.get_mut(match_id).tape_hash = tape_hash;
         let status = match winner {
             None => Status::Refund,
             Some(w) => {
@@ -432,7 +442,24 @@ impl Arena {
                 .record_result(match_id, m.monsters.clone().map(|l| l.map(|l| l.0)), winner, kos.unwrap_or_default(), m.tournament.map(|t| t.0))
                 .detach();
         }
-        self.after(match_id);
+        self.after(match_id, kos.unwrap_or_default());
+    }
+
+    /// Guest joined, fight never started: refund guest, reopen. Traded market -> rejected (bettors priced this pairing); void via report_result.
+    pub fn unjoin(&mut self, match_id: u64) {
+        let m = self.get_match_internal(match_id);
+        self.only_referee(&m.game);
+        require!(m.status == Status::Live && m.tournament.is_none(), "Match not unjoinable");
+        require!(m.bet_count == 0, "Market has trades");
+        let guest = m.guest.clone().unwrap();
+        self.credit(&guest, m.stake);
+        self.unlock(&m.game, m.monsters[1].clone().into_iter().collect());
+        self.history.remove(&match_id);
+        let m = self.get_mut(match_id);
+        m.guest = None;
+        m.monsters[1] = None;
+        m.status = Status::Open;
+        m.started_ns = 0;
     }
 
     /// Anyone voids unsettled (or unjoined) match after 2 h.
@@ -446,7 +473,7 @@ impl Arena {
         };
         require!(now.saturating_sub(since) > EXPIRY_NS, "Not expired yet");
         self.finish(match_id, Status::Refund);
-        self.after(match_id);
+        self.after(match_id, [0, 0]);
     }
 
     /* ---------- tournaments ---------- */
@@ -741,22 +768,22 @@ impl Arena {
         self.unlock(game, locked.into_iter().collect());
     }
 
-    /// Bettable seed comes out of treasury here.
-    fn open_match(&mut self, game: String, host: AccountId, stake: u128, bettable: bool, monster: Option<Lock>) -> u64 {
-        let seed = if bettable {
-            require!(self.treasury >= self.seed, "House can't fund bets right now");
-            self.treasury -= self.seed;
-            self.seed
-        } else {
-            0
-        };
+    /// Player room seed: config seed capped at stake.
+    fn seed_for(&self, stake: u128, bettable: bool) -> u128 {
+        if bettable { self.seed.min(stake) } else { 0 }
+    }
+
+    /// Seed (0 = not bettable) comes out of treasury here; `finish` returns it.
+    fn open_match(&mut self, game: String, host: AccountId, stake: u128, seed: u128, monster: Option<Lock>) -> u64 {
+        require!(self.treasury >= seed, "House can't fund bets right now");
+        self.treasury -= seed;
         let id = self.matches.len() as u64;
         self.matches.push(Match {
             game,
             host,
             guest: None,
             stake,
-            bettable,
+            bettable: seed > 0,
             status: Status::Open,
             kos: 0,
             amm: [seed; 2],
@@ -769,6 +796,7 @@ impl Arena {
             advances: 0,
             monsters: [monster, None],
             tournament: None,
+            tape_hash: None,
         });
         id
     }
@@ -787,22 +815,22 @@ impl Arena {
     /// Zero-stake Live bracket match; bettable only if house can seed now.
     fn tourney_match(&mut self, tid: u64, round: u8, slot: u8, a: (AccountId, Lock), b: (AccountId, Lock)) {
         let t = &self.tournaments[tid as u32];
-        let (bettable, game) = (t.bettable && self.treasury >= self.seed, t.game.clone());
-        let id = self.open_match(game, a.0, 0, bettable, Some(a.1));
+        let seed = if t.bettable && self.treasury >= self.seed { self.seed } else { 0 };
+        let id = self.open_match(t.game.clone(), a.0, 0, seed, Some(a.1));
         self.get_mut(id).tournament = Some((tid, round, slot));
         self.go_live(id, b.0, Some(b.1));
         self.tournaments.get_mut(tid as u32).unwrap().rounds[round as usize][slot as usize] = Some(id);
     }
 
-    fn after(&mut self, id: u64) {
+    fn after(&mut self, id: u64, kos: [u8; 2]) {
         let m = self.get_match_internal(id);
         let Some((tid, round, slot)) = m.tournament else {
             return self.unlock(&m.game, m.monsters.into_iter().flatten().collect());
         };
-        // ponytail: void/expired bracket match advances random seat (producer could bias); replay voids if fairness matters
+        // void/expired: more reported KOs advances, tie -> seat 0 (lower entrant index)
         let w = match m.status {
             Status::Settled(w) => w as usize,
-            _ => (env::random_seed()[0] & 1) as usize,
+            _ => (kos[1] > kos[0]) as usize,
         };
         self.get_mut(id).advances = w as u8;
         self.unlock(&m.game, m.monsters[1 - w].clone().into_iter().collect());
@@ -957,6 +985,7 @@ fn view(id: u64, m: &Match) -> MatchView {
         started_ms: m.started_ns / 1_000_000,
         monsters: m.monsters.clone().map(|l| l.map(|l| l.0)),
         tournament: m.tournament.map(|t| t.0),
+        tape_hash: m.tape_hash.clone(),
     }
 }
 

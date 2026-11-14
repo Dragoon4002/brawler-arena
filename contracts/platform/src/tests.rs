@@ -258,7 +258,7 @@ fn conserve(winner: Option<u8>) {
     }
     assert!(ledger(&c) < l0);
     as_("ref", 0);
-    c.report_result(0, winner, None);
+    c.report_result(0, winner, None, None);
     for who in ACTORS {
         if c.claimable(0, acc(who)).0 > 0 {
             claim_as(&mut c, who);
@@ -291,7 +291,7 @@ fn settle_pays_winning_shares() {
     let sh = bet(&mut c, "bob", 0, 2 * N, 0);
     bet(&mut c, "cat", 1, N, 0);
     as_("ref", 0);
-    c.report_result(0, Some(0), None);
+    c.report_result(0, Some(0), None, None);
     assert_eq!(c.claimable(0, acc("bob")).0, sh);
     assert_eq!(c.claimable(0, acc("cat")).0, 0);
     claim_as(&mut c, "bob");
@@ -303,7 +303,7 @@ fn refund_returns_net_deposit() {
     let mut c = live(N);
     bet(&mut c, "aa", 0, 3 * N, 0);
     as_("ref", 0);
-    c.report_result(0, None, None);
+    c.report_result(0, None, None, None);
     assert_eq!(claim_as(&mut c, "host"), N);
     assert_eq!(claim_as(&mut c, "guest"), N);
     assert_eq!(claim_as(&mut c, "aa"), 3 * N - 3 * N / 1000); // fee kept
@@ -312,7 +312,7 @@ fn refund_returns_net_deposit() {
 
 #[test]
 fn history_capped() {
-    let mut c = live(0);
+    let mut c = live(N);
     for i in 0..(MAX_HISTORY + 5) {
         bet_at(&mut c, "bob", (i % 2) as u8, N / 10, i as u64 * 1_000_000);
     }
@@ -326,7 +326,7 @@ fn history_capped() {
 fn double_claim() {
     let mut c = live(N);
     as_("ref", 0);
-    c.report_result(0, Some(1), None);
+    c.report_result(0, Some(1), None, None);
     claim_as(&mut c, "guest");
     claim_as(&mut c, "guest");
 }
@@ -422,7 +422,7 @@ fn per_game_referee() {
     create_in(&mut c, "other", "host", 0, false);
     join(&mut c, "guest", 0);
     as_("ref2", 0);
-    c.report_result(0, Some(0), None);
+    c.report_result(0, Some(0), None, None);
     assert_eq!(c.get_match(0).unwrap().status, "settled");
 }
 
@@ -433,7 +433,7 @@ fn other_game_referee_rejected() {
     as_("arena", 1);
     c.register_game("other".into(), acc("ref2"), None);
     as_("ref2", 0);
-    c.report_result(0, Some(0), None);
+    c.report_result(0, Some(0), None, None);
 }
 
 #[test]
@@ -473,7 +473,7 @@ fn bets_are_recorded_one_by_one() {
     assert_eq!(feed, vec![3, 2, 1]);
     assert_eq!(c.get_recent_bets(0, 99).len(), 4);
     as_("ref", 0);
-    c.report_result(0, Some(0), None);
+    c.report_result(0, Some(0), None, None);
     assert_eq!(c.claimable(0, acc("bob")).0, a1 + a2);
 }
 
@@ -484,9 +484,9 @@ fn void_refunds_every_bet_after_fee() {
     bet(&mut c, "bob", 1, 3 * N, 0);
     let t0 = c.config().treasury.0;
     as_("ref", 0);
-    c.report_result(0, None, None);
+    c.report_result(0, None, None, None);
     assert_eq!(c.claimable(0, acc("bob")).0, 5 * N - 5 * N / 1000);
-    assert_eq!(c.config().treasury.0 - t0, SEED);
+    assert_eq!(c.config().treasury.0 - t0, N); // seed = min(SEED, stake)
 }
 
 /* ---------- monsters + tournaments ---------- */
@@ -538,7 +538,7 @@ fn monster_match_full_flow() {
     let m = c.get_match(0).unwrap();
     assert_eq!((m.status.as_str(), m.monsters.clone(), m.tournament), ("live", [Some("1".into()), Some("2".into())], None));
     as_("ref", 0);
-    c.report_result(0, Some(1), Some([0, 2]));
+    c.report_result(0, Some(1), Some([0, 2]), None);
     has(r#"mon.record_result({"match_id":0,"tokens":["1","2"],"winner":1,"kos":[0,2],"tournament":null})"#);
     has(r#"mon.unlock({"locks":[["1",7],["2",7]]})"#);
 }
@@ -559,8 +559,8 @@ fn seed_taken_only_in_callback() {
     let mut c = setup();
     create_mon(&mut c, "host", N, true, "1");
     assert_eq!(c.config().treasury.0, 2 * SEED); // untouched while lock in flight
-    create(&mut c, "h2", 0, true);
-    create(&mut c, "h2", 0, true); // treasury drained meanwhile
+    create(&mut c, "h2", SEED, true);
+    create(&mut c, "h2", SEED, true); // treasury drained meanwhile
     cb(true);
     assert_eq!(c.on_create(G.into(), acc("host"), U128(N), true, "1".into(), 7), None);
     assert_eq!(calls(), vec![r#"mon.unlock({"locks":[["1",7]]})"#.to_string()]);
@@ -616,7 +616,7 @@ fn enter(c: &mut Arena, who: &str) -> bool {
 
 fn result(c: &mut Arena, id: u64, w: Option<u8>) {
     as_("ref", 0);
-    c.report_result(id, w, None);
+    c.report_result(id, w, None, None);
 }
 
 #[test]
@@ -680,11 +680,11 @@ fn tournament_8_with_voids() {
     }
     assert_eq!(c.get_tournament(0).unwrap().rounds[0], vec![Some(0), Some(1), Some(2), Some(3)]);
     result(&mut c, 0, Some(1)); // p1
-    result(&mut c, 1, None); // void, random byte 0 -> seat 0: p2
+    result(&mut c, 1, None); // void, no KOs -> seat 0: p2
     has(r#"mon.unlock({"locks":[["m-p3",259200000]]})"#);
     result(&mut c, 3, Some(1)); // p7
     as_at("anyone", 0, EXPIRY_NS + 1);
-    c.expire(2); // random byte 0 -> p4
+    c.expire(2); // tie -> seat 0: p4
     let r = c.get_tournament(0).unwrap().rounds;
     assert_eq!(r[1], vec![Some(4), Some(5)]);
     let (a, b) = (c.get_match(4).unwrap(), c.get_match(5).unwrap());
@@ -788,8 +788,8 @@ fn list_tournaments_newest_first() {
     assert_eq!(ids(c.list_tournaments(0, 5, Some(G.into()))), vec![2, 0]);
 }
 
-/// Void tournament match w/ random byte `r`: seat `r & 1` advances, other unlocked.
-fn void_with_seed(r: u8) -> Arena {
+/// Void tournament match w/ `kos` under random seed `r`: more KOs advances, tie -> seat 0; seed ignored.
+fn void_with(kos: Option<[u8; 2]>, r: u8) -> Arena {
     let mut c = tourney(4);
     for p in ["p0", "p1", "p2", "p3"] {
         enter(&mut c, p);
@@ -797,18 +797,118 @@ fn void_with_seed(r: u8) -> Arena {
     let mut b = VMContextBuilder::new();
     b.current_account_id(acc("arena")).predecessor_account_id(acc("ref")).random_seed([r; 32]);
     testing_env!(b.build());
-    c.report_result(0, None, None);
+    c.report_result(0, None, kos, None);
     c
 }
 
 #[test]
-fn void_advances_random_seat() {
-    for (r, adv, out) in [(0, "p0", "p1"), (1, "p1", "p0"), (2, "p0", "p1"), (255, "p1", "p0")] {
-        let mut c = void_with_seed(r);
-        has(&format!(r#"mon.unlock({{"locks":[["m-{out}",259200000]]}})"#));
-        result(&mut c, 1, Some(0));
-        assert_eq!(c.get_match(2).unwrap().host, acc(adv));
+fn void_advances_by_kos_not_seed() {
+    for (kos, adv, out) in [(None, "p0", "p1"), (Some([1, 1]), "p0", "p1"), (Some([2, 1]), "p0", "p1"), (Some([0, 3]), "p1", "p0")] {
+        for r in [0, 1, 255] {
+            let mut c = void_with(kos, r);
+            has(&format!(r#"mon.unlock({{"locks":[["m-{out}",259200000]]}})"#));
+            result(&mut c, 1, Some(0));
+            assert_eq!(c.get_match(2).unwrap().host, acc(adv));
+        }
     }
+}
+
+const TAPE: &str = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+
+#[test]
+fn tape_hash_stored() {
+    let mut c = live(N);
+    assert_eq!(c.get_match(0).unwrap().tape_hash, None);
+    as_("ref", 0);
+    c.report_result(0, Some(0), None, Some(TAPE.into()));
+    assert_eq!(c.get_match(0).unwrap().tape_hash.as_deref(), Some(TAPE));
+}
+
+#[test]
+fn tape_hash_validated() {
+    for bad in [&TAPE[1..], &TAPE.to_uppercase(), &format!("{}z", &TAPE[1..])] {
+        let mut c = live(N);
+        as_("ref", 0);
+        let bad = bad.to_string();
+        assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| c.report_result(0, Some(0), None, Some(bad)))).is_err());
+    }
+}
+
+#[test]
+fn unjoin_refunds_guest_and_reopens() {
+    let mut c = setup();
+    create(&mut c, "host", N, true);
+    fund(&mut c, "g1", N);
+    as_("g1", 1);
+    let _ = c.join_match(0, Some("7".into()));
+    cb(true);
+    assert!(c.on_join(0, acc("g1"), U128(N), "7".into(), 9));
+    as_("ref", 0);
+    c.unjoin(0);
+    has(r#"mon.unlock({"locks":[["7",9]]})"#);
+    let m = c.get_match(0).unwrap();
+    assert_eq!((m.status.as_str(), m.guest, m.monsters[1].clone(), bal(&c, "g1")), ("open", None, None, N));
+    join(&mut c, "g2", 0);
+    assert_eq!(c.get_match(0).unwrap().guest, Some(acc("g2")));
+    as_("ref", 0);
+    c.report_result(0, Some(1), None, None);
+    assert_eq!(claim_as(&mut c, "g2"), 2 * N - 2 * N / 1000);
+    as_("g1", 0);
+    assert_eq!(c.claimable(0, acc("g1")).0, 0);
+}
+
+#[test]
+#[should_panic(expected = "Only referee")]
+fn unjoin_referee_only() {
+    let mut c = live(N);
+    as_("host", 0);
+    c.unjoin(0);
+}
+
+#[test]
+#[should_panic(expected = "Market has trades")]
+fn unjoin_rejected_after_bets() {
+    let mut c = live(N);
+    bet(&mut c, "bob", 0, N, 0);
+    as_("ref", 0);
+    c.unjoin(0);
+}
+
+#[test]
+#[should_panic(expected = "Match not unjoinable")]
+fn unjoin_open_rejected() {
+    let mut c = setup();
+    create(&mut c, "host", N, false);
+    as_("ref", 0);
+    c.unjoin(0);
+}
+
+#[test]
+#[should_panic(expected = "Bettable rooms need stake >= min bet")]
+fn zero_stake_bettable_rejected() {
+    let mut c = setup();
+    create(&mut c, "host", 0, true);
+}
+
+#[test]
+fn seed_capped_at_stake_and_returned() {
+    let mut c = setup();
+    let t0 = c.config().treasury.0;
+    create(&mut c, "host", N, true); // settle, no bets
+    create(&mut c, "h2", 10 * N, true); // cancelled
+    create(&mut c, "h3", N / 10, true); // void
+    assert_eq!(c.get_match(0).unwrap().amm[0].0, N);
+    assert_eq!(c.get_match(1).unwrap().amm[0].0, SEED);
+    assert_eq!(t0 - c.config().treasury.0, N + SEED + N / 10);
+    join(&mut c, "guest", 0);
+    join(&mut c, "g3", 2);
+    as_("ref", 0);
+    c.report_result(0, Some(0), None, None);
+    c.report_result(2, None, None, None);
+    as_("h2", 0);
+    c.cancel_match(1);
+    let fees = 2 * N / 1000;
+    assert_eq!(c.config().treasury.0, t0 + fees);
 }
 
 #[test]
