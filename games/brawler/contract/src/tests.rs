@@ -1105,3 +1105,46 @@ fn dust_deposit_rejected() {
     as_("carol", 1);
     c.vault_deposit("0".into());
 }
+
+#[test]
+fn win_drops_common_to_winner_owner() {
+    let mut c = equipped();
+    give(&mut c, "alice", "bob", "1");
+    let before = free(&c, "bob", 6);
+    result(&mut c, 1, "0", "1", Some(1), T0);
+    assert_eq!(free(&c, "bob", 6), before + 1); // seed [7;32] -> pool [0, 6][1]
+    let mint = events().into_iter().find(|e| e["event"] == "mt_mint").unwrap();
+    assert_eq!(mint["data"][0]["owner_id"], "bob");
+    assert_eq!(mint["data"][0]["token_ids"], serde_json::json!(["skill:6"]));
+}
+
+#[test]
+fn no_drop_without_winner() {
+    let mut c = equipped();
+    let before = c.skills_of(acc("alice"));
+    result(&mut c, 1, "0", "1", None, T0);
+    assert_eq!(c.skills_of(acc("alice")), before);
+    assert!(!events().iter().any(|e| e["event"] == "mt_mint"));
+}
+
+#[test]
+fn skill_wears_out_after_20_fights() {
+    let mut c = equipped();
+    as_("alice", 1);
+    c.equip("0".into(), vec![2]);
+    assert_eq!(c.skill_wear("0".into()), vec![(2, 20)]);
+    result(&mut c, 1, "0", "1", None, T0);
+    assert_eq!(c.skill_wear("0".into()), vec![(2, 19)]);
+    for i in 2..20 {
+        result(&mut c, i, "0", "1", None, T0);
+    }
+    assert_eq!(c.skill_wear("0".into()), vec![(2, 1)]);
+    assert_eq!(c.mt_supply("skill:2".into()), Some(U128(1)));
+    result(&mut c, 20, "0", "1", None, T0);
+    let burn = events().into_iter().find(|e| e["event"] == "mt_burn").unwrap();
+    assert_eq!(burn["data"][0]["owner_id"], "alice");
+    assert_eq!(burn["data"][0]["token_ids"], serde_json::json!(["skill:2"]));
+    assert!(c.get_monster("0".into()).unwrap().skills.is_empty());
+    assert!(c.skill_wear("0".into()).is_empty());
+    assert_eq!((c.mt_supply("skill:2".into()), free(&c, "alice", 2)), (Some(U128(0)), 0));
+}

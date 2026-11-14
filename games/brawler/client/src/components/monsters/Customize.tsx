@@ -37,6 +37,7 @@ export function Customize({ id }: { id?: string }) {
   const [inv, reloadInv] = useLoad(() => Promise.all([api.skillTypes(), api.skills()]), [me]);
   const [pick, setPick] = useState(id);
   const m = mons?.find((x) => x.id === pick) ?? mons?.find((x) => x.owner === me) ?? mons?.[0];
+  const [wear] = useLoad(() => (m ? api.skillWear(m.id) : Promise.resolve([])), [m?.id, m?.skillIds.join()]);
   const [edit, setEdit] = useState<{ mon: string; ids: number[] } | null>(null);
   const act = useAct(() => { setEdit(null); reloadMons(); reloadInv(); });
   if (!mons || !inv) return <p>Loading your skills…</p>;
@@ -44,6 +45,7 @@ export function Customize({ id }: { id?: string }) {
   const ids = edit && edit.mon === m?.id ? edit.ids : m?.skillIds ?? [];
   const slots = ids.map((i) => types.find((t) => t.id === i)).filter((t): t is SkillType => !!t);
   const free = (t: SkillType) => (owned.find((o) => o.id === t.id)?.free ?? 0) + (m?.skillIds.includes(t.id) ? 1 : 0);
+  const left = (id: number) => wear?.find(([s]) => s === id)?.[1];
   const shelf = types.filter((t) => free(t) > 0);
   const why = m && frozen(m, me);
   const changed = !!m && ids.join() !== m.skillIds.join();
@@ -81,6 +83,7 @@ export function Customize({ id }: { id?: string }) {
                   return t ? (
                     <button key={i} type="button" className={`skill-slot ${t.rarity}`} disabled={!!why} title="Remove" onClick={() => set(ids.filter((x) => x !== t.id))}>
                       <img src={`/skills/${t.kind}.svg`} alt="" /><b>{t.name}</b><small>{skillLabel(t)}</small>
+                      {left(t.id) != null && <small>{left(t.id)} fights left</small>}
                     </button>
                   ) : <div key={i} className="skill-slot empty"><span>Empty slot</span></div>;
                 })}

@@ -413,6 +413,12 @@ impl Monsters {
         U128(amount)
     }
 
+    /// (skill_id, fights_left) for each equipped skill.
+    pub fn skill_wear(&self, token_id: String) -> Vec<(u32, u32)> {
+        let m = self.get(&token_id);
+        m.skills.iter().map(|&s| (s, SKILL_LIFE - wear(&token_id, s))).collect()
+    }
+
     pub fn vault_of(&self, token_id: String) -> Vault {
         self.vault(&token_id)
     }
@@ -511,6 +517,12 @@ impl Monsters {
                 self.season_top.sort_by_key(|r| std::cmp::Reverse(r.1));
                 self.season_top.truncate(3);
             }
+        }
+        for id in tokens.iter().flatten() {
+            self.wear_skills(id);
+        }
+        if let Some(owner) = winner.and_then(|w| tokens[w as usize].as_ref()).and_then(|id| self.tokens.owner_by_id.get(id)) {
+            self.drop_common(&owner, seed());
         }
     }
 
