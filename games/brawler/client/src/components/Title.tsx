@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { archetype } from '@/lib/genes.ts';
 import { STAGES, STAGE_IDS, type StageId } from '@/lib/stages.ts';
 import { DEMO } from '@/lib/demo.ts';
-import { fmt, MARKET_URL, useUnifiedBalance, useWallet } from '@/lib/near.ts';
+import { fmt, useUnifiedBalance, useWallet } from '@/lib/near.ts';
 import { monsters } from '@/lib/store.ts';
-import { ArenaBackdrop, Ico, Logo, Portrait, STAGE_ICON, StageThumb, TYPE_ICON } from '@/components/ui.tsx';
+import { ArenaBackdrop, HubDialog, Ico, Logo, Portrait, STAGE_ICON, StageThumb, TYPE_ICON } from '@/components/ui.tsx';
+import { FundsDialog } from '@/components/account/Funds.tsx';
 
 function HubBtn({ href, label, icon, badge, active }: { href: string; label: string; icon: string; badge?: number; active?: boolean }) {
   return (
@@ -20,24 +21,13 @@ function HubBtn({ href, label, icon, badge, active }: { href: string; label: str
 
 const PANEL_FROM: Record<string, 'left' | 'right' | 'bottom'> = { collection: 'left', breed: 'left', market: 'left', account: 'left', lobby: 'right', tournaments: 'right', season: 'right', play: 'bottom' };
 
-function HubDialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { ref.current?.showModal(); }, []);
-  return (
-    <dialog ref={ref} className="hub-dialog" aria-label={title} onClose={onClose} onClick={(e) => e.target === ref.current && ref.current?.close()}>
-      <header><h2>{title}</h2><button type="button" className="hub-x" aria-label="Close" onClick={() => ref.current?.close()}><Ico n="icon-close" /></button></header>
-      {children}
-    </dialog>
-  );
-}
-
 export function Title({ page, children }: { page?: string; children?: React.ReactNode }) {
   const list = useMemo(monsters, []);
   const { signedAccountId } = useWallet();
   const { balance } = useUnifiedBalance();
   const [i, setI] = useState(0);
   const [stage, setStage] = useState<StageId>('ember');
-  const [pop, setPop] = useState<'mon' | 'map' | null>(null);
+  const [pop, setPop] = useState<'mon' | 'map' | 'funds' | null>(null);
   const m = list[i];
   const wins = list.reduce((s, x) => s + x.record.w, 0), kos = list.reduce((s, x) => s + x.record.ko, 0);
   const step = (d: number) => setI((i + d + list.length) % list.length);
@@ -49,7 +39,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
         <div className="hub-counters">
           <span className="hub-count" title="Total wins"><Ico n="trophy" /><i>Wins</i>{wins}</span>
           <span className="hub-count" title="Total knockouts"><Ico n="ko" /><i>KOs</i>{kos}</span>
-          {signedAccountId && <a className="hub-count" href={MARKET_URL} title="Unified balance, top up on market"><Ico n="coin" /><i>Balance</i>{balance === null ? '…' : `${fmt(balance)} NEAR`}</a>}
+          {signedAccountId && <button type="button" className="hub-count" onClick={() => setPop('funds')} title="Unified balance, deposit / withdraw"><Ico n="coin" /><i>Balance</i>{balance === null ? '…' : `${fmt(balance)} NEAR`}</button>}
           <a className="hub-count wallet" href="#/account"><Ico n="icon-wallet" />{signedAccountId || 'Connect wallet'}</a>
           {DEMO && <a className="hub-count demo" href="/">Demo mode · exit</a>}
         </div>
@@ -116,6 +106,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
           <a className="hub-link row-ico" href="#/collection"><Ico n="icon-monster" />Manage collection</a>
         </HubDialog>
       )}
+      {pop === 'funds' && <FundsDialog onClose={() => setPop(null)} />}
       {pop === 'map' && (
         <HubDialog title="Choose arena" onClose={() => setPop(null)}>
           <div className="hub-pick maps">

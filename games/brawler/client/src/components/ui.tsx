@@ -115,3 +115,14 @@ export function StageThumb({ id, className }: { id: StageId; className?: string 
   }, [id]);
   return <canvas ref={ref} className={className} style={{ width: '100%', aspectRatio: '16 / 9' }} aria-hidden="true" />;
 }
+
+export function HubDialog({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { ref.current?.showModal(); ref.current?.querySelector('input')?.focus(); }, []);
+  return (
+    <dialog ref={ref} className="hub-dialog" aria-label={title} onClose={onClose} onClick={(e) => e.target === ref.current && ref.current?.close()}>
+      <header><h2>{title}</h2><button type="button" className="hub-x" aria-label="Close" onClick={() => ref.current?.close()}><Ico n="icon-close" /></button></header>
+      {children}
+    </dialog>
+  );
+}
