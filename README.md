@@ -8,7 +8,7 @@ Multi-game platform on NEAR. One balance (platform contract) shared by every gam
 | `packages/platform/` | shared TS wallet + balance hooks | - |
 | `contracts/platform/` | balances, matches, bets, tournaments, per-game referee | NEAR |
 | `crates/near-svc/` | rust: view, NEP-413 verify, referee tx queue | - |
-| `games/brawler/client/` | brawler game (Next.js, static export) | brawler.xyz.com |
+| `games/brawler/client/` | brawler game (Next.js, `npm run build && npm start`) | brawler.xyz.com |
 | `games/brawler/server/` | rust ws: relay, lobby, referee | ws svc |
 | `games/brawler/sim/` | rust sim port, golden-tested vs TS | - |
 | `games/brawler/contract/` | monster NFTs | NEAR |
