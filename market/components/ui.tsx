@@ -1,8 +1,12 @@
 "use client";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { BRAWLER_URL, change24, fmt, KIND_LABEL, useAssets, type Dna, type Kind, type Point, type Rarity, type Skill } from "@/lib/assets";
+import { art, change24, fmt, KIND_LABEL, useAssets, type Dna, type Kind, type Point, type Rarity, type Skill } from "@/lib/assets";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/shadcn/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/shadcn/dropdown-menu";
+import { Bell, ChevronDown, Gamepad2 } from "lucide-react";
 import { SignIn } from "@/components/signin";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -39,39 +43,66 @@ function Toaster() {
   );
 }
 
-const NAV = [["/", "Market"], ["/search", "Browse"], ["/collection", "Collections"], ["/create", "Create"], ["/me", "My stuff"], ["/economy", "Economy"]] as const;
+const NAV = [["/", "Dashboard"], ["/#games", "Games"], ["/search", "Market"], ["/create", "Create"], ["/economy", "Analytic"]] as const;
+
 export function Shell({ children }: { children: ReactNode }) {
   const a = useAssets();
   const path = usePathname();
+  const q = useSearchParams().get("q") ?? "";
+  const [b] = useLoad(async () => {
+    const now = Date.now();
+    const [p, h, m] = await Promise.all([a.presales(), a.account ? a.holdings() : [], a.account ? a.myMonsters() : []]);
+    return { live: p.filter((x) => !x.ended && x.start_ms <= now && (!x.end_ms || x.end_ms > now)).length, lib: h.length + m.length };
+  }, [a.account]);
+  const name = a.account && (/^[0-9a-f]{64}$/.test(a.account) ? `${a.account.slice(0, 6)}…${a.account.slice(-4)}` : a.account.replace(/\.testnet$/, ""));
+  const round = "size-10 rounded-full border-white/10 bg-white/5 [&_svg]:size-5";
+  const pill = (n?: number) => !!n && <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-extrabold text-white">{n}</span>;
   return (
     <>
-      <header className="sticky top-0 z-40 border-b-3 border-ink bg-sky-0/85 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3 sm:flex-nowrap sm:gap-4">
+      <header className="sticky top-0 z-40 border-b border-white/5 bg-sky-0/85 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 lg:flex-nowrap">
           <Link href="/" className="flex shrink-0 items-center gap-2">
-            <span className="grid size-10 place-items-center rounded-xl border-3 border-ink bg-ember font-display text-2xl text-ink shadow-drop-sm">B</span>
-            <span className="font-display text-xl leading-none sm:text-2xl">Brawler <span className="text-ember">Market</span></span>
+            <Gamepad2 className="size-7 text-indigo-400" />
+            <span className="font-display text-lg leading-none">Chomp Market</span>
           </Link>
-          <nav className="order-last -mx-1 flex w-full min-w-0 gap-1 overflow-x-auto sm:order-none sm:mx-0 sm:ml-4 sm:w-auto">
+          <nav className="order-last -mx-1 flex w-full min-w-0 gap-1 overflow-x-auto lg:order-none lg:mx-0 lg:ml-4 lg:w-auto">
             {NAV.map(([href, label]) => (
               <Link key={href} href={href} aria-current={path === href ? "page" : undefined}
-                className="shrink-0 rounded-lg px-2.5 py-1.5 font-display text-[17px] text-muted hover:text-cream aria-[current=page]:bg-panel aria-[current=page]:text-cream aria-[current=page]:outline-3 aria-[current=page]:outline-ink">
+                className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-bold text-muted hover:text-cream aria-[current=page]:bg-indigo-600 aria-[current=page]:text-white">
                 {label}
               </Link>
             ))}
           </nav>
           <div className="ml-auto flex shrink-0 items-center gap-2">
-            <a href={BRAWLER_URL} className="hidden font-display text-muted hover:text-cream md:block">Play ↗</a>
+            <Button asChild variant="outline" size="icon" className={cn(round, "relative hidden sm:inline-flex")}>
+              <Link href="/collection" title={b?.live ? `${b.live} live presale(s)` : "Presales"}>
+                <Bell />{!!b?.live && <span className="absolute right-2 top-2 size-2 rounded-full bg-danger" />}
+              </Link>
+            </Button>
             {a.account ? (
-              <button onClick={a.signOut} title="Disconnect" className="flex max-w-36 items-center gap-2 rounded-full border-3 border-ink bg-panel py-1 pl-1.5 pr-3 font-bold shadow-drop-sm sm:max-w-56">
-                <span className="size-6 shrink-0 rounded-full border-2 border-ink bg-gradient-to-br from-gold to-ember" />
-                <span className="truncate text-sm">{/^[0-9a-f]{64}$/.test(a.account) ? `${a.account.slice(0, 3)}...${a.account.slice(-3)}` : a.account}</span>
-                {a.demo && <span className="hidden rounded bg-gold px-1 text-[10px] font-extrabold text-ink sm:inline">DEMO</span>}
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-auto gap-2 px-1 py-1">
+                    <img src={art("avatar.png")} alt="" className="size-9 rounded-full" />
+                    <span className="hidden min-w-0 max-w-36 text-left sm:block">
+                      <span className="block truncate text-sm font-extrabold">{name}</span>
+                      <span className="block truncate text-xs font-bold text-muted">{a.demo ? "Demo mode" : "NEAR testnet"}</span>
+                    </span>
+                    <ChevronDown className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem asChild><Link href="/me" className="font-bold">My Library{pill(b?.lib)}</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/collection" className="font-bold">Collections{pill(b?.live)}</Link></DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" className="font-bold" onClick={a.signOut}>Log Out</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : <Btn onClick={a.signIn} small>Connect</Btn>}
           </div>
         </div>
+        <div className="mx-auto max-w-7xl px-4 pb-3"><SearchBar key={q} initial={q} /></div>
       </header>
-      <main className="mx-auto w-full max-w-6xl px-4 pb-24 pt-6 sm:pt-10">{children}</main>
+      <main className="mx-auto w-full max-w-7xl px-4 pb-24 pt-6">{children}</main>
       <Toaster />
       <SignIn />
     </>
@@ -79,7 +110,7 @@ export function Shell({ children }: { children: ReactNode }) {
 }
 
 export function Btn({ children, tone = "ember", small, className, ...p }: React.ButtonHTMLAttributes<HTMLButtonElement> & { tone?: "ember" | "gold" | "ghost" | "teal"; small?: boolean }) {
-  const t = { ember: "bg-ember hover:bg-ember-hi text-ink", gold: "bg-gold text-ink", teal: "bg-teal text-ink", ghost: "bg-panel-2 text-cream hover:bg-sky-2" }[tone];
+  const t = { ember: "btn-primary hover:brightness-110", gold: "btn-primary hover:brightness-110", teal: "bg-teal text-ink", ghost: "bg-panel-2 text-cream hover:bg-sky-2" }[tone];
   return (
     <button {...p} className={cx("inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl border-3 border-ink font-display shadow-drop-sm transition active:translate-y-0.5 active:shadow-none disabled:cursor-not-allowed disabled:opacity-50 disabled:active:translate-y-0",
       small ? "h-9 px-3 text-base" : "h-12 px-5 text-xl", t, className)}>{children}</button>
@@ -87,7 +118,7 @@ export function Btn({ children, tone = "ember", small, className, ...p }: React.
 }
 
 export const Panel = ({ children, className }: { children: ReactNode; className?: string }) => (
-  <section className={cx("rounded-3xl border-3 border-ink bg-panel shadow-drop", className)}>{children}</section>
+  <section className={cx("glow rounded-3xl bg-panel", className)}>{children}</section>
 );
 
 export function Chip({ on, children, onClick }: { on?: boolean; children: ReactNode; onClick?: () => void }) {
@@ -178,9 +209,9 @@ export function SearchBar({ initial = "", big }: { initial?: string; big?: boole
   }, []);
   return (
     <form role="search" onSubmit={(e) => { e.preventDefault(); router.push(`/search?q=${encodeURIComponent(q.trim())}`); }}
-      className={cx("group flex w-full items-center gap-3 rounded-full border-3 border-ink bg-panel shadow-drop transition focus-within:bg-panel-2", big ? "h-16 px-5 sm:h-[72px] sm:px-7" : "h-13 px-4")}>
+      className={cx("glow group flex w-full items-center gap-3 rounded-full bg-sky-1 transition focus-within:bg-panel-2", big ? "h-16 px-5 sm:h-[72px] sm:px-7" : "h-12 px-4")}>
       <svg viewBox="0 0 24 24" className="size-6 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
-      <input ref={r} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search skills, monsters…"
+      <input ref={r} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search games, skills, monsters…"
         aria-label="Search" className={cx("w-full flex-1 bg-transparent font-bold text-cream outline-none placeholder:text-muted/70 focus-visible:outline-none", big ? "text-lg sm:text-xl" : "text-base")} />
       <kbd className="hidden shrink-0 rounded-lg border-2 border-ink bg-sky-1 px-2 py-0.5 font-body text-sm font-extrabold text-muted sm:block">{mac ? "⌘K" : "Ctrl K"}</kbd>
     </form>

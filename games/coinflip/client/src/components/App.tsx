@@ -30,6 +30,19 @@ function Coin({ face, from = face, mode = 'still', size, onDone }: { face: Side;
   return <div className={`coin gold ${mode}`} style={style} onAnimationEnd={onDone}><span>{face ? '★' : 'N'}</span></div>;
 }
 
+// Remotion toss videos (games/coinflip/video): toss-<from><to>.webm, 1200x800, coin 300px wide at centre, transparent.
+// Idle = first frame of toss-<side><side>; result known -> play toss-<side><result> on top, onDone at end.
+// ponytail: WebM alpha = Chrome/Firefox only; add HEVC/opaque fallback if Safari matters.
+const HT = 'ht';
+function Toss({ from, to, size, onDone }: { from: Side; to?: Side; size: number; onDone: () => void }) {
+  const [playing, setPlaying] = useState(false);
+  const vid = (a: Side, b: Side, play: boolean) => (
+    <video key={`${play ? "play" : "idle"}${a}${b}`} className="toss" src={`/coin/toss-${HT[a]}${HT[b]}.webm`} muted playsInline preload="auto" autoPlay={play}
+      style={{ width: size * 4, opacity: play || !playing ? 1 : 0 }} onPlaying={play ? () => setPlaying(true) : undefined} onEnded={play ? onDone : undefined} />
+  );
+  return <>{vid(from, from, false)}{to != null && vid(from, to, true)}</>;
+}
+
 const N = () => <span className="n" aria-hidden>N</span>; // NEAR glyph
 
 // deterministic gradient + initials from account name; empty slot when no one seated
@@ -232,7 +245,7 @@ function RoomView({ api, id, back }: { api: Api; id: number; back: () => void })
             <div className="halo">
               {cancelled ? <p className="count">ROOM<br />CLOSED</p>
                 : count > 0 ? <p className="count">FLIPPING<br />IN {count}...</p>
-                : <Coin face={flipped ? r.result! : r.side} from={r.side} size={big} mode={flipped ? 'land' : r.status === 'open' ? 'still' : 'spin'} onDone={() => setLanded(true)} />}
+                : <Toss from={r.side} to={flipped ? r.result! : undefined} size={big} onDone={() => setLanded(true)} />}
             </div>
             {r.status === 'open' && <p className="wait">{left ? `Waiting for opponent · bot in ${left}s` : 'Calling the house bot…'}</p>}
             {r.status === 'open' && seat === 0 && <button className="btn sm ghost" onClick={cancel}>Cancel</button>}

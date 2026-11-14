@@ -3,8 +3,11 @@ import type { NextConfig } from "next";
 
 const root = path.resolve(process.cwd(), ".."); // market imports agents/pricing.ts
 
+const basePath = process.env.MARKET_BASE_PATH || "";
+
 export default {
-  basePath: process.env.MARKET_BASE_PATH || "",
+  basePath,
+  env: { NEXT_PUBLIC_BASE_PATH: basePath }, // plain <img> src needs the prefix
   output: "standalone",
   outputFileTracingRoot: root,
   reactCompiler: true,

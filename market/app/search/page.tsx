@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { change24, fmt, KIND_LABEL, KINDS, RARITIES, skillKey, useAssets, type Point } from "@/lib/assets";
-import { Chip, cx, Empty, Loading, MonsterArt, Pct, prices, RARITY_TEXT, SearchBar, SkillArt, Sparkline, STATS, useLoad } from "@/components/ui";
+import { Chip, cx, Empty, Loading, MonsterArt, Pct, prices, RARITY_TEXT, SkillArt, Sparkline, STATS, useLoad } from "@/components/ui";
 
 const TYPES = [["", "All"], ["skill", "Skills"], ["monster", "Monsters"], ["collection", "Collections"]] as const;
 
@@ -35,8 +35,7 @@ export default function Search() {
 
   return (
     <>
-      <SearchBar key={q} initial={q} />
-      <div className="mt-5 flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">{TYPES.map(([v, l]) => <Chip key={v} on={type === v} onClick={() => set("type", v)}>{l}</Chip>)}</div>
         <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
           <Chip on={!kind} onClick={() => set("kind", "")}>Any kind</Chip>

@@ -1,12 +1,16 @@
 "use client";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { change24, fmt, near, skillKey, useAssets, type Point } from "@/lib/assets";
-import { Empty, Loading, MonsterArt, Panel, Pct, prices, SearchBar, SkillArt, SkillRow, Sparkline, useLoad } from "@/components/ui";
+import { art, change24, fmt, GAMES, near, skillKey, useAssets, type Point } from "@/lib/assets";
+import { Card as UiCard, CardContent, CardDescription, CardTitle } from "@/components/shadcn/card";
+import { Badge } from "@/components/shadcn/badge";
+import { Button } from "@/components/shadcn/button";
+import { Play } from "lucide-react";
+import { cx, Empty, Loading, MonsterArt, Panel, Pct, prices, SkillArt, SkillRow, Sparkline, useLoad } from "@/components/ui";
 
 function Card({ label, href, chart, icon, name, value, delta }: { label: string; href: string; chart: number[]; icon: ReactNode; name: string; value: string; delta: ReactNode }) {
   return (
-    <Link href={href} className="group block rounded-3xl border-3 border-ink bg-panel p-5 shadow-drop transition hover:-translate-y-1 hover:bg-panel-2">
+    <Link href={href} className="glow group block rounded-2xl bg-panel p-5 transition hover:bg-panel-2">
       <p className="text-sm font-extrabold uppercase tracking-wider text-muted">{label}</p>
       <Sparkline data={chart} className="my-4 h-16 sm:h-24" />
       <div className="flex items-center gap-3 border-t-2 border-ink/60 pt-4">
@@ -22,7 +26,7 @@ function Card({ label, href, chart, icon, name, value, delta }: { label: string;
 }
 
 const Blank = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div className="rounded-3xl border-3 border-ink bg-panel p-5 shadow-drop">
+  <div className="glow rounded-2xl bg-panel p-5">
     <p className="mb-4 text-sm font-extrabold uppercase tracking-wider text-muted">{label}</p>
     <Empty>{children}</Empty>
   </div>
@@ -46,13 +50,43 @@ export default function Home() {
 
   return (
     <>
-      <section className="mx-auto max-w-3xl pb-10 pt-6 text-center sm:pt-14">
-        <p className="mb-4 inline-block rounded-full border-3 border-ink bg-panel px-3 py-1 text-xs font-extrabold uppercase tracking-widest text-gold shadow-drop-sm">Skills · Monsters · Presales</p>
-        <h1 className="text-[44px] drop-shadow-[0_5px_0_var(--color-ink)] sm:text-7xl md:text-8xl">Trade in the <span className="text-ember">Arena</span></h1>
-        <p className="mx-auto mt-4 max-w-xl text-lg font-bold text-muted">Buy skills, gear up your monster, win more fights. Everything settles on NEAR.</p>
-        <div className="mt-8"><SearchBar big /></div>
+      <section className="relative overflow-hidden rounded-2xl">
+        <img src={art("hero.jpg")} alt="" className="absolute inset-0 size-full object-cover object-[70%_40%]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent" />
+        <div className="relative max-w-xl px-6 py-10 sm:px-14 sm:py-14">
+          <h1 className="text-3xl sm:text-4xl">New Skills Every Week<br />For Every Player</h1>
+          <p className="mt-4 max-w-sm text-sm font-semibold text-neutral-300">Fresh skills and monsters drop in presales. Gear up, then jump into any game.</p>
+          <Link href="/collection" className="btn-primary mt-6 inline-flex h-11 items-center rounded-full px-6 text-sm font-extrabold">Check Now</Link>
+        </div>
       </section>
 
+      <section id="games" className="mt-6 scroll-mt-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-xl">Most Popular Games</h2>
+          <Link href="/search" className="shrink-0 text-sm font-bold text-indigo-400 hover:underline">View All</Link>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {GAMES.map((g) => (
+            <UiCard key={g.id} className="glow gap-0 overflow-hidden rounded-2xl bg-panel py-0">
+              <div className="relative">
+                <img src={art(`${g.id}.png`)} alt="" className={cx("aspect-[274/166] w-full object-cover", "soon" in g && "opacity-60 grayscale-[60%]")} />
+                {"soon" in g && <Badge variant="outline" className="absolute right-3 top-3 border-white/10 bg-black/70 font-bold text-neutral-200">Coming Soon</Badge>}
+              </div>
+              <CardContent className="flex flex-1 flex-col p-4">
+                <CardTitle className="text-lg">{g.name}</CardTitle>
+                <CardDescription className="mt-1 flex-1 text-xs font-semibold text-muted">{g.desc}</CardDescription>
+                <p className="my-3 text-lg leading-none text-amber-400" aria-label="4 out of 5 stars">★★★★☆</p>
+                {"soon" in g
+                  ? <Button disabled variant="outline" className="h-9 rounded-full border-white/10 bg-transparent text-sm font-bold">Coming Soon</Button>
+                  : <Button asChild variant="outline" className="h-9 rounded-full border-indigo-500 bg-transparent text-sm font-bold text-indigo-400 hover:bg-indigo-600 hover:text-white dark:border-indigo-500 dark:bg-transparent dark:hover:bg-indigo-600"><a href={g.url}><Play className="fill-current" /> Play Now</a></Button>}
+              </CardContent>
+            </UiCard>
+          ))}
+        </div>
+      </section>
+
+      <Panel className="mt-8 p-4 sm:p-5">
+        <h2 className="mb-4 text-xl">News Games In This Week</h2>
       <div className="grid gap-5 md:grid-cols-3">
         {!d ? [0, 1, 2].map((i) => <Loading key={i} />) : <>
           {top ? <Card label="Top Skill (24H)" href={`/item?id=skill:${top.id}`} chart={prices(d.hist[top.id])}
@@ -65,19 +99,20 @@ export default function Home() {
             delta={live.cap_total ? <span className="font-extrabold text-up">{Math.round((Number(live.sold) / Number(live.cap_total)) * 100)}%</span> : <span className="font-extrabold text-up">Open</span>} /> : <Blank label="Live Presale">No live presale.</Blank>}
         </>}
       </div>
+      </Panel>
 
-      <div className="mt-12 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <div className="mt-8 grid gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Panel className="p-3 sm:p-4">
           <div className="flex items-baseline justify-between px-3 pb-2 pt-1">
-            <h2 className="text-2xl">Top movers</h2>
-            <Link href="/search?type=skill&sort=change" className="text-sm font-extrabold text-gold hover:underline">See all →</Link>
+            <h2 className="text-xl">Top movers</h2>
+            <Link href="/search?type=skill&sort=change" className="text-sm font-bold text-indigo-400 hover:underline">See all →</Link>
           </div>
           {!movers ? <Loading /> : movers.length ? movers.map((s) => <SkillRow key={s.id} s={s} h={d!.hist[s.id]} />) : <Empty>No trades yet.</Empty>}
         </Panel>
         <Panel className="p-3 sm:p-4">
           <div className="flex items-baseline justify-between px-3 pb-2 pt-1">
-            <h2 className="text-2xl">Monsters for sale</h2>
-            <Link href="/search?type=monster" className="text-sm font-extrabold text-gold hover:underline">See all →</Link>
+            <h2 className="text-xl">Monsters for sale</h2>
+            <Link href="/search?type=monster" className="text-sm font-bold text-indigo-400 hover:underline">See all →</Link>
           </div>
           {!d ? <Loading /> : !d.monsters.length ? <Empty>No monsters for sale.</Empty> : d.monsters.slice(0, 6).map((m) => (
             <Link key={m.token_id} href={`/item?id=monster:${m.token_id}`} className="flex items-center gap-3 rounded-2xl px-3 py-2.5 transition hover:bg-panel-2">
