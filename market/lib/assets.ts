@@ -3,7 +3,6 @@ import { useNearWallet } from "near-connect-hooks";
 import { nearToYocto, yoctoToNear } from "near-api-js";
 import { demoApi } from "./demo";
 import { openSocial, socialCall, socialSignOut, useSocial } from "./social";
-import { FASTAUTH } from "./fastauth";
 
 export const ASSETS_ID = process.env.NEXT_PUBLIC_ASSETS_ID || "v2.brawler-monsters-5c8e2b.testnet";
 export const BRAWLER_URL = process.env.NEXT_PUBLIC_BRAWLER_URL || "http://localhost:3000";
@@ -103,7 +102,7 @@ export function useAssets(): Api {
   });
   const mine = () => (me ? view<Monster[]>("monsters_of", { account_id: me, from: 0, limit: 50 }) : Promise.resolve([]));
   return {
-    demo: false, account: me, signIn: () => (FASTAUTH.enabled ? openSocial() : w.signIn()), signOut: () => (social ? socialSignOut() : w.signOut()),
+    demo: false, account: me, signIn: () => openSocial(), signOut: () => (social ? socialSignOut() : w.signOut()),
     skills: () => page<Skill>("skill_types"),
     collections: () => page<Collection>("collections"),
     presales: () => page<Presale>("presales"),

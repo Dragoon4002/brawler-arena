@@ -11,7 +11,11 @@ import { HubDialog, Ico } from '@/components/ui.tsx';
 
 // Social login via NEAR Auth: Auth0 (Google/email) -> MPC-derived key -> implicit account.
 // One MPC-signed tx adds a local full-access key per device; after that every call (incl. NEP-413) signs locally.
-type Session = { accountId: string; key: KeyPairString };
+type Session = { accountId: string; key: KeyPairString; guest?: boolean };
+const GUEST = 'guest:key';
+const bus = new EventTarget();
+export const playAsGuest = () => bus.dispatchEvent(new Event('guest'));
+export const isGuest = (accountId?: string | null) => !!accountId && load()?.guest === true && load()?.accountId === accountId;
 const STORE = 'fastauth:session';
 const load = (): Session | null => { try { return JSON.parse(localStorage.getItem(STORE) ?? 'null'); } catch { return null; } };
 const rpc = new JsonRpcProvider({ url: FASTAUTH.rpc });
@@ -31,6 +35,20 @@ async function autoFund(accountId: string) {
   if (!res.ok || (await res.json()).accountId !== accountId) return false;
   for (let i = 0; i < 15; i++) { if (await exists(accountId)) return true; await new Promise((r) => setTimeout(r, 1000)); }
   return false;
+}
+
+async function guest(): Promise<Session> {
+  let key = localStorage.getItem(GUEST) as KeyPairString | null;
+  if (!key) { key = KeyPair.fromRandom('ed25519').toString() as KeyPairString; localStorage.setItem(GUEST, key); }
+  const accountId = keyToImplicitAddress(KeyPair.fromString(key).getPublicKey().toString());
+  if (!(await exists(accountId))) {
+    const res = await fetch('/api/guest/fund', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ accountId }) });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(j.error ?? `guest faucet ${res.status}`);
+    for (let i = 0; i < 15 && !(await exists(accountId)); i++) await new Promise((r) => setTimeout(r, 1000));
+    if (!(await exists(accountId))) throw new Error('Guest account not funded yet, retry in a moment.');
+  }
+  return { accountId, key, guest: true };
 }
 
 // built before the click so the Auth0 popup opens inside the user gesture
@@ -70,19 +88,19 @@ function overrideFor(base: NearContextValue, s: Session, signIn: () => Promise<v
 export function SocialProvider({ children }: { children: React.ReactNode }) {
   const base = useBaseWallet();
   const [session, setSession] = useState(load);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<false | 'choose' | 'guest'>(false);
+  useEffect(() => { const f = () => setOpen('guest'); bus.addEventListener('guest', f); return () => bus.removeEventListener('guest', f); }, []);
   const value = useMemo(() => {
-    if (!FASTAUTH.enabled) return null;
-    const signIn = async () => setOpen(true);
+    const signIn = async () => setOpen('choose');
     if (!session) return { ...base, signIn };
-    const signOut = async () => { localStorage.removeItem(STORE); setSession(null); await auth().logout({ openUrl: false }).catch(() => {}); };
+    const signOut = async () => { localStorage.removeItem(STORE); setSession(null); if (FASTAUTH.enabled && !session.guest) await auth().logout({ openUrl: false }).catch(() => {}); };
     return overrideFor(base, session, signIn, signOut);
   }, [base, session]);
   const done = (s: Session) => { localStorage.setItem(STORE, JSON.stringify(s)); setSession(s); setOpen(false); };
   return (
     <WalletOverride.Provider value={value}>
       {children}
-      {open && <SocialDialog onClose={() => setOpen(false)} onWallet={() => { setOpen(false); base.signIn(); }} onDone={done} />}
+      {open && <SocialDialog guest={open === 'guest'} onClose={() => setOpen(false)} onWallet={() => { setOpen(false); base.signIn(); }} onDone={done} />}
     </WalletOverride.Provider>
   );
 }
@@ -90,12 +108,12 @@ export function SocialProvider({ children }: { children: React.ReactNode }) {
 type Step = { s: 'choose' } | { s: 'busy'; msg: string } | { s: 'fund'; accountId: string; pk: string } | { s: 'activate'; prep: Prep } | { s: 'error'; msg: string };
 const RELAYER_MISSING = 'Social login is not set up on this server yet (NEAR Auth relayer missing). Use a NEAR wallet for now.';
 
-function SocialDialog({ onClose, onWallet, onDone }: { onClose: () => void; onWallet: () => void; onDone: (s: Session) => void }) {
+function SocialDialog({ guest: startGuest, onClose, onWallet, onDone }: { guest: boolean; onClose: () => void; onWallet: () => void; onDone: (s: Session) => void }) {
   const [step, setStep] = useState<Step>({ s: 'choose' });
   // checked up front so the click can open the Auth0 popup without awaiting anything first
   const [pre, setPre] = useState<{ ready: boolean; loggedIn: boolean } | null>(null);
   useEffect(() => {
-    Promise.all([fetch('/api/fastauth').then((r) => r.json()).then((j) => !!j.ready, () => false), auth().isLoggedIn()]).then(([ready, loggedIn]) => setPre({ ready, loggedIn }));
+    if (FASTAUTH.enabled) Promise.all([fetch('/api/fastauth').then((r) => r.json()).then((j) => !!j.ready, () => false), auth().isLoggedIn()]).then(([ready, loggedIn]) => setPre({ ready, loggedIn }));
   }, []);
   const fail = (e: unknown) => setStep({ s: 'error', msg: (e as Error).message || String(e) });
   const toAccount = async (accountId: string, pk: string) => {
@@ -114,6 +132,10 @@ function SocialDialog({ onClose, onWallet, onDone }: { onClose: () => void; onWa
       await toAccount(accountId, pk);
     } catch (e) { fail(e); }
   };
+  const asGuest = async () => {
+    try { setStep({ s: 'busy', msg: 'Creating a guest account…' }); onDone(await guest()); } catch (e) { fail(e); }
+  };
+  useEffect(() => { if (startGuest) asGuest(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const fundStep = step.s === 'fund' ? step : null;
   useEffect(() => {
     if (!fundStep) return;
@@ -127,9 +149,10 @@ function SocialDialog({ onClose, onWallet, onDone }: { onClose: () => void; onWa
     <HubDialog title="Sign in" onClose={onClose}>
       {step.s === 'choose' && (
         <div style={{ display: 'grid', gap: 12 }}>
-          <button type="button" className="btn alt" disabled={!pre} onClick={login}><span><Ico n="icon-wallet" />Continue with Google / email</span></button>
-          <p className="sub" style={{ margin: 0 }}>No seed phrase. Powered by NEAR Auth (testnet).</p>
+          <button type="button" className="btn alt" disabled={!FASTAUTH.enabled || !pre} onClick={login}><span><Ico n="icon-wallet" />Continue with Google / email</span></button>
+          <p className="sub" style={{ margin: 0 }}>{FASTAUTH.enabled ? 'No seed phrase. Powered by NEAR Auth (testnet).' : 'Works on localhost:3000 only'}</p>
           <button type="button" className="btn ghost" onClick={onWallet}><span><Ico n="icon-wallet" />Use a NEAR wallet</span></button>
+          <button type="button" className="btn ghost" onClick={asGuest}><span>Play as guest</span></button>
         </div>
       )}
       {step.s === 'busy' && <p>{step.msg}</p>}
