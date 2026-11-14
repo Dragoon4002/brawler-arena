@@ -594,4 +594,4 @@ a.lb-who:hover b { color: var(--gold); text-decoration: underline; }
 .touch-btn:first-child { background: rgb(255 138 61 / 0.65); color: var(--ink); }
 .touch-btn:nth-child(2) { background: rgb(255 209 102 / 0.65); color: var(--ink); }
 .touch-btn:active { transform: translateY(2px); filter: brightness(1.2); }
-.bot-tag { display: inline-block; vertical-align: middle; margin-left: 4px; padding: 1px 6px; font: 800 11px var(--font-body); letter-spacing: 0.05em; color: var(--ink); background: #5ce1e6; border: 2px solid var(--ink); border-radius: 6px; }
+.bot-tag { display: inline-block; vertical-align: middle; margin-left: 4px; padding: 1px 6px; font: 800 11px var(--font-body); color: var(--ink); background: #5ce1e6; border: 2px solid var(--ink); border-radius: 99px; }

@@ -7,7 +7,7 @@ Bots that play, over the normal client protocol (free rooms only, nothing on-cha
 ```sh
 npm test
 SERVER_URL=ws://localhost:8787 npm start
-docker compose -f infra/compose.yml up -d agents
+docker compose -f infra/compose.yml --profile agents up -d agents   # off by default
 ```
 
 | env | default | |

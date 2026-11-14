@@ -24,7 +24,7 @@ export function Ico({ n, className = 'ico' }: { n: string; className?: string })
   return <img className={className} src={asset(n)} alt="" aria-hidden="true" draggable={false} />;
 }
 
-export const BotTag = ({ account }: { account?: string }) => (isBot(account) ? <span className="bot-tag" title="Computer opponent">BOT</span> : null);
+export const BotTag = ({ account }: { account?: string }) => (isBot(account) ? <span className="bot-tag" title="Computer opponent">bot</span> : null);
 
 export const TYPE_ICON = { Bruiser: 'type-bruiser', Duelist: 'type-duelist', Bulwark: 'type-bulwark', Skirmisher: 'type-skirmisher' } as Record<string, string>;
 export const STAGE_ICON = { ember: 'arena-ember', grove: 'arena-grove', docks: 'arena-docks' } as Record<StageId, string>;

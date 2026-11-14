@@ -254,7 +254,7 @@ function PracticeFight({ again }: { again: () => void }) {
   const account = useArena().account ?? '';
   useEffect(() => {
     const list = monsters(), me = practiceMon ?? list[0];
-    const players = [{ ...asPlayer(me), account }, { ...asPlayer(pick(list.filter((m) => m.id !== me.id)) ?? me), account: 'practice bot' }];
+    const players = [{ ...asPlayer(me), account }, { ...asPlayer(pick(list.filter((m) => m.id !== me.id)) ?? me), account: 'bot-0.brawler' }];
     setNames(players.map((p) => p.name));
     const g = startBotFight(canvas.current!, players, pick(STAGE_IDS), { result: (w) => setTimeout(() => setOver(w), 1000) }, true);
     const key = (e: KeyboardEvent) => {

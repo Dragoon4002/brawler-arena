@@ -162,14 +162,13 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       ctx.textAlign = R ? 'right' : 'left'; ctx.textBaseline = 'alphabetic';
       ctx.font = "30px 'Lilita One', system-ui"; ctx.fillStyle = '#fff3dc';
       ctx.fillText(NAMES[i], tx, y + 40, cw - 140);
-      if (isBot(ACCOUNTS[i])) { // BOT pill after the name
-        const nw = Math.min(ctx.measureText(NAMES[i]).width, cw - 140), px = R ? tx - nw - 52 : tx + nw + 8;
-        ctx.fillStyle = '#5ce1e6'; ctx.beginPath(); ctx.roundRect(px, y + 20, 44, 22, 6); ctx.fill();
-        ctx.font = "800 14px Nunito, system-ui"; ctx.fillStyle = '#0c0816'; ctx.textAlign = 'center'; ctx.fillText('BOT', px + 22, y + 36);
-        ctx.textAlign = R ? 'right' : 'left';
-      }
       let by = y + 58;
-      if (ACCOUNTS[i]) {
+      if (isBot(ACCOUNTS[i])) { // bots show a "bot" chip instead of their account
+        const px = R ? tx - 46 : tx;
+        ctx.fillStyle = '#5ce1e6'; ctx.beginPath(); ctx.roundRect(px, y + 50, 46, 22, 11); ctx.fill();
+        ctx.font = "800 15px Nunito, system-ui"; ctx.fillStyle = '#0c0816'; ctx.textAlign = 'center'; ctx.fillText('bot', px + 23, y + 66);
+        ctx.textAlign = R ? 'right' : 'left'; by = y + 80;
+      } else if (ACCOUNTS[i]) {
         ctx.font = "700 18px Nunito, system-ui"; ctx.fillStyle = 'rgba(255,243,220,0.65)';
         const a = ACCOUNTS[i].length > 30 ? ACCOUNTS[i].slice(0, 28) + '…' : ACCOUNTS[i];
         ctx.fillText(a, tx, y + 66, cw - 2 * pad); by = y + 80;

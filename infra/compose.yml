@@ -21,6 +21,7 @@ services:
 
   # Bot hosts (open rooms humans can join, never bot vs bot) + commentator, free rooms only. Env: agents/README.md
   agents:
+    profiles: [agents] # opt-in: docker compose --profile agents up -d agents
     image: brawler-agents
     build: { context: .., dockerfile: infra/agents.Dockerfile }
     environment:
