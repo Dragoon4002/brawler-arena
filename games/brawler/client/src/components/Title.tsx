@@ -45,6 +45,7 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
         <HubBtn href="/customize" label="Skills" icon="/skills/Power.svg" active={page === 'customize'} />
         <HubBtn href="/account" label="Account" icon="icon-wallet" active={page === 'account'} />
         <HubBtn href="/breed" label="Breed" icon="icon-breed" active={page === 'breed'} />
+        <HubBtn href="/holders" label="Holders" icon="trophy" active={page === 'holders'} />
         <HubBtn href="/market" label="Market" icon="coin-stack" active={page === 'market'} />
       </nav>
 

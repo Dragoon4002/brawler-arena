@@ -112,7 +112,7 @@ export function useMonsters(): MonstersApi {
     },
     list: (id, yocto) => call('list', { token_id: id, price: yocto }, '1'),
     delist: (id) => call('delist', { token_id: id }),
-    buy: (id, yocto) => call('buy', { token_id: id }, yocto, GAS_X),
+    buy: async (id, yocto) => call('buy', { token_id: id, min_vault: (await view<Vault>('vault_of', { token_id: id })).balance }, yocto, GAS_X),
     offerRent: (id, perDay, maxDays) => call('offer_rent', { token_id: id, price_per_day: perDay, max_days: maxDays }, '1'),
     cancelRent: (id) => call('cancel_rent_offer', { token_id: id }),
     rent: (id, days, total) => call('rent', { token_id: id, days }, total, GAS_X),

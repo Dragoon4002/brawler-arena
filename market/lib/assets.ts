@@ -125,7 +125,7 @@ export function useAssets(): Api {
     listSkill: (skill, qty, priceEach) => call("list_skill", { skill, qty, price_each: priceEach }, STORAGE),
     cancelSkillListing: (skill) => call("cancel_skill_listing", { skill }, "0"),
     buyPresale: (p, qty) => call("buy_presale", { id: p.id, qty }, BigInt(p.price) * BigInt(qty) + STORAGE, GAS_X),
-    buyMonster: (m) => call("buy", { token_id: m.token_id }, m.price ?? "0", GAS_X),
+    buyMonster: async (m) => call("buy", { token_id: m.token_id, min_vault: (await view<{ balance: string }>("vault_of", { token_id: m.token_id })).balance }, m.price ?? "0", GAS_X),
     listMonster: (id, price) => call("list", { token_id: id, price }),
     delistMonster: (id) => call("delist", { token_id: id }, "0"),
     createCollection: (c) => call("create_collection", c, STORAGE),

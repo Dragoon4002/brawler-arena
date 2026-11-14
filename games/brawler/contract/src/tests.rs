@@ -246,7 +246,7 @@ fn buy_pays_seller_royalty_and_fee() {
     let before = c.config().treasury.0;
 
     as_("carol", 10 * N);
-    c.buy("3".into());
+    c.buy("3".into(), None);
     let mut t = transfers();
     t.sort();
     assert_eq!(t, vec![("alice".into(), N / 2), ("bob".into(), 10 * N - N / 4 - N / 2)]);
@@ -263,7 +263,7 @@ fn buy_gen0_or_own_bred_has_no_royalty() {
     as_("alice", 1);
     c.list("0".into(), U128(4 * N));
     as_("bob", 4 * N);
-    c.buy("0".into());
+    c.buy("0".into(), None);
     assert_eq!(transfers(), vec![("alice".to_string(), 4 * N - N / 10)]);
 }
 
@@ -274,7 +274,7 @@ fn buy_wrong_deposit() {
     as_("alice", 1);
     c.list("0".into(), U128(N));
     as_("bob", N + 1);
-    c.buy("0".into());
+    c.buy("0".into(), None);
 }
 
 #[test]
@@ -976,7 +976,7 @@ fn loadout_travels_on_transfer_and_buy() {
 
     c.list("0".into(), U128(N));
     as_("carol", N);
-    c.buy("0".into());
+    c.buy("0".into(), None);
     let m = c.get_monster("0".into()).unwrap();
     assert_eq!((m.owner_id, m.skills), (acc("carol"), vec![SkillRef { id: 2, kind: SkillKind::AirJump, mag: 1 }]));
     assert_eq!(c.price_history("monsters".into()), vec![(T0, U128(N))]);
@@ -1037,7 +1037,7 @@ fn vault_moves_with_sale_and_deposit_mid_sale_goes_to_buyer() {
     as_("carol", N); // payout lands while the sale is open
     c.vault_deposit("0".into());
     as_("dex", 5 * N);
-    c.buy("0".into());
+    c.buy("0".into(), None);
     let v = c.vault_of("0".into());
     assert_eq!(v.balance.0, 2 * N);
     assert_eq!(v.log.last().map(|e| (e.kind.as_str(), e.who.clone())), Some(("sale", acc("dex"))));
@@ -1078,4 +1078,30 @@ fn cannot_overdraw_vault() {
     c.vault_deposit("0".into());
     as_("alice", 1);
     c.vault_withdraw("0".into(), Some(U128(N + 1)));
+}
+
+#[test]
+#[should_panic(expected = "Vault below min_vault")]
+fn buyer_floor_blocks_delist_drain_relist() {
+    let mut c = with_starters();
+    as_("carol", N);
+    c.vault_deposit("0".into());
+    as_("alice", 1);
+    c.list("0".into(), U128(5 * N));
+    as_("alice", 0);
+    c.delist("0".into());
+    as_("alice", 1);
+    c.vault_withdraw("0".into(), None);
+    as_("alice", 1);
+    c.list("0".into(), U128(5 * N));
+    as_("dex", 5 * N);
+    c.buy("0".into(), Some(U128(N)));
+}
+
+#[test]
+#[should_panic(expected = "Deposit at least 0.01 NEAR")]
+fn dust_deposit_rejected() {
+    let mut c = with_starters();
+    as_("carol", 1);
+    c.vault_deposit("0".into());
 }

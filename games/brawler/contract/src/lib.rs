@@ -199,6 +199,7 @@ pub struct Monsters {
 }
 
 const VAULT_LOG: usize = 30;
+const MIN_DEPOSIT: u128 = 10_000_000_000_000_000_000_000; // 0.01 NEAR: ledger spam costs real money
 
 #[near(serializers = [borsh, json])]
 #[derive(Clone, Default)]
@@ -323,10 +324,12 @@ impl Monsters {
         self.listings.remove(&token_id);
     }
 
+    /// `min_vault`: buyer's floor on the vault balance, so a seller can't delist, drain, relist and front-run.
     #[payable]
-    pub fn buy(&mut self, token_id: String) {
+    pub fn buy(&mut self, token_id: String, min_vault: Option<U128>) {
         let buyer = env::predecessor_account_id();
         let m = self.get(&token_id);
+        require!(self.vault(&token_id).balance.0 >= min_vault.map_or(0, |v| v.0), "Vault below min_vault");
         let seller = self.owner_of(&token_id);
         let price = m.price.unwrap_or_else(|| env::panic_str("Not for sale"));
         require!(env::attached_deposit().as_yoctonear() == price, "Deposit must equal price");
@@ -391,7 +394,7 @@ impl Monsters {
     pub fn vault_deposit(&mut self, token_id: String) {
         self.owner_of(&token_id);
         let amount = env::attached_deposit().as_yoctonear();
-        require!(amount > 0, "Attach NEAR");
+        require!(amount >= MIN_DEPOSIT, "Deposit at least 0.01 NEAR");
         self.vault_note(&token_id, "deposit", &env::predecessor_account_id(), amount);
     }
 

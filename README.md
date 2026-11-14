@@ -133,6 +133,7 @@ Each monster is a NEP-171/177/181 NFT that does more than hold an image:
 | **Earns** | Rent accrues to the vault. The breeder earns 5% on every resale of a monster they bred (`buy_pays_seller_royalty_and_fee`). |
 | **Has a ledger** | `vault_of` returns balance, total earned, total paid out and the last 30 entries: `rent`, `deposit`, `withdraw`, `sale` (buyer, price), `transfer` (new holder), `returned`. |
 | **Is dynamic** | DNA is generated on-chain (`hatch_starters`, `breed` mixes the parents) and sets fight stats. Record, titles, loadout, lock and rental state change after mint. |
+| **Has a holder-only page** | Hub → **Holders** (`/holders`): opens only for accounts that own a monster (rented ones don't count), shows every vault you hold and withdraws each one. |
 | **Has a history view** | Monster page → Monster vault (earnings, payouts, holders) and Fight history; Account → Match history, `/replay/<id>`. |
 
 ### Transfer threat model: how a seller could try to keep value, and what stops it
@@ -149,6 +150,8 @@ Each monster is a NEP-171/177/181 NFT that does more than hold an image:
 | Double-rent | Rejected | `no_double_rent` |
 | Old holder withdraws the vault after selling | Withdraw checks the current owner | `old_holder_cannot_withdraw_after_transfer` |
 | Seller drains the vault while the buyer is paying for it | Vault is frozen while listed; a buy only works while listed | `listed_vault_is_frozen` |
+| Seller front-runs a buy: delist → withdraw → relist at the same price | `buy(token_id, min_vault)`: the buyer's floor on the vault balance, like slippage protection; the UI fills it from `vault_of` | `buyer_floor_blocks_delist_drain_relist` |
+| Spam 1-yocto deposits to push real entries out of the ledger | Minimum deposit 0.01 NEAR | `dust_deposit_rejected` |
 | A payout lands mid-sale and the seller keeps it | Deposits during the listing stay in the vault and go to the buyer | `vault_moves_with_sale_and_deposit_mid_sale_goes_to_buyer` |
 | Withdraw more than the vault holds | Rejected | `cannot_overdraw_vault` |
 | Rent paid to the owner's account, not the NFT | Net rent is credited to the vault | `rent_accrues_to_vault_and_holder_withdraws` |
@@ -167,7 +170,9 @@ Games track:
 NFTs track:
 
 - The vault is **contract storage keyed by token id**, not a separate sub-account per NFT. Same guarantees (money moves with the token, holder-only withdraw), fewer accounts.
-- **No holder-gated page.** Holder-only actions (withdraw, equip, list, rent, breed) are gated on-chain by ownership checks; the vault view is public by design so buyers can price it in.
+- **The holder page (`/holders`) is gated in the client** by an on-chain `monsters_of` ownership read; the money actions on it are enforced by the contract. No server-side signed-login gate.
+- **A `nft_transfer_call` receiver can withdraw during `nft_on_transfer` and then bounce the token.** Low risk: a hostile receiver could simply keep the token instead.
+- **Match winnings and tournament pots go to the owner's account**, not the vault. Only rent and deposits accrue to the NFT.
 
 ## Architecture
 
@@ -200,7 +205,7 @@ Deploy log and end-to-end transactions: [`contracts/DEPLOYMENTS.md`](contracts/D
 
 | Suite | Command | Covers | Last run (2026-11-14) |
 |---|---|---|---|
-| Monsters + skills contract | `cd games/brawler/contract && cargo test` | NEP-171/245, royalties, rentals, vaults, locks, transfer threat model | 62 passed |
+| Monsters + skills contract | `cd games/brawler/contract && cargo test` | NEP-171/245, royalties, rentals, vaults, locks, transfer threat model | 64 passed |
 | Platform contract | `cd contracts/platform && cargo test` | signed settle, replay protection, conservation of funds, order book, tournaments, locks | 62 passed |
 | Sim parity | `cargo test --workspace` | Rust referee matches the TS sim frame for frame (golden vectors) | |
 | Merchants and bots | `cd agents && npm test` | pricing rules, broke-merchant closing, bot brain | 7 passed |

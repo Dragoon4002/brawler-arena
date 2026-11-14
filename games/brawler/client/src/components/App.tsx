@@ -16,6 +16,7 @@ import { Breed } from '@/components/monsters/Breed.tsx';
 import { Collection } from '@/components/monsters/Collection.tsx';
 import { Customize } from '@/components/monsters/Customize.tsx';
 import { Detail } from '@/components/monsters/Detail.tsx';
+import { Holders } from '@/components/monsters/Holders.tsx';
 import { Play } from '@/components/Play.tsx';
 import { Lobby } from '@/components/rooms/Lobby.tsx';
 import { Watch } from '@/components/rooms/Watch.tsx';
@@ -59,6 +60,7 @@ function Routes() {
     : page === 'lobby' ? <Lobby />
     : page === 'collection' ? <Collection />
     : page === 'monster' && arg ? <Detail key={arg} id={arg} />
+    : page === 'holders' ? <Holders />
     : page === 'breed' ? <Breed />
     : page === 'customize' ? <Customize key={arg} id={arg} />
     : page === 'market' ? <Market />
