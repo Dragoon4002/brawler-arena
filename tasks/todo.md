@@ -39,7 +39,7 @@
 - [x] W2 UI screens (sonnet)
 - [x] W3 review (opus) + cargo test x2, tsc, npm test, demo check
 - [x] Review fixes: random void advance, lock lengths 5h/72h + 24h entry window, owed map, O(1) season end, tournament-only season wins, NEP-413 seat auth, 5 min no-show forfeit
-- [ ] Deploy monsters + arena v3 to testnet (fresh accounts), set MONSTERS_ID/VITE_MONSTERS_ID (ask first)
+- [x] Deploy monsters + arena v3 to testnet (seed 1 NEAR, treasury 4 NEAR); smoke: hatch, create+cancel lock/unlock ok
 
 ## Review (economy)
 - arena cargo test 46/46, monsters 44/44, both wasm 0 warnings. tsc clean, npm test 30/30, vite build ok, server boots.

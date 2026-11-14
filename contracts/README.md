@@ -2,7 +2,7 @@
 
 Staked 1v1 duels with live pari-mutuel betting. Source: `arena/src/lib.rs`, tests: `arena/src/tests.rs`.
 
-Testnet: `brawler-arena-ed5da3.testnet` (owner + treasury), referee `brawler-ref-ed5da3.testnet`.
+Testnet: arena `brawler-arena-v3-ed5da3.testnet` (self-owned, treasury), monsters `brawler-monsters-ed5da3.testnet` (self-owned), referee `brawler-ref-ed5da3.testnet`.
 
 ```sh
 cd arena

@@ -3,7 +3,7 @@ import { useNearWallet } from 'near-connect-hooks';
 import { nearToYocto, yoctoToNear } from 'near-api-js';
 import { DEMO, DEMO_ACCOUNT, demoArena } from './demo.ts';
 
-export const CONTRACT_ID: string = import.meta.env?.VITE_CONTRACT_ID ?? 'brawler-arena-v2-ed5da3.testnet'; // testnet deploy
+export const CONTRACT_ID: string = import.meta.env?.VITE_CONTRACT_ID ?? 'brawler-arena-v3-ed5da3.testnet'; // testnet deploy
 const GAS = '30000000000000';
 const GAS_X = '100000000000000'; // cross-contract (monster lock) calls
 const GAS_T = '150000000000000'; // enter_tournament (contract requires 150 Tgas)
