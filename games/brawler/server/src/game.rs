@@ -6,7 +6,7 @@ use crate::{App, ChainMatch};
 use brawler_sim::genes::Dna;
 use serde_json::{Value, json};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const FORFEIT: Duration = Duration::from_secs(30);
 const NO_SHOW: Duration = Duration::from_secs(5 * 60);
@@ -148,6 +148,22 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
     }
     r.status = Status::Done;
     r.winner = winner;
+    if let [a, b] = &r.seats[..] {
+        let p = |s: &crate::room::Seat| crate::history::Player {
+            account: s.account.clone(),
+            name: s.name.clone(),
+        };
+        app.history.push(crate::history::Rec {
+            at: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |d| d.as_millis() as u64),
+            match_id: r.match_id,
+            stake: r.stake.clone(),
+            winner,
+            reason: reason.into(),
+            players: [p(a), p(b)],
+        });
+    }
     if reason != "ko"
         && let Some(rf) = &r.referee
     {

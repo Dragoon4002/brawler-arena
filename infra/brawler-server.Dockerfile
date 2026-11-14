@@ -12,7 +12,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
 COPY --from=build /brawler-server /usr/local/bin/
-ENV PORT=8787
+RUN mkdir /data && chown nobody /data
+ENV PORT=8787 HISTORY_FILE=/data/history.jsonl
 EXPOSE 8787
 USER nobody
 CMD ["brawler-server"]

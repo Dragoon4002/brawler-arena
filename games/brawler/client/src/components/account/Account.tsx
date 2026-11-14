@@ -17,7 +17,7 @@ export function Account() {
     if (!signedAccountId) return setBal('');
     getBalance(signedAccountId).then((y: bigint) => setBal(Number(yoctoToNear(y)).toFixed(3))).catch(() => setBal('unavailable'));
   }, [signedAccountId, getBalance]);
-  const fights = useFights(signedAccountId);
+  const { fights, loading: fl } = useFights(signedAccountId, true);
   const api = useMonsters();
   const [owed, setOwed] = useState('0');
   const [funds, setFunds] = useState(false);
@@ -46,7 +46,7 @@ export function Account() {
       </div>
       {funds && <FundsDialog onClose={() => setFunds(false)} />}
       <Claims />
-      <History fights={fights} />
+      <History fights={fights} loading={fl} />
       <SoundSettings />
     </>
   );

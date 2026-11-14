@@ -13,14 +13,16 @@ type Arena = ReturnType<typeof useArena>;
 const BUSY = 'Monster busy or unavailable. Stake refunded.';
 const chainId = (m: Monster) => ('owner' in m ? m.id : undefined);
 
+const NEED_WALLET = 'Connect your NEAR wallet to play.';
+
 export async function joinRoom(arena: Arena, code: string, mon: Monster, say: (t: string) => void) {
+  if (!arena.account) { say(NEED_WALLET); return arena.signIn(); }
   say('Looking up room…');
   const r = await peekRoom(code);
   if (!r) return say('Room not found.');
   if (r.status !== 'waiting') return say('That fight already started. You can watch it from the lobby.');
   if (r.matchId !== null) {
     if (!arena.ready) return say('Betting contract not configured on this build.');
-    if (!arena.account) { say('Connect your NEAR wallet to join a staked or bettable room.'); return arena.signIn(); }
     if (r.players[0]?.account === arena.account) return say('You are the host of that room.');
     say(r.stake === '0' ? 'Confirm the join in your wallet…' : `Joining stakes ${fmt(r.stake)} NEAR from your balance (matches the host; winner takes both). Confirm in your wallet…`);
     if ((await arena.joinMatch(r.matchId, r.stake, chainId(mon))) !== true && !DEMO) return say(BUSY); // demo returns null
@@ -39,13 +41,13 @@ export function CreateRoom({ mon }: { mon: Monster }) {
   const onChain = bettable || Number(stake) > 0;
 
   const create = async () => {
+    if (!arena.account) { setMsg(NEED_WALLET); return arena.signIn(); }
     setBusy(true); setMsg('');
     try {
       let matchId: number | null = null;
       const stakeY = Number(stake) > 0 ? toYocto(stake) : '0';
       if (onChain) {
         if (!arena.ready) throw new Error('Betting contract not configured on this build.');
-        if (!arena.account) { setMsg('Connect your NEAR wallet first.'); await arena.signIn(); return; }
         setMsg('Confirm in your wallet…');
         matchId = await arena.createMatch(bettable, stakeY, chainId(mon));
         if (typeof matchId !== 'number' || !Number.isInteger(matchId)) { setMsg(BUSY); return; }
@@ -83,7 +85,7 @@ export function CreateRoom({ mon }: { mon: Monster }) {
           <dt>Room</dt><dd>{pub ? 'Listed in lobby' : view ? 'Code only · watchable' : 'Code only'}</dd>
           <dt>Spectator bets</dt><dd>{bettable ? 'On' : 'Off'}</dd>
         </dl>
-        <button className="btn big" disabled={busy} onClick={create}><span><Ico n={onChain ? 'coin' : 'icon-check'} />{onChain ? 'Create and stake' : 'Create room'}</span></button>
+        <button className="btn big" disabled={busy} onClick={create}><span><Ico n={!arena.account ? 'icon-wallet' : onChain ? 'coin' : 'icon-check'} />{!arena.account ? 'Connect wallet' : onChain ? 'Create and stake' : 'Create room'}</span></button>
         {onChain && <p className="note">Needs a wallet signature{st ? `; ${stake} NEAR is held until the fight ends` : ''}.</p>}
         {msg && <p className="note" role="status">{msg}</p>}
       </aside>

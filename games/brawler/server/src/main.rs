@@ -1,4 +1,4 @@
-//! Brawler ws server. Env: PORT, NEAR_RPC, CONTRACT_ID, MONSTERS_ID, REFEREE_ID, REFEREE_KEY.
+//! Brawler ws server. Env: PORT, NEAR_RPC, CONTRACT_ID, MONSTERS_ID, REFEREE_ID, REFEREE_KEY, HISTORY_FILE.
 use near_svc::Near;
 use std::{env::var, sync::Arc};
 
@@ -16,7 +16,12 @@ async fn main() {
             "!!! CONTRACT_ID set but MONSTERS_ID empty: matches w/ on-chain monsters will fail to start"
         );
     }
-    let app = brawler_server::App::new(Arc::new(Near::new(&rpc, contract, referee)), monsters);
+    let history = var("HISTORY_FILE").unwrap_or_else(|_| "history.jsonl".into());
+    let app = brawler_server::App::with_history(
+        Arc::new(Near::new(&rpc, contract, referee)),
+        monsters,
+        history,
+    );
     let port = var("PORT").unwrap_or_else(|_| "8787".into());
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await

@@ -10,4 +10,8 @@ services:
       MONSTERS_ID: ${MONSTERS_ID:-}
       REFEREE_ID: ${REFEREE_ID:-}
       REFEREE_KEY: ${REFEREE_KEY:-}
+    volumes: [brawler_data:/data]
     restart: unless-stopped
+
+volumes:
+  brawler_data:

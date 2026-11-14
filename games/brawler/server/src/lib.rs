@@ -25,6 +25,7 @@
 //!   restarts (fresh `start`/`spec`). Opponent gone -> {t:'left'}; else rejected with `error`.
 
 mod game;
+pub mod history;
 mod protocol;
 pub mod referee;
 mod room;
@@ -43,6 +44,7 @@ const GAME: &str = "brawler";
 
 pub struct App {
     shared: Mutex<Shared>,
+    pub history: history::History,
     near: Arc<Near>,
     /// Monsters NFT contract; empty = no on-chain DNA lookups.
     monsters: String,
@@ -64,8 +66,13 @@ struct ChainMatch {
 
 impl App {
     pub fn new(near: Arc<Near>, monsters: String) -> Arc<Self> {
+        Self::with_history(near, monsters, String::new())
+    }
+
+    pub fn with_history(near: Arc<Near>, monsters: String, history_file: String) -> Arc<Self> {
         Arc::new(App {
             shared: Mutex::default(),
+            history: history::History::load(history_file),
             near,
             monsters,
             conn_ids: AtomicU64::new(1),
@@ -104,5 +111,18 @@ pub fn router(app: Arc<App>) -> Router {
             game::tick(&ticker);
         }
     });
-    Router::new().fallback(session::ws_handler).with_state(app)
+    Router::new()
+        .route("/history/{account}", axum::routing::get(player_history))
+        .fallback(session::ws_handler)
+        .with_state(app)
+}
+
+async fn player_history(
+    axum::extract::State(app): axum::extract::State<Arc<App>>,
+    axum::extract::Path(account): axum::extract::Path<String>,
+) -> impl axum::response::IntoResponse {
+    (
+        [(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
+        axum::Json(app.history.of(&account, 200)),
+    )
 }

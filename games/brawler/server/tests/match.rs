@@ -83,7 +83,7 @@ async fn seated(url: &str, run: &Value, match_id: Value) -> (Tx, Rx, Tx, Rx, Val
     let (b, mut br) = client(url).await;
     until(&mut ar, "hello").await;
     until(&mut br, "hello").await;
-    a.send(json!({ "t": "host", "name": "A", "dna": run["dna"][0], "stage": run["stage"], "pub": true, "matchId": match_id, "stake": "5" }))
+    a.send(json!({ "account": "a.testnet", "t": "host", "name": "A", "dna": run["dna"][0], "stage": run["stage"], "pub": true, "matchId": match_id, "stake": "5" }))
         .unwrap();
     let code = until(&mut ar, "room").await["code"].clone();
     let rs = until(&mut ar, "roomstate").await;
@@ -93,7 +93,7 @@ async fn seated(url: &str, run: &Value, match_id: Value) -> (Tx, Rx, Tx, Rx, Val
     );
     assert_eq!(rs["seats"].as_array().unwrap().len(), 1);
     until(&mut ar, "chatlog").await;
-    b.send(json!({ "t": "join", "code": code, "name": "B", "dna": run["dna"][1] }))
+    b.send(json!({ "account": "b.testnet", "t": "join", "code": code, "name": "B", "dna": run["dna"][1] }))
         .unwrap();
     assert_eq!(until(&mut br, "room").await["seat"], 1);
     until(&mut br, "chatlog").await;
@@ -135,6 +135,44 @@ async fn free_room_to_ko() {
     let run = golden();
     let (a, mut ar, b, mut br, _) = pair(&url, &run, Value::Null).await;
     play_ko(&run, &a, &mut ar, &b, &mut br).await;
+    let h = http_get(&url, "/history/b.testnet").await;
+    assert_eq!(h.as_array().unwrap().len(), 1);
+    assert_eq!(h[0]["players"][0]["account"], "a.testnet");
+    assert_eq!(h[0]["players"][1]["account"], "b.testnet");
+    assert_eq!(h[0]["winner"], run["winner"]);
+    assert_eq!(h[0]["stake"], "5");
+    assert!(
+        http_get(&url, "/history/nobody.testnet")
+            .await
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+}
+
+async fn http_get(ws_url: &str, path: &str) -> Value {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let host = ws_url.trim_start_matches("ws://");
+    let mut s = tokio::net::TcpStream::connect(host).await.unwrap();
+    s.write_all(
+        format!("GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n").as_bytes(),
+    )
+    .await
+    .unwrap();
+    let mut buf = String::new();
+    s.read_to_string(&mut buf).await.unwrap();
+    serde_json::from_str(buf.split("\r\n\r\n").nth(1).unwrap()).unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn play_needs_wallet() {
+    let url = serve().await;
+    let (a, mut ar) = client(&url).await;
+    a.send(json!({ "t": "host", "name": "A" })).unwrap();
+    assert_eq!(err(&mut ar).await, "Connect your NEAR wallet to play");
+    a.send(json!({ "t": "join", "code": "ABCD", "name": "A" }))
+        .unwrap();
+    assert_eq!(err(&mut ar).await, "Connect your NEAR wallet to play");
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -174,7 +212,7 @@ async fn on_chain_room_rejected_without_contract() {
     let run = golden();
     let (a, mut ar) = client(&url).await;
     until(&mut ar, "hello").await;
-    a.send(json!({ "t": "host", "name": "A", "dna": run["dna"][0], "stage": run["stage"], "pub": true, "matchId": 7 }))
+    a.send(json!({ "account": "a.testnet", "t": "host", "name": "A", "dna": run["dna"][0], "stage": run["stage"], "pub": true, "matchId": 7 }))
         .unwrap();
     let msg = until(&mut ar, "error").await["msg"].clone();
     assert!(
@@ -280,12 +318,13 @@ async fn begin_guards() {
     let url = serve().await;
     let run = golden();
     let (a, mut ar) = client(&url).await;
-    a.send(json!({ "t": "host", "name": "A" })).unwrap();
+    a.send(json!({ "account": "a.testnet", "t": "host", "name": "A" }))
+        .unwrap();
     let code = until(&mut ar, "room").await["code"].clone();
     a.send(json!({ "t": "begin" })).unwrap();
     assert_eq!(err(&mut ar).await, "Waiting for a challenger");
     let (b, mut br) = client(&url).await;
-    b.send(json!({ "t": "join", "code": code, "dna": run["dna"][1] }))
+    b.send(json!({ "account": "b.testnet", "t": "join", "code": code, "dna": run["dna"][1] }))
         .unwrap();
     until(&mut br, "room").await;
     b.send(json!({ "t": "begin" })).unwrap();
@@ -302,7 +341,7 @@ async fn guest_leave_frees_seat() {
     assert_eq!(rs["status"], "waiting");
     assert_eq!(rs["seats"].as_array().unwrap().len(), 1);
     let (c, mut cr) = client(&url).await;
-    c.send(json!({ "t": "join", "code": code, "name": "C" }))
+    c.send(json!({ "account": "c.testnet", "t": "join", "code": code, "name": "C" }))
         .unwrap();
     assert_eq!(until(&mut cr, "room").await["seat"], 1);
     assert_eq!(until(&mut ar, "roomstate").await["seats"][1]["name"], "C");

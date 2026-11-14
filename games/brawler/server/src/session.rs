@@ -17,6 +17,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Notify, mpsc};
 
 /// Netplay/signaling messages forwarded verbatim to the other seat.
+const NO_WALLET: &str = "Connect your NEAR wallet to play";
 const RELAYED: [&str; 6] = ["in", "hash", "sdp", "ice", "go", "pick"];
 const MAX_MSG: usize = 16 * 1024;
 const TAPE_BATCH: usize = 600;
@@ -196,6 +197,9 @@ impl Session {
     async fn host(&mut self, m: &Value) -> Reply {
         let match_id = int_id(&m["matchId"]);
         let account = str_of(&m["account"], 64);
+        if account.is_empty() {
+            return Err(NO_WALLET);
+        }
         if match_id.is_some() && !self.app.on_chain() {
             return Err(
                 "This server has no contract configured; cancel the match and create a free room",
@@ -253,6 +257,9 @@ impl Session {
     async fn join(&mut self, m: &Value) -> Reply {
         let code = str_of(&m["code"], 8).to_uppercase();
         let account = str_of(&m["account"], 64);
+        if account.is_empty() {
+            return Err(NO_WALLET);
+        }
         let (at, match_id) = self
             .app
             .lock()

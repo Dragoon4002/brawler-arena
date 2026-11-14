@@ -34,14 +34,17 @@ export function FundsDialog({ onClose }: { onClose: () => void }) {
         <button type="button" className="btn" onClick={() => signIn()}><span><Ico n="icon-wallet" />Connect wallet</span></button>
       ) : (
         <>
-          <dl className="kv">
+          <dl className="kv funds-kv">
             <dt>Game balance</dt><dd className="row-ico"><Ico n="coin-stack" />{balance === null ? 'loading…' : `${fmt(balance)} NEAR`}</dd>
             <dt>Wallet</dt><dd className="row-ico"><Ico n="coin" />{wallet === null ? 'loading…' : `${fmt(wallet)} NEAR`}</dd>
           </dl>
           {DEMO ? <p className="note">Demo mode: deposits and withdrawals are off.</p> : (
             <>
-              <label className="row">Amount <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} aria-label="Amount in NEAR" style={{ width: 150 }} /> NEAR</label>
-              <div className="row">
+              <label className="funds-amount">
+                <span>Amount</span>
+                <span className="stake-input"><input type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.0" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={busy} aria-label="Amount in NEAR" /><b>NEAR</b></span>
+              </label>
+              <div className="funds-actions">
                 <button type="button" className="btn" disabled={busy} onClick={() => run('Deposit')}><span><Ico n="coin" />Deposit</span></button>
                 <button type="button" className="btn ghost" disabled={busy} onClick={() => run('Withdraw')}><span><Ico n="coin-stack" />Withdraw</span></button>
               </div>

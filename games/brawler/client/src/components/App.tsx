@@ -8,6 +8,7 @@ import { DemoIndex } from '@/components/demo/DemoIndex.tsx';
 import { MarketSim } from '@/components/demo/MarketSim.tsx';
 import { Market } from '@/components/economy/Market.tsx';
 import { Leaderboard } from '@/components/economy/Leaderboard.tsx';
+import { Profile } from '@/components/account/Profile.tsx';
 import { TournamentPage } from '@/components/economy/TournamentPage.tsx';
 import { Tournaments } from '@/components/economy/Tournaments.tsx';
 import { GodotPage } from '@/components/GodotPage.tsx';
@@ -57,6 +58,7 @@ function Routes() {
     : page === 'breed' ? <Breed />
     : page === 'market' ? <Market />
     : page === 'leaderboard' ? <Leaderboard />
+    : page === 'player' && arg ? <Profile key={arg} account={decodeURIComponent(arg)} />
     : page === 'tournaments' ? <Tournaments />
     : page === 'tournament' && arg ? <TournamentPage id={+arg} />
     : page === 'account' ? <Account />
