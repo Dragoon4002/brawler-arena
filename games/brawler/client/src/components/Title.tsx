@@ -5,22 +5,14 @@ import { monsters } from '@/lib/store.ts';
 import { Ico, Logo, TitleArt } from '@/components/ui.tsx';
 import { FundsDialog } from '@/components/account/Funds.tsx';
 
-function HubBtn({ href, label, icon, badge, active, soon }: { href: string; label: string; icon: string; badge?: number; active?: boolean; soon?: boolean }) {
+function HubBtn({ href, label, icon, badge, active }: { href: string; label: string; icon: string; badge?: number; active?: boolean }) {
   return (
     <div className="hub-slot">
-      {soon ? (
-        <span className="hub-btn soon" aria-disabled="true" title={`${label}: coming soon`}>
-          <Ico n={icon} className="hub-btn-ico" />
-          <span>{label}</span>
-          <b className="hub-soon">Soon</b>
-        </span>
-      ) : (
-        <a className="hub-btn" href={href} aria-current={active ? 'page' : undefined}>
-          <Ico n={icon} className="hub-btn-ico" />
-          <span>{label}</span>
-          {badge ? <b className="hub-badge">{badge}</b> : null}
-        </a>
-      )}
+      <a className="hub-btn" href={href} aria-current={active ? 'page' : undefined}>
+        <Ico n={icon} className="hub-btn-ico" />
+        <span>{label}</span>
+        {badge ? <b className="hub-badge">{badge}</b> : null}
+      </a>
     </div>
   );
 }
@@ -51,8 +43,8 @@ export function Title({ page, children }: { page?: string; children?: React.Reac
         <HubBtn href="/collection" label="Monsters" icon="icon-monster" badge={list.length} active={page === 'collection'} />
         <HubBtn href="/customize" label="Skills" icon="/skills/Power.svg" active={page === 'customize'} />
         <HubBtn href="/account" label="Account" icon="icon-wallet" active={page === 'account'} />
-        <HubBtn href="/breed" label="Breed" icon="icon-breed" soon />
-        <HubBtn href="/market" label="Market" icon="coin-stack" soon />
+        <HubBtn href="/breed" label="Breed" icon="icon-breed" active={page === 'breed'} />
+        <HubBtn href="/market" label="Market" icon="coin-stack" active={page === 'market'} />
       </nav>
 
       <nav className="hub-side right" aria-label="Online">

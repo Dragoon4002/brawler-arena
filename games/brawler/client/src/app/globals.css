@@ -550,8 +550,6 @@ kbd { font: 700 12px var(--font-body); padding: 1px 6px; border-radius: 5px; bac
 @media (prefers-reduced-motion: reduce) { .room-wait { animation: none; } .odds-bar > span { transition: none; } }
 input[type='number'] { appearance: textfield; -moz-appearance: textfield; }
 input[type='number']::-webkit-inner-spin-button, input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.hub-btn.soon { cursor: not-allowed; filter: grayscale(0.6) brightness(0.75); }
-.hub-soon { position: absolute; top: -8px; right: -12px; padding: 2px 8px; background: var(--gloss), var(--gold); color: var(--ink); border: 2px solid var(--ink); border-radius: 99px; font-size: 12px; text-shadow: none; transform: rotate(8deg); }
 .lb-row .chip.on { background: var(--gold); color: var(--ink); }
 .end-actions { display: grid; gap: 12px; width: min(100%, 340px); margin-inline: auto; }
 .end-actions .btn { width: 100%; }
