@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { lookOf } from '@/lib/genes.ts';
 import { DEMO, DEMO_ROOMS, demoChat, demoSettle } from '@/lib/demo.ts';
-import { fmt, slip, toYocto, useArena, type FeedItem, type Limits, type LotView, type MatchView, type PositionView } from '@/lib/near.ts';
+import { fmt, toYocto, useArena, type Book, type FillView, type Limits, type MatchView, type OrderView, type PositionView } from '@/lib/near.ts';
+import { UNIT, cost, sweep } from '@/lib/market.ts';
 import { startBotFight, startSpectate, type ChatLine, type RoomState } from '@/lib/session.ts';
 import { errText, signed } from '@/lib/format.ts';
 import { asset, BotTag, Ico, Portrait } from '@/components/ui.tsx';
@@ -12,6 +13,8 @@ type Player = { name: string; account: string; dna: any };
 
 const col = (p?: Player) => (p?.dna ? lookOf(p.dna).body : 'var(--ember)'); // fighter's HUD colour
 const tint = (p?: Player) => ({ '--c': col(p) } as React.CSSProperties);
+const pc = (bps: number) => `${+(bps / 100).toFixed(2)}%`;
+const win = (qty: number) => BigInt(qty) * UNIT; // what `qty` shares pay if their fighter wins
 
 export function Watch({ code }: { code: string }) {
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -26,16 +29,18 @@ export function Watch({ code }: { code: string }) {
   const [pos, setPos] = useState<PositionView | null>(null);
   const [due, setDue] = useState(0n);
   const [hist, setHist] = useState<[number, number][]>([]);
-  const [feed, setFeed] = useState<FeedItem[]>([]);
-  const [lots, setLots] = useState<LotView[]>([]);
+  const [feed, setFeed] = useState<FillView[]>([]);
+  const [orders, setOrders] = useState<OrderView[]>([]);
+  const [book, setBook] = useState<Book>([[], []]);
   const [limits, setLimits] = useState<Limits | null>(null);
   const [tick, setTick] = useState(0); // bump to re-poll right away (after a trade)
   const [msg, setMsg] = useState('');
-  const [side, setSide] = useState(0);
   const [amount, setAmount] = useState('0.1');
-  const [quote, setQuote] = useState<string | null>(null);
-  const [pops, setPops] = useState<FeedItem[]>([]); // new bets, shown over the fight for a few seconds
-  const seen = useRef<number | null>(null); // newest feed id already shown (null until first poll, so old bets don't flood in)
+  const [adv, setAdv] = useState(false);
+  const [side, setSide] = useState(0);
+  const [pricePct, setPricePct] = useState('50');
+  const [pops, setPops] = useState<FillView[]>([]); // new fills, shown over the fight for a few seconds
+  const seen = useRef<number | null>(null); // newest fill id already shown (null until first poll, so old fills don't flood in)
 
   useEffect(() => {
     const hooks = {
@@ -56,16 +61,16 @@ export function Watch({ code }: { code: string }) {
   }, [code]);
 
   const matchId: number | null = spec?.matchId ?? rs?.matchId ?? null;
-  useEffect(() => { if (DEMO && over) demoSettle(matchId, over.winner); }, [over]); // demo: the fight result settles the in-browser market
+  useEffect(() => { if (DEMO && over) demoSettle(matchId, over.winner); }, [over]); // demo: the fight result settles the in-browser book
   useEffect(() => {
     if (matchId === null || !arena.ready) return;
     let dead = false;
     const me = arena.account;
     const poll = async () => {
       try {
-        const [m, h, f, p, l, d] = await Promise.all([arena.getMatch(matchId), arena.getPrices(matchId), arena.getFeed(matchId), me ? arena.getPosition(matchId, me) : null,
-          me ? arena.getLots(matchId, me) : [], me ? arena.claimable(matchId, me) : '0']);
-        if (!dead) { setMatch(m); setHist(h); setFeed(f); setPos(p); setLots(l); setDue(BigInt(d)); }
+        const [m, h, f, b, p, o, d] = await Promise.all([arena.getMatch(matchId), arena.getPrices(matchId), arena.getFills(matchId), arena.getBook(matchId),
+          me ? arena.getPosition(matchId, me) : null, me ? arena.getOrders(matchId, me) : [], me ? arena.claimable(matchId, me) : '0']);
+        if (!dead) { setMatch(m); setHist(h); setFeed(f); setBook(b); setPos(p); setOrders(o); setDue(BigInt(d)); }
       } catch { /* RPC hiccup; next poll */ }
     };
     poll();
@@ -89,50 +94,45 @@ export function Watch({ code }: { code: string }) {
   const name = (i?: number) => (i === undefined ? '' : players[i]?.name ?? '?');
   const mine = !!arena.account && players.some((p) => p.account === arena.account);
   const bettable = !!(spec?.bettable ?? rs?.bettable);
-  const canTrade = bettable && match?.status === 'live' && !over && !mine;
-  const bps = match?.price_bps ?? 5000, p0 = bps / 1e4;
-  const series = hist.length ? hist.map(([, b]) => b / 1e4) : [0.5];
-  if (match?.status === 'live') series.push(p0); // extend the line to now
-  const shares = (pos?.shares ?? ['0', '0']).map((s) => BigInt(s));
-  const cost = pos ? BigInt(pos.paid) : 0n; // in the market (after fees), locked until the result
+  const open = match?.status === 'live' || match?.status === 'open';
+  const canTrade = bettable && open && !over && !mine;
+  const ask = (s: number) => (book[1 - s][0] ? 10_000 - book[1 - s][0][0] : null); // cheapest price to back fighter s now
+  const bid0 = book[0][0]?.[0], ask0 = ask(0);
+  const bps = match?.fills ? match.price_bps : bid0 && ask0 ? Math.round((bid0 + ask0) / 2) : 5000;
+  const series = hist.length ? hist.map(([, b]) => b / 1e4) : [bps / 1e4];
+  if (open) series.push(bps / 1e4); // extend the line to now
   const settledW = match?.status === 'settled' ? match.winner : null;
-  const value = settledW !== null ? shares[settledW] // final: winning shares pay 1 NEAR each
-    : match?.status === 'refund' ? (cost > 0n ? cost : 0n)
-    : (shares[0] * BigInt(bps) + shares[1] * BigInt(10000 - bps)) / 10000n; // marked at the current price
+  const paid = pos ? BigInt(pos.paid[0]) + BigInt(pos.paid[1]) : 0n;
 
   const yocto = (a: string) => { try { const y = BigInt(toYocto(a.trim())); return y > 0n ? y : null; } catch { return null; } };
-  useEffect(() => { // live quote for the bet window
-    const y = yocto(amount);
-    if (matchId === null || !canTrade || !y) return setQuote(null);
-    let dead = false;
-    const t = setTimeout(() => arena.quoteBuy(matchId, side, y.toString()).then((q) => !dead && setQuote(q), () => !dead && setQuote(null)), 250);
-    return () => { dead = true; clearTimeout(t); };
-  }, [matchId, side, amount, canTrade, bps]);
+  const budget = yocto(amount);
+  const quick = [0, 1].map((s) => (budget ? sweep(book, s, budget) : null));
+  const advPrice = Math.round(Number(pricePct) * 100), advQty = budget && advPrice >= 1 && advPrice <= 9999 ? Number(budget / cost(advPrice, 1)) : 0;
 
-  // mirrors contract `buy` checks so wallet opens only for landable trade
-  const trade = async () => {
+  // mirrors contract `place_order` checks so the wallet opens only for a landable order
+  const place = async (s: number, price: number, qty: number) => {
     if (!arena.account) { setMsg('Connect your wallet, then trade.'); return arena.signIn(); }
-    const y = yocto(amount);
-    if (!y) return setMsg('Enter an amount in NEAR, like 0.5.');
-    if (limits && y < BigInt(limits.min_bet)) return setMsg(`Minimum trade is ${fmt(limits.min_bet)} NEAR.`);
-    if (limits && y > BigInt(limits.max_bet)) return setMsg(`Maximum trade is ${fmt(limits.max_bet)} NEAR.`);
+    if (!budget) return setMsg('Enter an amount in NEAR, like 0.5.');
+    if (!(price >= 1 && price <= 9999)) return setMsg('Price must be between 0.01% and 99.99%.');
+    if (qty < 1) return setMsg(`Too little for one share at ${pc(price)} (${fmt(cost(price, 1))} NEAR).`);
+    if (limits && cost(price, qty) > BigInt(limits.max_bet)) return setMsg(`Maximum order is ${fmt(limits.max_bet)} NEAR.`);
     try {
-      const q = await arena.quoteBuy(matchId!, side, y.toString());
-      setMsg(`Confirm in your wallet: ≈${fmt(q)} ${name(side)} shares.`);
-      await arena.buy(matchId!, side, y.toString(), slip(q), { card: side, dir: 'long' });
-      setMsg(`Bought ${fmt(q)} ${name(side)} shares.`); setTick((t) => t + 1);
+      setMsg(`Confirm in your wallet: ${qty} ${name(s)} shares at up to ${pc(price)}.`);
+      const r = await arena.placeOrder(matchId!, s, price, qty);
+      setMsg(r.filled === qty ? `Bought ${qty} ${name(s)} shares.` : `Bought ${r.filled}; ${qty - r.filled} waiting at ${pc(price)} for a seller.`);
+      setTick((t) => t + 1);
     } catch (e) { setMsg(errText(e)); }
   };
-  const claim = async () => {
-    try { setMsg('Claiming…'); await arena.claim(matchId!); setMsg('Added to your balance.'); setTick((t) => t + 1); } catch (e) { setMsg(errText(e)); }
+  const act = async (f: () => Promise<unknown>, ok: string) => {
+    try { setMsg('Confirm in your wallet…'); await f(); setMsg(ok); setTick((t) => t + 1); } catch (e) { setMsg(errText(e)); }
   };
 
   const market = bettable && matchId !== null;
-  const note = !spec && !rs ? null : !market ? 'Betting needs a staked room with spectator bets on. This one is chat only.'
+  const note = !spec && !rs ? null : !market ? 'Spectator bets are off in this room. Chat only.'
     : mine ? 'You are fighting in this match, so its market is hidden from you.' : !arena.ready ? 'Betting contract not configured on this build.' : null;
-  const verb = (f: FeedItem) => f.kind === 'buy' ? `backed ${name(f.side)}` : f.kind === 'payout' ? 'collected winnings' : 'got a refund';
-  const who = (f: FeedItem) => (f.who === arena.account ? 'You' : f.who.replace(/\.testnet$/, ''));
-  const pct = [Math.round(p0 * 100), 100 - Math.round(p0 * 100)];
+  const who = (a: string) => (a === arena.account ? 'You' : a.replace(/\.testnet$/, ''));
+  const pct = [Math.round(bps / 100), 100 - Math.round(bps / 100)];
+  const lead = pct[0] >= pct[1] ? 0 : 1;
   const colors = { '--c0': col(players[0]), '--c1': col(players[1]) } as React.CSSProperties;
 
   return (
@@ -140,7 +140,7 @@ export function Watch({ code }: { code: string }) {
       <header className="watch-top">
         <a className="btn ghost watch-back" href="/lobby"><span><Ico n="icon-back" />Lobby</span></a>
         <div className="wwin" aria-label="Who will win?">
-          <h1>Who will win?</h1>
+          <h1>{market && players[lead] ? `${name(lead)} wins @ ${pct[lead]}%` : 'Who will win?'}</h1>
           <div className="wwin-row">
             {[0, 1].map((i) => (
               <div key={i} className={`wwin-side s${i}`} style={tint(players[i])}>
@@ -162,10 +162,10 @@ export function Watch({ code }: { code: string }) {
 
       <main className="watch-stage">
         <div className="watch-canvas"><canvas ref={canvas} aria-label="Fight arena" /></div>
-        {[0, 1].map((s) => pops.some((f) => (f.side ?? 0) === s) && ( // new bets pop up over the fight, on the backed fighter's side
+        {[0, 1].map((s) => pops.some((f) => f.side === s) && ( // new fills pop up over the fight, on the backed fighter's side
           <ul key={s} className={`bet-pops ${s ? 'right' : 'left'}`} aria-live="polite" aria-label="New bets">
-            {pops.filter((f) => (f.side ?? 0) === s).map((f) => (
-              <li key={f.id} className="bet-pop" style={tint(f.side === undefined ? undefined : players[f.side])}><b>{who(f)}</b> {verb(f)} <b>{fmt(f.near)} NEAR</b></li>
+            {pops.filter((f) => f.side === s).map((f) => (
+              <li key={f.id} className="bet-pop" style={tint(players[f.side])}><b>{who(f.taker)}</b> backed {name(f.side)} <b>{fmt(cost(f.price_bps, f.qty))} NEAR</b> @ {pc(f.price_bps)}</li>
             ))}
           </ul>
         ))}
@@ -174,45 +174,73 @@ export function Watch({ code }: { code: string }) {
 
       <aside className="watch-side">
         {note ? <section className="slab bet"><h3 className="row-ico"><Ico n="icon-bet" />Betting</h3><p className="note">{note}</p></section> : spec && (
-          <section className="slab bet" aria-label="Place a bet">
-            <h3 className="row-ico"><Ico n="icon-bet" />Place a bet</h3>
-            <fieldset className="side-pick" disabled={!canTrade}>
-              <legend className="note">Back a fighter</legend>
-              {[0, 1].map((i) => (
-                <label key={i} style={tint(players[i])}>
-                  <input type="radio" name="side" checked={side === i} onChange={() => setSide(i)} />
-                  <b>{name(i)}</b><span>{pct[i]}¢</span>
-                </label>
-              ))}
-            </fieldset>
+          <section className="slab bet" aria-label="Back a fighter">
+            <h3 className="row-ico"><Ico n="icon-bet" />Back a fighter</h3>
             <label className="bet-amt"><span>Amount</span><input type="number" min="0.01" step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} disabled={!canTrade} /><b>NEAR</b></label>
-            <p className="note bet-quote" aria-live="polite">{quote ? <>≈ <b>{fmt(quote)}</b> shares · pays <b>{fmt(quote)} NEAR</b> if {name(side)} wins</> : canTrade ? 'Enter an amount to see the quote.' : over ? 'Betting closed.' : 'Market opens when the fight goes live.'}</p>
-            <button type="button" className="btn" disabled={!canTrade} onClick={trade}><span><Ico n="coin" />Buy {name(side)}</span></button>
+            {!adv && <>
+              <div className="side-pick">
+                {[0, 1].map((s) => (
+                  <button key={s} type="button" className="btn" style={tint(players[s])} disabled={!canTrade || !quick[s]} onClick={() => quick[s] && place(s, quick[s]!.price, quick[s]!.qty)}>
+                    <span>Back {name(s)}{ask(s) !== null && ` @ ${pc(ask(s)!)}`}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="note bet-quote" aria-live="polite">
+                {!canTrade ? (over || !open ? 'Betting closed.' : 'Betting opens with the room.')
+                  : quick[side] ?? quick[1 - side] ? [0, 1].filter((s) => quick[s]).map((s) => `${name(s)}: ${quick[s]!.qty} shares, pays ${fmt(win(quick[s]!.qty))} NEAR if they win`).join(' · ')
+                  : 'No one is offering yet — set your own price below.'}
+              </p>
+            </>}
+            <button type="button" className="chip" aria-expanded={adv} onClick={() => setAdv(!adv)}>{adv ? 'Simple: back at best price' : 'Advanced: set price'}</button>
+            {adv && <>
+              <fieldset className="side-pick" disabled={!canTrade}>
+                <legend className="note">Fighter</legend>
+                {[0, 1].map((i) => (
+                  <label key={i} style={tint(players[i])}>
+                    <input type="radio" name="side" checked={side === i} onChange={() => setSide(i)} />
+                    <b>{name(i)}</b><span>best {ask(i) === null ? '—' : pc(ask(i)!)}</span>
+                  </label>
+                ))}
+              </fieldset>
+              <label className="bet-amt"><span>Price</span><input type="number" min="0.01" max="99.99" step="1" inputMode="decimal" value={pricePct} onChange={(e) => setPricePct(e.target.value)} disabled={!canTrade} /><b>%</b></label>
+              <p className="note">{advQty} shares · pays {fmt(win(advQty))} NEAR if {name(side)} wins. Unmatched shares wait on the book until someone takes them or you cancel.</p>
+              <button type="button" className="btn" disabled={!canTrade || advQty < 1} onClick={() => place(side, advPrice, advQty)}><span><Ico n="coin" />Place order</span></button>
+            </>}
             {msg && <p className="note" role="status">{msg}</p>}
             <PriceChart pts={series} />
-            <p className="note">{fmt(match?.collateral)} NEAR in pool · {match?.kos ?? 0} KO{match?.kos === 1 ? '' : 's'} · winning shares pay 1 NEAR each.</p>
-            {over && <b>{over.winner === null ? 'Match void, positions refunded.' : `${name(over.winner)} wins${over.reason === 'ko' ? '' : ` by ${over.reason}`}.`}</b>}
-            {over && match?.status === 'live' && <p className="note">Waiting for the referee to post the result on-chain…</p>}
-            {due > 0n && <button className="btn big" onClick={claim}><span><Ico n="icon-claim" />Claim {fmt(due)} NEAR</span></button>}
+            <div className="book-ladder" aria-label="Order book">
+              {[0, 1].map((s) => (
+                <div key={s} style={tint(players[s])}>
+                  <b>{name(s)} bids</b>
+                  {book[s].length ? book[s].slice(0, 5).map(([p, q]) => <span key={p}>{pc(p)}<i>{q} sh</i></span>) : <span className="note">none</span>}
+                </div>
+              ))}
+            </div>
+            <p className="note">{fmt(match?.collateral)} NEAR matched · {match?.kos ?? 0} KO{match?.kos === 1 ? '' : 's'} · each winning share pays 0.01 NEAR.</p>
+            {over && <b>{over.winner === null ? 'Match void, everyone gets back what they paid.' : `${name(over.winner)} wins${over.reason === 'ko' ? '' : ` by ${over.reason}`}.`}</b>}
+            {over && match?.status === 'live' && <p className="note">Waiting for the result to post on-chain…</p>}
+            {due > 0n && <button className="btn big" onClick={() => act(() => arena.claim(matchId!), 'Added to your balance.')}><span><Ico n="icon-claim" />Claim {fmt(due)} NEAR</span></button>}
             {DEMO && !over && ( // demo bots rarely finish a fight; end it here to see settlement and payouts
               <span className="row demo-end">End fight:
                 {[0, 1, null].map((w) => <button key={String(w)} className="chip" onClick={() => setOver({ winner: w, reason: 'ko' })}>{w === null ? 'Void' : `${name(w)} wins`}</button>)}
               </span>
             )}
-            {lots.length > 0 && (
+            {(orders.length > 0 || (pos && paid > 0n)) && (
               <div className="bet-pos" aria-label="Your position">
                 <h4>Your bets</h4>
-                {lots.map((l) => {
-                  const sh = BigInt(l.shares), paid = BigInt(l.cost);
-                  return (
-                    <div key={l.id} className="bet-pos-row" style={tint(players[l.card])}>
-                      <b>{name(l.card)}</b>
-                      <span>{fmt(paid)} in · {fmt(sh)} shares</span>
-                      {settledW === null ? <span>pays {fmt(sh)}</span> : settledW === l.side ? <b className="pnl-up">Won {fmt(sh)}</b> : <b className="pnl-down">Lost</b>}
-                    </div>
-                  );
-                })}
-                {pos && <span>Total: in {fmt(cost > 0n ? cost : 0n)} · {match?.status === 'live' ? 'worth' : 'final'} {fmt(value)} · <b className={value - cost >= 0n ? 'pnl-up' : 'pnl-down'}>{signed(value - cost)} NEAR</b></span>}
+                {orders.map((o) => (
+                  <div key={o.id} className="bet-pos-row" style={tint(players[o.side])}>
+                    <b>{name(o.side)}</b><span>{o.qty} waiting @ {pc(o.price_bps)}</span>
+                    <button className="chip" disabled={!open} onClick={() => act(() => arena.cancelOrder(matchId!, o.id), 'Order cancelled, refunded to your balance.')}>Cancel</button>
+                  </div>
+                ))}
+                {pos && [0, 1].filter((s) => pos.shares[s] > 0).map((s) => (
+                  <div key={s} className="bet-pos-row" style={tint(players[s])}>
+                    <b>{name(s)}</b><span>{pos.shares[s]} shares · {fmt(pos.paid[s])} in</span>
+                    {settledW === null ? <span>pays {fmt(win(pos.shares[s]))}</span> : settledW === s ? <b className="pnl-up">Won {fmt(win(pos.shares[s]))}</b> : <b className="pnl-down">Lost</b>}
+                  </div>
+                ))}
+                {pos && settledW !== null && <span>Result: <b className={win(pos.shares[settledW]) >= paid ? 'pnl-up' : 'pnl-down'}>{signed(win(pos.shares[settledW]) - paid)} NEAR</b></span>}
               </div>
             )}
           </section>

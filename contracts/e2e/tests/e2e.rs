@@ -9,6 +9,9 @@ use serde_json::{Value, json};
 const N: u128 = 1_000_000_000_000_000_000_000_000;
 const FEE_BPS: u128 = 10;
 const Y1: NearToken = NearToken::from_yoctonear(1);
+const UNIT: u128 = N / 100; // share face value
+const T: u128 = UNIT / 10_000; // yocto per share per bps
+const TAPE: &str = "abababababababababababababababababababababababababababababababab";
 
 struct Env {
     w: Worker<Sandbox>,
@@ -21,6 +24,7 @@ struct Env {
     bob: Account,
     carol: Account,
     dave: Account,
+    rk: near_crypto::SecretKey, // referee attestation key
 }
 
 async fn setup() -> anyhow::Result<Env> {
@@ -36,9 +40,11 @@ async fn setup() -> anyhow::Result<Env> {
     let m = acct("monsters", 30).await?.deploy(&std::fs::read("../../games/brawler/contract/target/near/monsters.wasm")?).await?.into_result()?;
     ok(p.call("new").args_json(json!({"owner_id": owner.id()})).transact().await?);
     ok(m.call("new").args_json(json!({"owner_id": owner.id(), "arena_id": p.id()})).transact().await?);
-    ok(owner.call(p.id(), "register_game").args_json(json!({"game": "brawler", "referee_id": referee.id(), "assets_id": m.id()})).deposit(Y1).transact().await?);
+    let rk = near_crypto::SecretKey::from_seed(near_crypto::KeyType::ED25519, "referee");
+    let g = json!({"game": "brawler", "referee_id": referee.id(), "assets_id": m.id(), "referee_key": rk.public_key().to_string()});
+    ok(owner.call(p.id(), "register_game").args_json(g).deposit(Y1).transact().await?);
     ok(owner.call(p.id(), "register_game").args_json(json!({"game": "other", "referee_id": referee2.id(), "assets_id": null})).deposit(Y1).transact().await?);
-    Ok(Env { w, p, m, owner, referee, referee2, alice, bob, carol, dave })
+    Ok(Env { w, p, m, owner, referee, referee2, alice, bob, carol, dave, rk })
 }
 
 fn ok(r: ExecutionFinalResult) -> ExecutionFinalResult {
@@ -86,6 +92,30 @@ async fn join(e: &Env, a: &Account, id: u64, mon: Option<&str>) -> ExecutionFina
 }
 async fn result(e: &Env, by: &Account, id: u64, winner: Option<u8>, kos: [u8; 2]) -> ExecutionFinalResult {
     by.call(e.p.id(), "report_result").args_json(json!({"match_id": id, "winner": winner, "kos": kos})).gas(Gas::from_tgas(100)).transact().await.unwrap()
+}
+/// Anyone posts the referee's signed result; `sign_id` != id forges a bad signature.
+async fn settle_as(e: &Env, by: &Account, id: u64, sign_id: u64, winner: Option<u8>, kos: [u8; 2]) -> ExecutionFinalResult {
+    use base64::Engine;
+    use sha2::Digest;
+    let w = winner.map_or("none".into(), |w| w.to_string());
+    let msg = format!("brawler-settle|{}|{sign_id}|{w}|{},{}|{TAPE}", e.p.id(), kos[0], kos[1]);
+    let near_crypto::Signature::ED25519(sig) = e.rk.sign(&sha2::Sha256::digest(msg.as_bytes())) else { unreachable!() };
+    let sig = base64::engine::general_purpose::STANDARD.encode(sig.to_bytes());
+    by.call(e.p.id(), "settle")
+        .args_json(json!({"match_id": id, "winner": winner, "kos": kos, "tape_hash": TAPE, "signature": sig}))
+        .gas(Gas::from_tgas(100))
+        .transact()
+        .await
+        .unwrap()
+}
+async fn order(e: &Env, who: &Account, id: u64, side: u8, price: u16, qty: u64) -> ExecutionFinalResult {
+    who.call(e.p.id(), "place_order")
+        .args_json(json!({"match_id": id, "side": side, "price_bps": price, "qty": qty}))
+        .deposit(Y1)
+        .gas(Gas::from_tgas(100))
+        .transact()
+        .await
+        .unwrap()
 }
 async fn claim(e: &Env, a: &Account, id: u64) -> ExecutionFinalResult {
     a.call(e.p.id(), "claim").args_json(json!({"match_id": id})).transact().await.unwrap()
@@ -156,7 +186,7 @@ async fn spend_needs_one_yocto() -> anyhow::Result<()> {
     fails(e.bob.call(e.p.id(), "join_match").args_json(json!({"match_id": id, "monster_id": null})).transact().await?, "exactly 1 yoctoNEAR");
     clean(join(&e, &e.bob, id, None).await);
     fails(
-        e.carol.call(e.p.id(), "buy").args_json(json!({"match_id": id, "side": 0, "amount": N.to_string(), "min_out": "0"})).transact().await?,
+        e.carol.call(e.p.id(), "place_order").args_json(json!({"match_id": id, "side": 0, "price_bps": 5000, "qty": 1})).transact().await?,
         "exactly 1 yoctoNEAR",
     );
     ok(e.owner.call(e.p.id(), "create_tournament").args_json(json!({"game": "brawler", "size": 4, "entry_fee": "1", "bettable": false})).deposit(Y1).transact().await?);
@@ -191,8 +221,7 @@ async fn staked_match_settles() -> anyhow::Result<()> {
 
     let fee = 2 * N * FEE_BPS / 10_000;
     assert_eq!(treasury(&e).await, fee);
-    assert_eq!(n(&clean(claim(&e, &e.alice, id).await).json::<Value>()?), 2 * N - fee);
-    fails(claim(&e, &e.alice, id).await, "Nothing to claim");
+    fails(claim(&e, &e.alice, id).await, "Nothing to claim"); // seats credited at result
     fails(claim(&e, &e.bob, id).await, "Nothing to claim");
     let (a, b) = (bal(&e, &e.alice).await, bal(&e, &e.bob).await);
     assert_eq!((a, b), (4 * N - fee, 2 * N));
@@ -283,48 +312,79 @@ async fn monsters_lock_record_unlock() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn betting_settle_and_refund() -> anyhow::Result<()> {
+async fn settle_by_attestation() -> anyhow::Result<()> {
     let e = setup().await?;
-    fails(create(&e, &e.alice, "brawler", 0, true, None).await, "Bettable rooms need stake");
-    deposit(&e, &e.alice, 1).await;
-    fails(create(&e, &e.alice, "brawler", N / 10, true, None).await, "House can't fund bets");
-    ok(e.owner.call(e.p.id(), "fund").deposit(NearToken::from_near(20)).transact().await?);
-    deposit(&e, &e.carol, 3).await;
-    deposit(&e, &e.bob, 1).await;
-    let total = || async { bal(&e, &e.carol).await + bal(&e, &e.alice).await + bal(&e, &e.bob).await + treasury(&e).await };
-    let t0 = total().await;
-
-    let id = clean(create(&e, &e.alice, "brawler", N / 10, true, None).await).json::<Option<u64>>()?.unwrap();
-    let buy = |who: &Account, id: u64, amt: u128, min: u128| {
-        who.call(e.p.id(), "buy").args_json(json!({"match_id": id, "side": 0, "amount": amt.to_string(), "min_out": min.to_string()})).deposit(Y1).transact()
-    };
-    fails(buy(&e.carol, id, N, 0).await?, "Betting closed");
+    deposit(&e, &e.alice, 3).await;
+    deposit(&e, &e.bob, 3).await;
+    let id = clean(create(&e, &e.alice, "brawler", N, false, None).await).json::<Option<u64>>()?.unwrap();
     clean(join(&e, &e.bob, id, None).await);
-    fails(buy(&e.alice, id, N, 0).await?, "Players cannot bet");
-    let q = n(&view(&e.p, "quote_buy", json!({"match_id": id, "side": 0, "amount": N.to_string()})).await);
-    fails(buy(&e.carol, id, N, q + 1).await?, "Price moved");
-    let r = clean(buy(&e.carol, id, N, q).await?);
-    gas_log("buy", &r, 30);
-    assert_eq!(n(&r.json::<Value>()?), q);
-    assert_eq!(bal(&e, &e.carol).await, 2 * N);
-    let price = view(&e.p, "get_match", json!({"match_id": id})).await["price_bps"].as_u64().unwrap();
-    assert!(price > 5000, "seat0 price must rise after seat0 buy, got {price}");
+    fails(settle_as(&e, &e.carol, id, id + 1, Some(0), [3, 1]).await, "Bad signature");
+    let r = clean(settle_as(&e, &e.alice, id, id, Some(0), [3, 1]).await);
+    gas_log("settle", &r, 100);
+    let fee = 2 * N * FEE_BPS / 10_000;
+    let mv = view(&e.p, "get_match", json!({"match_id": id})).await;
+    assert_eq!((mv["status"].as_str(), mv["tape_hash"].as_str(), mv["kos"].as_u64()), (Some("settled"), Some(TAPE), Some(4)));
+    assert_eq!((bal(&e, &e.alice).await, bal(&e, &e.bob).await), (4 * N - fee, 2 * N), "winner paid in the settle tx");
+    fails(settle_as(&e, &e.bob, id, id, Some(0), [3, 1]).await, "Match not live");
+    fails(result(&e, &e.referee, id, Some(1), [0, 3]).await, "Match not live");
+    let v = clean(create(&e, &e.alice, "brawler", N, false, None).await).json::<Option<u64>>()?.unwrap();
+    clean(join(&e, &e.bob, v, None).await);
+    clean(settle_as(&e, &e.bob, v, v, None, [1, 1]).await);
+    assert_eq!((bal(&e, &e.alice).await, bal(&e, &e.bob).await), (4 * N - fee, 2 * N), "void: stakes back");
+    Ok(())
+}
 
-    clean(result(&e, &e.referee, id, Some(0), [3, 0]).await);
-    assert_eq!(n(&clean(claim(&e, &e.carol, id).await).json::<Value>()?), q, "1 NEAR per winning share");
-    clean(claim(&e, &e.alice, id).await);
+#[tokio::test]
+async fn order_book_settle_and_refund() -> anyhow::Result<()> {
+    let e = setup().await?;
+    for a in [&e.alice, &e.bob, &e.carol, &e.dave] {
+        deposit(&e, a, 1).await;
+    }
+    let total = || async { bal(&e, &e.carol).await + bal(&e, &e.dave).await + bal(&e, &e.alice).await + bal(&e, &e.bob).await + treasury(&e).await };
+    let t0 = total().await;
+    let id = clean(create(&e, &e.alice, "brawler", N / 10, true, None).await).json::<Option<u64>>()?.unwrap();
+    let r = clean(order(&e, &e.carol, id, 0, 6000, 10).await); // book open before the guest joins
+    assert_eq!(r.json::<Value>()?["id"], json!(0));
+    clean(join(&e, &e.bob, id, None).await);
+    fails(order(&e, &e.alice, id, 1, 5000, 1).await, "Players cannot bet");
+    let d0 = bal(&e, &e.dave).await;
+    let r = clean(order(&e, &e.dave, id, 1, 5000, 4).await).json::<Value>()?; // crosses carol's 6000: dave pays 4000
+    assert_eq!((r["filled"].as_u64(), n(&r["cost"]), r["id"].is_null()), (Some(4), 4 * 4000 * T, true));
+    assert_eq!(d0 - bal(&e, &e.dave).await, 4 * 4000 * T, "price improvement stays with taker");
+    assert_eq!(view(&e.p, "get_book", json!({"match_id": id})).await, json!([[[6000, 6]], []]));
+    let f = view(&e.p, "get_fills", json!({"match_id": id, "limit": 5})).await;
+    assert_eq!((f[0]["side"].as_u64(), f[0]["price_bps"].as_u64(), f[0]["qty"].as_u64()), (Some(1), Some(4000), Some(4)));
+    let c0 = bal(&e, &e.carol).await;
+    fails(e.dave.call(e.p.id(), "cancel_order").args_json(json!({"match_id": id, "order_id": 0})).transact().await?, "No such order");
+    clean(e.carol.call(e.p.id(), "cancel_order").args_json(json!({"match_id": id, "order_id": 0})).transact().await?);
+    assert_eq!(bal(&e, &e.carol).await - c0, 6 * 6000 * T, "unfilled escrow back");
+    for _ in 0..20 {
+        clean(order(&e, &e.carol, id, 0, 5000, 1).await);
+    }
+    let r = clean(order(&e, &e.dave, id, 1, 5000, 25).await);
+    gas_log("place_order 20 fills", &r, 100);
+    let v = r.json::<Value>()?;
+    assert_eq!((v["filled"].as_u64(), v["id"].is_null()), (Some(20), false));
+    let p = view(&e.p, "get_position", json!({"match_id": id, "account_id": e.dave.id()})).await;
+    assert_eq!((p["shares"].clone(), n(&p["open"])), (json!([0, 24]), 5 * 5000 * T));
+    clean(settle_as(&e, &e.alice, id, id, Some(0), [3, 0]).await);
+    assert_eq!(view(&e.p, "get_book", json!({"match_id": id})).await, json!([[], []]));
+    let win = 24 * UNIT;
+    assert_eq!(n(&clean(claim(&e, &e.carol, id).await).json::<Value>()?), win - win * FEE_BPS / 10_000);
+    assert_eq!(n(&clean(claim(&e, &e.dave, id).await).json::<Value>()?), 5 * 5000 * T, "loser gets resting escrow back");
+    fails(claim(&e, &e.alice, id).await, "Nothing to claim");
     assert_eq!(total().await, t0, "conservation after settle");
 
-    // void -> bettor gets net paid back
-    let id2 = clean(create(&e, &e.alice, "brawler", N / 10, true, None).await).json::<Option<u64>>()?.unwrap();
-    clean(join(&e, &e.bob, id2, None).await);
-    clean(buy(&e.carol, id2, N / 2, 0).await?);
-    clean(result(&e, &e.referee, id2, None, [0, 0]).await);
-    let fee = N / 2 * FEE_BPS / 10_000;
-    assert_eq!(n(&clean(claim(&e, &e.carol, id2).await).json::<Value>()?), N / 2 - fee);
-    clean(claim(&e, &e.alice, id2).await);
-    clean(claim(&e, &e.bob, id2).await);
-    assert_eq!(total().await, t0, "conservation after refund");
+    let (c1, d1) = (bal(&e, &e.carol).await, bal(&e, &e.dave).await);
+    let v = clean(create(&e, &e.alice, "brawler", N / 10, true, None).await).json::<Option<u64>>()?.unwrap();
+    clean(join(&e, &e.bob, v, None).await);
+    clean(order(&e, &e.carol, v, 0, 3000, 5).await);
+    clean(order(&e, &e.dave, v, 1, 7000, 5).await);
+    clean(result(&e, &e.referee, v, None, [0, 0]).await);
+    clean(claim(&e, &e.carol, v).await);
+    clean(claim(&e, &e.dave, v).await);
+    assert_eq!((bal(&e, &e.carol).await, bal(&e, &e.dave).await), (c1, d1), "void: exactly what was paid");
+    assert_eq!(total().await, t0, "conservation after void");
     Ok(())
 }
 
@@ -355,9 +415,6 @@ async fn cancel_and_expire() -> anyhow::Result<()> {
     eprintln!("fast_forward {blocks} blocks for 2h");
     for id in [open, live] {
         clean(e.carol.call(e.p.id(), "expire").args_json(json!({"match_id": id})).gas(Gas::from_tgas(30)).transact().await?);
-    }
-    for (who, id) in [(&e.alice, open), (&e.alice, live), (&e.bob, live)] {
-        assert_eq!(n(&clean(claim(&e, who, id).await).json::<Value>()?), N);
     }
     assert_eq!((bal(&e, &e.alice).await, bal(&e, &e.bob).await), (3 * N, 3 * N));
     fails(result(&e, &e.referee, live, Some(0), [0, 0]).await, "Match not live");
@@ -392,7 +449,9 @@ async fn tournament_of_four() -> anyhow::Result<()> {
     assert_eq!(r0.len(), 2);
 
     // alice beats bob, dave beats carol, final alice vs dave -> dave
-    clean(result(&e, &e.referee, r0[0], Some(0), [3, 0]).await);
+    fails(settle_as(&e, &e.alice, r0[0], r0[0] + 9, Some(0), [3, 0]).await, "Bad signature");
+    let r = clean(settle_as(&e, &e.alice, r0[0], r0[0], Some(0), [3, 0]).await); // winner settles, referee pays no gas
+    gas_log("settle tournament semi", &r, 100);
     assert_eq!(monster(&e, &mons[1]).await["locked_until_ms"].as_u64(), Some(0), "loser unlocked");
     assert!(monster(&e, &mons[0]).await["locked_until_ms"].as_u64().unwrap() > 0, "winner stays locked");
     clean(result(&e, &e.referee, r0[1], Some(1), [1, 3]).await);

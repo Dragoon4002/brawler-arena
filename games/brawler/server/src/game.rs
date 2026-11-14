@@ -5,7 +5,7 @@ use crate::session::{Conn, broadcast};
 use crate::{App, ChainMatch};
 use brawler_sim::genes::Dna;
 use serde_json::{Value, json};
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const FORFEIT: Duration = Duration::from_secs(30);
@@ -78,12 +78,7 @@ fn go_live(
     let (Some(host), Some(guest)) = (seated(0), seated(1)) else {
         return None;
     };
-    r.referee = Some(Referee::new(
-        app.near.clone(),
-        r.match_id,
-        [r.seats[0].dna, r.seats[1].dna],
-        r.stage,
-    ));
+    r.referee = Some(Referee::new([r.seats[0].dna, r.seats[1].dna], r.stage));
     r.status = Status::Live;
     let now = Instant::now();
     r.seats.iter_mut().for_each(|s| s.seen = now);
@@ -150,6 +145,16 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
     r.winner = winner;
     let frames = r.frames.iter().map(|[h, g]| ((h << 16) | g) as u32);
     let tape_hash = crate::referee::tape_hash(r.stage.name(), frames.clone());
+    let kos = r.referee.as_ref().map_or([0, 0], Referee::kos);
+    let settle = r
+        .match_id
+        .filter(|_| app.gasless.load(Ordering::Relaxed))
+        .and_then(|id| crate::referee::attestation(&app.near, id, winner, kos, &tape_hash));
+    if let (Some(id), None) = (r.match_id, &settle) {
+        // contract has no matching referee_key (pre-v3): report directly
+        let args = json!({ "match_id": id, "winner": winner, "kos": kos, "tape_hash": tape_hash });
+        app.near.call(id, "report_result", args, 100);
+    }
     if let [a, b] = &r.seats[..] {
         let at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -166,7 +171,7 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
             &key,
             &json!({
                 "key": key, "match_id": r.match_id, "stage": r.stage.name(), "stake": r.stake, "winner": winner,
-                "reason": reason, "tape_hash": tape_hash, "at": at, "frames": frames.collect::<Vec<_>>(),
+                "reason": reason, "tape_hash": tape_hash, "settle": settle, "at": at, "frames": frames.collect::<Vec<_>>(),
                 "players": r.seats.iter().map(|s| json!({ "name": s.name, "account": s.account, "dna": s.dna })).collect::<Vec<_>>(),
             }),
         );
@@ -180,12 +185,18 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
             key: Some(key),
         });
     }
-    if let Some(rf) = &r.referee {
-        rf.result(winner, &tape_hash);
+    if let (Some(id), Some(s)) = (r.match_id, &settle) {
+        let due_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as u64)
+            + app.settle_fallback.as_millis() as u64;
+        app.history
+            .set_pending(id, Some(json!({ "settle": s, "due_ms": due_ms })));
+        tokio::spawn(fallback(app.clone(), id, app.settle_fallback));
     }
     broadcast(
         r.players().chain(r.spectators.values()),
-        &json!({ "t": "over", "winner": winner, "reason": reason }),
+        &json!({ "t": "over", "winner": winner, "reason": reason, "settle": settle }),
     );
     r.push_state();
     lobby.push(app);
@@ -197,6 +208,16 @@ pub fn finish(app: &Arc<App>, r: &mut Room, lobby: &mut Lobby, winner: Option<i3
             st.rooms.remove(&at.code);
         }
     });
+}
+
+/// After `wait`: still unsettled -> referee reports itself (only gas it spends on results).
+pub async fn fallback(app: Arc<App>, id: u64, wait: Duration) {
+    tokio::time::sleep(wait).await;
+    let Some((_, p)) = app.history.pending().into_iter().find(|(k, _)| *k == id) else {
+        return;
+    };
+    crate::referee::fallback(&app.near, &p["settle"]).await;
+    app.history.set_pending(id, None);
 }
 
 /// Paid guest left the waiting room: refund it and reopen the match; contract refuses (market traded) -> void it.
@@ -236,8 +257,8 @@ pub fn tick(app: &Arc<App>) {
             && let Some(winner) = r.no_show
         {
             let d = r.seats[0].dna;
-            // fresh game: result() reports kos [0,0]
-            r.referee = Some(Referee::new(app.near.clone(), r.match_id, [d, d], r.stage));
+            // fresh game: kos [0,0]
+            r.referee = Some(Referee::new([d, d], r.stage));
             finish(app, r, &mut st.lobby, Some(winner), "no-show");
             continue;
         }

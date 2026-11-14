@@ -1,55 +1,70 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Market, ONE, simulate } from './market.ts';
+import { Market, UNIT, cost, simulate, sweep } from './market.ts';
 
-test('books balance for every outcome, many random runs', () => {
+test('books balance exactly for every outcome, many random runs', () => {
   for (let run = 1; run <= 40; run++) for (const winner of [0, 1, null] as const) {
-    const { audit, market } = simulate({ run, winner, traders: 6 + (run % 5), trades: 30 + run });
-    assert.ok(audit.dust >= 0n, `overpaid run ${run} winner ${winner}: ${audit.dust}`);
-    assert.ok(audit.dust < 1000n, `dust only, run ${run}: ${audit.dust}`);
-    for (const [who] of market.positions) assert.equal(market.due(who), 0n); // all claimed
+    const { audit, market } = simulate({ run, winner, traders: 6 + (run % 5), orders: 30 + run });
+    assert.equal(audit.dust, 0n, `run ${run} winner ${winner}`);
+    for (const [who] of market.positions) assert.equal(market.due(who), 0n);
   }
 });
 
-test('long raises price, short lowers it, quote matches fill', () => {
-  const m = new Market(5n * ONE);
-  const q = m.quoteBuy(0, ONE);
-  assert.equal(m.buy('a', 0, ONE, q), q);
-  const up = m.price;
-  assert.ok(up > 5000);
-  m.buy('b', 1, 2n * ONE);
-  assert.ok(m.price < up);
+test('cross at maker price: taker gets price improvement, partial fill rests', () => {
+  const m = new Market();
+  assert.deepEqual(m.place('a', 1, 4000, 10), { id: 0, filled: 0, cost: cost(4000, 10) }); // a backs side 1 @ 40%
+  const r = m.place('b', 0, 7000, 15); // b willing to pay 70% for side 0; a's 40% leaves 60% for b
+  assert.deepEqual(r, { id: 1, filled: 10, cost: cost(6000, 10) + cost(7000, 5) });
+  assert.deepEqual(m.levels(0), [[7000, 5]]);
+  assert.deepEqual(m.levels(1), []);
+  assert.equal(m.price, 6000);
+  assert.equal(m.collateral, 10n * UNIT);
+  assert.deepEqual(m.fills[0], { id: 0, taker: 'b', maker: 'a', side: 0, price_bps: 6000, qty: 10, ms: m.fills[0].ms });
 });
 
-test('positions lock until the fight ends: there is no way to sell', () => {
-  assert.equal('sell' in new Market(5n * ONE), false);
+test('no cross below 100%; own orders never match', () => {
+  const m = new Market();
+  m.place('a', 1, 4000, 10);
+  assert.equal(m.place('b', 0, 5999, 1).filled, 0);
+  assert.equal(m.place('a', 0, 9000, 3).filled, 0); // skips own
+  assert.equal(m.place('c', 0, 6000, 2).filled, 2);
 });
 
-test('guards match the contract', () => {
-  const m = new Market(5n * ONE);
-  assert.throws(() => m.buy('a', 0, ONE / 1000n), /Bet below minimum/);
-  assert.throws(() => m.buy('a', 0, 101n * ONE), /Bet above maximum/);
-  const sh = m.buy('a', 0, ONE);
-  assert.throws(() => m.buy('b', 0, ONE, ONE * 10n), /Price moved/);
-  m.finish(0);
-  assert.throws(() => m.buy('a', 0, ONE), /Betting closed/);
-  assert.equal(m.claim('a'), sh); // 1 NEAR per winning share
+test('cancel refunds unfilled escrow only; closed book rejects', () => {
+  const m = new Market();
+  m.place('a', 1, 4000, 10);
+  m.place('b', 0, 6000, 4);
+  assert.equal(m.cancel('a', 0), cost(4000, 6));
+  assert.throws(() => m.cancel('a', 0), /No such order/);
+  m.finish(1);
+  assert.throws(() => m.cancel('b', 1), /Book closed/);
+  assert.throws(() => m.place('b', 0, 5000, 1), /Book closed/);
+  const gross = 4n * UNIT;
+  assert.equal(m.claim('a'), gross - gross / 1000n);
+  assert.throws(() => m.claim('b'), /Nothing to claim/);
 });
 
-test('void refunds net deposit (after fee) and house keeps the rest', () => {
-  const m = new Market(5n * ONE);
-  m.buy('a', 0, 3n * ONE);
+test('void refunds exactly what was paid plus resting escrow', () => {
+  const m = new Market();
+  m.place('a', 1, 4000, 10);
+  m.place('b', 0, 7000, 15);
   m.finish(null);
-  assert.equal(m.claim('a'), 3n * ONE - (3n * ONE) / 1000n);
-  const a = m.audit();
-  assert.equal(a.house, 5n * ONE);
-  assert.equal(a.dust, 0n);
+  assert.equal(m.claim('a'), cost(4000, 10));
+  assert.equal(m.claim('b'), cost(6000, 10) + cost(7000, 5));
+  assert.equal(m.audit().dust, 0n);
 });
 
-test('each bet is its own position; all settle together at the result', () => {
-  const m = new Market(5n * ONE);
-  const a1 = m.buy('a', 0, 45n * ONE / 10n), b = m.buy('a', 1, 25n * ONE / 10n), a2 = m.buy('a', 0, 15n * ONE / 10n);
-  assert.deepEqual(m.lots.get('a')!.map((l) => [l.side, l.shares]), [[0, a1], [1, b], [0, a2]]);
-  m.finish(0);
-  assert.equal(m.claim('a'), a1 + a2); // A shares pay 1 NEAR each, B shares nothing
+test('guards', () => {
+  const m = new Market(10n, UNIT);
+  assert.throws(() => m.place('a', 0, 0, 1), /Bad price/);
+  assert.throws(() => m.place('a', 0, 10_000, 1), /Bad price/);
+  assert.throws(() => m.place('a', 0, 5000, 0), /Bad qty/);
+  assert.throws(() => m.place('a', 0, 5000, 3), /Order above maximum/);
+});
+
+test('sweep walks asks to spend a budget', () => {
+  const book: [[number, number][], [number, number][]] = [[], [[4000, 2], [3000, 5]]]; // side-0 asks: 60% x2, 70% x5
+  assert.deepEqual(sweep(book, 0, cost(6000, 2) + cost(7000, 1)), { qty: 3, price: 7000 });
+  assert.deepEqual(sweep(book, 0, cost(6000, 1)), { qty: 1, price: 6000 });
+  assert.equal(sweep(book, 1, UNIT), null);
 });

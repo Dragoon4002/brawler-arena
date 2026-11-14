@@ -16,27 +16,27 @@ Two monsters knock each other off a floating stage (3 stocks, damage %, blocks, 
 |---|---|---|
 | Platform | [`v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/v2.brawler-platform-5c8e2b.testnet) | balances, staked matches, spectator market, tournaments, per-game referee |
 | Monsters | [`brawler-monsters-5c8e2b.testnet`](https://testnet.nearblocks.io/address/brawler-monsters-5c8e2b.testnet) | monster NFTs: hatch, breed, list/buy, rent, match locks |
-| Referee | [`referee.v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/referee.v2.brawler-platform-5c8e2b.testnet) | the game server's key; only it can report results |
+| Referee | [`referee.v2.brawler-platform-5c8e2b.testnet`](https://testnet.nearblocks.io/address/referee.v2.brawler-platform-5c8e2b.testnet) | the game server's key; signs results (v3) / reports them (v2) |
 
-Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DEPLOYMENTS.md).
+Deploy and end-to-end transaction log: [`contracts/DEPLOYMENTS.md`](contracts/DEPLOYMENTS.md). Platform v3 code (gasless settle, order-book market) is in this repo, not yet deployed: switch steps there.
 
 ## What's on-chain
 
 | On-chain | Off-chain |
 |---|---|
 | Deposits, withdrawals, in-contract balance | Live fight inputs (WebRTC P2P, or WebSocket relay) |
-| Match stakes, escrow, payout (`create_match`, `join_match`, `report_result`) | Room lobby, chat, matchmaking |
+| Match stakes, escrow, payout (`create_match`, `join_match`, `settle` / `report_result`) | Room lobby, chat, matchmaking |
 | Guest refund before the fight (`unjoin`), voids and expiry | Rendering, sound |
-| Spectator prediction market: AMM prices, `buy`, `claim` | Full input tapes (served at `/tape/<id>`) |
+| Spectator prediction market: order book, `place_order`, `cancel_order`, `claim` | Full input tapes (served at `/tape/<id>`) |
 | SHA-256 hash of every settled match's input tape (`tape_hash`) | Free friendly matches |
 | Tournaments: entry, bracket advance, `claim_tournament` | |
 | Monster NFTs, DNA, breeding, sales, rentals, lock during a match | |
 
 ## How we use NEAR
 
-- **Escrow without trust:** stakes and bets live in the platform contract. The game server can only call `report_result` through its referee key; it never holds funds.
+- **Escrow without trust:** stakes and bets live in the platform contract. The game server never holds funds: it signs the result off-chain with its referee key and the winner's own `settle` tx posts it (verified with `ed25519_verify`), so the referee spends no gas; it falls back to `report_result` only if nobody settles within 5 min.
 - **Provable fairness:** the sim is deterministic. The referee re-simulates both players' inputs, reports the winner and the tape's SHA-256 on-chain. Anyone can open `/replay/<id>`: the browser re-runs the tape, recomputes the hash and checks both against the contract.
-- **Prediction markets per fight:** each bettable match opens an AMM market seeded by the house treasury, on staked and free rooms alike; the seed comes back at settle.
+- **Prediction markets per fight:** each bettable match (staked or free) gets a binary order book: shares of "A wins" / "B wins", 0.01 NEAR face value. Every fill pairs two real traders, no house money, so colluding fighters have nothing to drain.
 - **NFT gameplay assets:** monster stats come from on-chain DNA, and the NFT is locked while it fights, so it can't be sold mid-match.
 - **One balance across games:** the platform registers games with their own referee; Brawler is the first.
 - **Wallet only when money moves:** Practice vs bot and watching need no wallet.
@@ -77,11 +77,11 @@ npm run dev -w @xyz/brawler                    # http://localhost:3000
 npm run dev -w @xyz/market
 ```
 
-- Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY`. No CONTRACT_ID = free rooms only.
+- Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY SETTLE_FALLBACK_S` (default 300). No CONTRACT_ID = free rooms only. Attestations only when the contract's `referee_key` is REFEREE_KEY's public key, else direct `report_result`.
 - Room lobby: a staked guest who leaves before the host presses Start frees the seat; referee `unjoin` refunds their stake and reopens the match (rejected once bets exist).
 - Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (default: same origin), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_BRAWLER_URL`.
 - Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
-- New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?)` on platform.
+- New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?, referee_key?)` on platform.
 
 ## Deploy to AWS
 
@@ -121,4 +121,4 @@ Hold a direction with an attack to pick the move (neutral, side or down; ground 
   - Hitlag on impact, hitstun scaled by knockback, 6-frame input buffer, frame data in `moves.ts`.
 - **`src/lib/render/`**: procedural bone rig with keyframed poses, a fit-both camera, hit sparks, screen shake and KO beams. Reads sim state only.
 - **`src/lib/net.ts`**: rollback netplay. The local sim predicts the opponent's input up to 10 frames ahead and re-simulates when real input arrives; clients compare state hashes every second.
-- **Server**: relays inputs, records the confirmed tape, re-simulates it as referee, reports the result and tape hash on-chain, and serves history and tapes.
+- **Server**: relays inputs, records the confirmed tape, re-simulates it as referee, signs the result + tape hash for on-chain `settle` (fallback: reports it), and serves history and tapes.
