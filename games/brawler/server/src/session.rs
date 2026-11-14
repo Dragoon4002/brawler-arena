@@ -126,6 +126,11 @@ impl Session {
             "join" if !joined => self.join(m).await,
             "match" if !joined => self.join_match(m).await,
             "watch" if !joined => self.watch(m),
+            "rejoin" if !joined => self.rejoin(m).await,
+            "resync" => {
+                self.resync();
+                Ok(())
+            }
             "peek" => {
                 self.peek(m);
                 Ok(())
@@ -376,6 +381,74 @@ impl Session {
         Ok(())
     }
 
+    /// Same account back in its live seat (reload / dropped socket) within the forfeit window. Opponent gets
+    /// `rejoin`, flushes its tape and answers `resync`; then we get `resume` (see `resync`).
+    async fn rejoin(&mut self, m: &Value) -> Reply {
+        let code = str_of(&m["code"], 8).to_uppercase();
+        let account = str_of(&m["account"], 64);
+        if account.is_empty() {
+            return Err(NO_WALLET);
+        }
+        let find = |st: &mut crate::room::Shared| {
+            let r = st
+                .rooms
+                .get_mut(&code)
+                .filter(|r| r.status == Status::Live)?;
+            let mine = |s: &Seat| s.account == account;
+            let i = r
+                .seats
+                .iter()
+                .position(|s| mine(s) && s.conn.is_none())
+                .or_else(|| r.seats.iter().position(mine))?;
+            Some((r.handle(), r.match_id, i))
+        };
+        let (at, match_id, _) = find(&mut self.app.lock()).ok_or("No live fight to rejoin")?;
+        if let Some(id) = match_id
+            && !self.authed(m, &account, id).await
+        {
+            return Err(DENIED);
+        }
+        let mut st = self.app.lock();
+        let (_, _, i) = find(&mut st)
+            .filter(|(a, ..)| a.uid == at.uid)
+            .ok_or("No live fight to rejoin")?;
+        let r = at.get_mut(&mut st.rooms).expect("just found");
+        let other = r.opponent(i).cloned().ok_or("Opponent is gone")?;
+        let seat = &mut r.seats[i];
+        if let Some(old) = seat.conn.replace(self.conn.clone()) {
+            old.close();
+        }
+        seat.seen = Instant::now();
+        other.send(&json!({ "t": "rejoin" }));
+        r.push_state();
+        self.room = Some(at);
+        Ok(())
+    }
+
+    /// Survivor answers `rejoin` with its tape flushed: both seats continue from its confirmed frames.
+    fn resync(&self) {
+        let Some(at) = &self.room else { return };
+        let mut st = self.app.lock();
+        let Some(r) = at
+            .get_mut(&mut st.rooms)
+            .filter(|r| r.status == Status::Live)
+        else {
+            return;
+        };
+        let Some(i) = r.seat_of(&self.conn) else {
+            return;
+        };
+        let tape = r.seats[i].tape.clone();
+        r.seats[1 - i].tape = tape.clone();
+        if let Some(c) = r.opponent(i) {
+            c.send(&json!({
+                "t": "resume", "code": r.code, "seat": 1 - i, "stage": r.stage.name(), "matchId": r.match_id,
+                "bettable": r.bettable, "frames": tape,
+                "players": r.seats.iter().map(|s| json!({ "name": s.name, "dna": s.dna })).collect::<Vec<_>>(),
+            }));
+        }
+    }
+
     fn watch(&mut self, m: &Value) -> Reply {
         let mut st = self.app.lock();
         let st = &mut *st;
@@ -580,6 +653,9 @@ impl Session {
             }
             Some(i) if r.status == Status::Waiting => {
                 r.seats.remove(i);
+                if let Some(id) = r.match_id {
+                    tokio::spawn(game::unjoin(self.app.clone(), at.clone(), id));
+                }
             }
             Some(i) => {
                 r.seats[i].conn = None;

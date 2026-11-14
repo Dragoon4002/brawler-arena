@@ -23,6 +23,11 @@
 //!   Opponent absent NO_SHOW -> present seat wins, {t:'over', winner, reason:'no-show'}.
 //! {t:'rematch'} after `over` (free rooms, seats only): opponent gets {t:'rematch'}; once both asked the room
 //!   restarts (fresh `start`/`spec`). Opponent gone -> {t:'left'}; else rejected with `error`.
+//! Reconnect: {t:'rejoin', code, account, auth?} (live room, that account's seat, opponent still there) re-seats the
+//!   socket; opponent gets {t:'rejoin'}, flushes its tape, answers {t:'resync'}; rejoiner gets
+//!   {t:'resume', code, seat, stage, matchId, bettable, players, frames} (frames = survivor's confirmed tape), relay only.
+//! Paid guest leaves a waiting on-chain room -> referee `unjoin` (refund + reopen); refused -> void via report_result.
+//! HTTP: GET /history/{account}, GET /tape/{key} (stage, players+dna, frames, winner, reason, tape_hash; see referee).
 
 mod game;
 pub mod history;
@@ -113,8 +118,29 @@ pub fn router(app: Arc<App>) -> Router {
     });
     Router::new()
         .route("/history/{account}", axum::routing::get(player_history))
+        .route("/tape/{key}", axum::routing::get(tape))
         .fallback(session::ws_handler)
         .with_state(app)
+}
+
+async fn tape(
+    axum::extract::State(app): axum::extract::State<Arc<App>>,
+    axum::extract::Path(key): axum::extract::Path<String>,
+) -> impl axum::response::IntoResponse {
+    use axum::http::{StatusCode, header};
+    let cors = (header::ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+    match app.history.tape(&key) {
+        Some(t) => (
+            StatusCode::OK,
+            [cors, (header::CONTENT_TYPE, "application/json")],
+            t,
+        ),
+        None => (
+            StatusCode::NOT_FOUND,
+            [cors, (header::CONTENT_TYPE, "text/plain")],
+            "no tape".into(),
+        ),
+    }
 }
 
 async fn player_history(

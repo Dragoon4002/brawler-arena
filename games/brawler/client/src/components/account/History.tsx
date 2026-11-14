@@ -6,9 +6,9 @@ import { short } from '@/lib/format.ts';
 import { useLoad } from '@/hooks/async.ts';
 import { Ico } from '@/components/ui.tsx';
 
-export interface Fight { at: number; won: boolean | null; mine: string; vs: string; vsAccount?: string; stake: string; kind: 'Friendly' | 'Staked' | 'Tournament'; matchId: number | null }
+export interface Fight { at: number; won: boolean | null; mine: string; vs: string; vsAccount?: string; stake: string; kind: 'Friendly' | 'Staked' | 'Tournament'; matchId: number | null; key?: string | null }
 
-interface Rec { at: number; match_id: number | null; stake: string; winner: number | null; reason: string; players: { account: string; name: string }[] }
+interface Rec { at: number; match_id: number | null; stake: string; winner: number | null; reason: string; players: { account: string; name: string }[]; key?: string | null }
 
 const kindOf = (stake: string | undefined, tournament: boolean | number | null | undefined, matchId?: number | null): Fight['kind'] =>
   tournament || tournament === 0 ? 'Tournament' : (stake && stake !== '0') || matchId != null ? 'Staked' : 'Friendly';
@@ -34,7 +34,7 @@ export function useFights(account: string | null | undefined, local = false) {
   const recs = data?.recs ?? [], chain = data?.chain ?? [];
   const fights: Fight[] = recs.map((r) => {
     const me = r.players[0].account === account ? 0 : 1, them = r.players[1 - me], c = chain.find((m) => m.id === r.match_id);
-    return { at: r.at, won: r.winner === null ? null : r.winner === me, mine: r.players[me].name, vs: them.name, vsAccount: them.account, stake: r.stake || '0', kind: kindOf(r.stake, c?.tournament, r.match_id), matchId: r.match_id };
+    return { at: r.at, won: r.winner === null ? null : r.winner === me, mine: r.players[me].name, vs: them.name, vsAccount: them.account, stake: r.stake || '0', kind: kindOf(r.stake, c?.tournament, r.match_id), matchId: r.match_id, key: r.key };
   });
   const seen = new Set(recs.map((r) => r.match_id).filter((x) => x != null));
   for (const m of chain) {
@@ -76,7 +76,7 @@ export function History({ fights, loading }: { fights: Fight[]; loading?: boolea
       {fights.length === 0 ? <p className="sub">{loading ? 'Loading…' : 'No fights yet.'}</p> : (
         <div className="history-wrap">
           <table className="history">
-            <thead><tr><th>Result</th><th>Monster</th><th>Opponent</th><th>Stake</th><th>Type</th><th>When</th></tr></thead>
+            <thead><tr><th>Result</th><th>Monster</th><th>Opponent</th><th>Stake</th><th>Type</th><th>When</th><th>Replay</th></tr></thead>
             <tbody>
               {fights.slice(0, n).map((f, i) => (
                 <tr key={`${f.at}-${i}`}>
@@ -86,6 +86,7 @@ export function History({ fights, loading }: { fights: Fight[]; loading?: boolea
                   <td>{fmt(f.stake)} NEAR</td>
                   <td><span className={`chip kind-${f.kind.toLowerCase()}`}>{f.kind}{f.matchId != null ? ` #${f.matchId}` : ''}</span></td>
                   <td className="muted">{when(f.at)}</td>
+                  <td>{f.key && <a className="row-ico" href={`/replay/${encodeURIComponent(f.key)}`}><Ico n="icon-play" />Replay</a>}</td>
                 </tr>
               ))}
             </tbody>

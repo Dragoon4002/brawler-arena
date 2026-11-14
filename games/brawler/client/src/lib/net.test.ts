@@ -24,6 +24,42 @@ test('lockstep survives packet loss, peers stay in sync', () => {
   assert.equal(lag, false, 'jitter within the prediction window never shows the banner');
 });
 
+// Peer drops mid-fight and comes back as a fresh Netplay resumed at the survivor's confirmed frame (server tape).
+test('reconnect: resumed peer continues in sync from the survivor tape', () => {
+  let now = 0;
+  let wire: { at: number; to: number; m: object }[] = [];
+  const tapes: number[][][] = [[], []];
+  const peer = (seat: number, start = 0, s = newGame()) => {
+    const net = new Netplay((m) => wire.push({ at: now + 2, to: 1 - seat, m: JSON.parse(JSON.stringify(m)) }), seat, 3, start);
+    return { s, net, seat };
+  };
+  const peers = [peer(0), peer(1)];
+  let alive = true;
+  const run = (ticks: number) => {
+    for (const end = now + ticks; now < end; now++) {
+      for (let i = wire.length - 1; i >= 0; i--) if (wire[i].at <= now) { const w = wire.splice(i, 1)[0]; if (alive || w.to === 0) peers[w.to].net.onMessage(w.m as any); }
+      for (const p of alive ? peers : []) p.net.tick(() => (now * 7 + p.seat * 13) % 512, (inp) => { step(p.s, inp); tapes[p.seat].push(inp); }, () => hash(p.s));
+    }
+  };
+  run(600);
+  alive = false; // seat 1 gone (its in-flight packets still land); survivor frozen behind the "reconnecting" banner
+  run(60);
+  const [a] = peers;
+  const f = a.net.frame;
+  a.net.resync((m) => wire.push({ at: now + 2, to: 1, m: JSON.parse(JSON.stringify(m)) }));
+  wire = wire.filter((w) => w.to === 0);
+  const s = newGame();
+  tapes[1] = tapes[0].slice();
+  for (const inp of tapes[1]) step(s, inp);
+  peers[1] = peer(1, f, s);
+  alive = true;
+  run(1200);
+  assert.ok(a.net.frame > f + 1000 && peers[1].net.frame > f + 1000, `frames ${a.net.frame} ${peers[1].net.frame}`);
+  assert.equal(a.net.desync || peers[1].net.desync, false);
+  const n = Math.min(tapes[0].length, tapes[1].length);
+  assert.deepEqual(tapes[1].slice(0, n), tapes[0].slice(0, n));
+});
+
 // Peer silent: local sim keeps running on prediction for MAX_PRED frames (no freeze), banner only after a real hold-up.
 test('predicts through short gaps, lagging only after a sustained stall', () => {
   const net = new Netplay(() => {}, 0, 2);

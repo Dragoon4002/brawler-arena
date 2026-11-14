@@ -14,9 +14,14 @@ import { go } from '@/lib/nav.ts';
 export type FightSetup =
   | { kind: 'host'; mon: Monster; stage: StageId; opts: HostOpts }
   | { kind: 'join'; mon: Monster; code: string; stage: StageId; account: string; matchId: number | null }
-  | { kind: 'match'; mon: Monster; stage: StageId; matchId: number; account: string }; // on-chain (tournament) match via relay `match` msg
+  | { kind: 'match'; mon: Monster; stage: StageId; matchId: number; account: string } // on-chain (tournament) match via relay `match` msg
+  | { kind: 'rejoin'; mon: Monster; stage: StageId; code: string; account: string; matchId: number | null; tournament?: boolean };
 
 let setup: FightSetup | null = null;
+// Live fight survives a reload: this tab rejoins its seat (cleared when the fight ends or we leave the page).
+const LIVE = 'brawler-live-fight';
+const saved = (): FightSetup | null => { try { return JSON.parse(sessionStorage.getItem(LIVE) ?? 'null'); } catch { return null; } };
+const forget = () => { try { sessionStorage.removeItem(LIVE); } catch { /* storage blocked */ } };
 export const prepareFight = (s: FightSetup) => { setup = s; go('/fight'); };
 
 const asPlayer = (m: Monster): Player => ({ name: m.name, dna: m.dna });
@@ -58,7 +63,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
   const onR = useRef<(() => void) | null>(null);
   const ctl = useRef<ReturnType<typeof startOnline> | null>(null);
   const bots = useRef<{ stop(): void } | null>(null);
-  const [s] = useState(() => (demo ? demoSetup() : setup));
+  const [s] = useState(() => (demo ? demoSetup() : setup ?? saved()));
   const [mine, setMine] = useState(s?.mon);
 
   useEffect(() => {
@@ -78,7 +83,9 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
       const g = startBotFight(canvas.current!, players, s.stage);
       return () => g.stop();
     }
-    let seat = -1;
+    let seat = -1, code = '';
+    const account = s.kind === 'host' ? s.opts.account : s.account;
+    const tournament = s.kind === 'match' || (s.kind === 'rejoin' && !!s.tournament);
     const back = (e: KeyboardEvent) => {
       if (typing(e.target)) return;
       if (e.code === 'Escape') go('/lobby');
@@ -88,24 +95,28 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
     addEventListener('keydown', back);
     const hooks = {
       status: setStatus,
-      room: (r: { code: string; matchId: number | null; bettable: boolean; seat: number }) => { seat = r.seat; setRoom(r); },
-      started: (players: Player[]) => { setNames(players.map((p) => p.name)); setLive(true); setOver(null); setRm((x) => ({ ...x, asked: false, wants: false })); },
+      room: (r: { code: string; matchId: number | null; bettable: boolean; seat: number }) => { seat = r.seat; code = r.code; setRoom(r); },
+      started: (players: Player[]) => {
+        setNames(players.map((p) => p.name)); setLive(true); setOver(null); setRm((x) => ({ ...x, asked: false, wants: false }));
+        const live: FightSetup = { kind: 'rejoin', mon: monRef.current, stage: s.stage, code, account, matchId: rsRef.current?.matchId ?? (s.kind === 'host' ? s.opts.matchId : s.matchId), tournament };
+        try { sessionStorage.setItem(LIVE, JSON.stringify(live)); } catch { /* storage blocked: no reload rejoin */ }
+      },
       rematch: () => setRm((x) => ({ ...x, wants: true })),
       left: () => setRm((x) => ({ ...x, gone: true })),
       gone: setClosed,
       roomstate: setRs,
       chat: (l: ChatLine) => setChat((c) => [...c, l].slice(-200)),
       chatlog: setChat,
-      over: (winner: number | null, reason: string) => setTimeout(() => setOver({ winner, reason, seat }), reason === 'ko' ? 1000 : 0),
+      over: (winner: number | null, reason: string) => { forget(); setTimeout(() => setOver({ winner, reason, seat }), reason === 'ko' ? 1000 : 0); },
       result: (winner: number, kos: number[], st: number) => {
         const r = rsRef.current, them = r?.seats[1 - st];
         recordResult(monRef.current.id, winner === st, kos[st], them?.name || 'Online rival', 'online',
-          { vsAccount: them?.account || undefined, stake: r?.stake ?? '0', matchId: r?.matchId ?? (s.kind === 'match' ? s.matchId : null), tournament: s.kind === 'match' });
+          { vsAccount: them?.account || undefined, stake: r?.stake ?? '0', matchId: r?.matchId ?? (s.kind === 'match' ? s.matchId : null), tournament });
       },
     };
-    const game = startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : s.kind === 'match' ? { t: 'match', matchId: s.matchId, account: s.account } : { t: 'join', code: s.code, account: s.account, matchId: s.matchId }, asPlayer(s.mon), s.stage, hooks, sign);
+    const game = startOnline(canvas.current!, s.kind === 'host' ? { t: 'host', ...s.opts } : s.kind === 'match' ? { t: 'match', matchId: s.matchId, account: s.account } : { t: s.kind, code: s.code, account: s.account, matchId: s.matchId }, asPlayer(s.mon), s.stage, hooks, sign);
     ctl.current = game;
-    return () => { removeEventListener('keydown', back); game.stop(); };
+    return () => { removeEventListener('keydown', back); game.stop(); forget(); };
   }, []);
 
   const monRef = useRef(s?.mon as Monster);
@@ -161,7 +172,7 @@ function Fight({ demo, again }: { demo?: string; again: () => void }) {
   const locked = room?.matchId != null && !!s && 'owner' in s.mon;
   const options = room?.matchId != null ? local : [...free, ...local];
   const canRematch = !!over && !!s && room?.matchId == null; // staked/on-chain: stakes need a new on-chain match
-  const gone = rm.gone || over?.reason === 'opponent left' || over?.reason === 'no-show';
+  const gone = rm.gone || over?.reason === 'opponent left' || over?.reason === 'no-show' || over?.reason === 'forfeit';
   const rematch = () => {
     if (!canRematch || !s) return;
     if (gone) {

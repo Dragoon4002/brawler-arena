@@ -121,13 +121,22 @@ impl Near {
         } // last call: worker drains + exits
     }
 
-    async fn send(&self, match_id: u64, method: &str, args: Value, tgas: u64) {
+    pub fn can_sign(&self) -> bool {
+        self.referee.is_some()
+    }
+
+    /// Unqueued referee call, awaited: true once it landed OK (same retries as `call`).
+    pub async fn call_now(&self, match_id: u64, method: &str, args: Value, tgas: u64) -> bool {
+        self.send(match_id, method, args, tgas).await
+    }
+
+    async fn send(&self, match_id: u64, method: &str, args: Value, tgas: u64) -> bool {
         let (Some((id, signer)), Ok(contract)) =
             (&self.referee, self.contract.parse::<AccountId>())
         else {
-            return;
+            return false;
         };
-        for i in 0.. {
+        for i in 0..5 {
             let tx = Contract(contract.clone())
                 .call_function(method, args.clone())
                 .transaction()
@@ -136,15 +145,17 @@ impl Near {
                 .send_to(&self.net)
                 .await;
             let err = match tx.map(|r| r.into_result()) {
-                Ok(Ok(_)) => return,
+                Ok(Ok(_)) => return true,
                 Ok(Err(e)) => e.to_string(),
                 Err(e) => e.to_string(),
             };
-            if i >= 4 {
-                return eprintln!("referee gave up {method} {match_id}: {err}");
-            } // 2 h expiry refunds
-            tokio::time::sleep(Duration::from_millis(1500 << i)).await;
+            if i == 4 {
+                eprintln!("referee gave up {method} {match_id}: {err}"); // 2 h expiry refunds
+            } else {
+                tokio::time::sleep(Duration::from_millis(1500 << i)).await;
+            }
         }
+        false
     }
 }
 

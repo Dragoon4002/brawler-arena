@@ -1,8 +1,10 @@
 //! Finished-match log for player profiles. Appended to HISTORY_FILE (JSON lines) so it survives restarts.
+//! Each match's input tape goes to `tapes/<key>.json` next to it (replay + fairness check).
 use serde::{Deserialize, Serialize};
 use std::{
     fs::OpenOptions,
     io::{BufRead, BufReader, Write},
+    path::{Path, PathBuf},
     sync::Mutex,
 };
 
@@ -22,11 +24,18 @@ pub struct Rec {
     pub winner: Option<i32>,
     pub reason: String,
     pub players: [Player; 2],
+    /// Tape key (`/tape/{key}`): on-chain match id, else `r<ms>-<room uid>`.
+    #[serde(default)]
+    pub key: Option<String>,
 }
 
 pub struct History {
     path: String,
     recs: Mutex<Vec<Rec>>,
+}
+
+pub fn key_ok(key: &str) -> bool {
+    (1..=40).contains(&key.len()) && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
 }
 
 impl History {
@@ -62,6 +71,26 @@ impl History {
             let cut = recs.len() - KEEP;
             recs.drain(..cut);
         }
+    }
+
+    fn tape_path(&self, key: &str) -> Option<PathBuf> {
+        let dir = Path::new(&self.path).parent()?.join("tapes");
+        (!self.path.is_empty() && key_ok(key)).then(|| dir.join(format!("{key}.json")))
+    }
+
+    pub fn save_tape(&self, key: &str, tape: &serde_json::Value) {
+        let Some(p) = self.tape_path(key) else { return };
+        let ok = p
+            .parent()
+            .is_some_and(|d| std::fs::create_dir_all(d).is_ok())
+            && std::fs::write(&p, tape.to_string()).is_ok();
+        if !ok {
+            eprintln!("tape: can't write {}", p.display());
+        }
+    }
+
+    pub fn tape(&self, key: &str) -> Option<String> {
+        std::fs::read_to_string(self.tape_path(key)?).ok()
     }
 
     /// Newest first.
