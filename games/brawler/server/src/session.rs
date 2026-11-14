@@ -7,12 +7,13 @@ use axum::extract::State;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
 use axum::response::Response;
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
+use brawler_sim::StageId;
 use brawler_sim::genes::sanitize;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::time::Instant;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{Notify, mpsc};
 
 /// Netplay/signaling messages forwarded verbatim to the other seat.
@@ -21,6 +22,8 @@ const MAX_MSG: usize = 16 * 1024;
 const TAPE_BATCH: usize = 600;
 const DENIED: &str = "Wallet signature check failed";
 const OTHER_GAME: &str = "Match is for another game";
+const CHAT_MAX: usize = 200;
+const CHAT_GAP: Duration = Duration::from_millis(500);
 
 pub struct Conn {
     pub id: u64,
@@ -82,6 +85,8 @@ async fn run(app: Arc<App>, sock: WebSocket) {
         conn,
         nonce,
         room: None,
+        watcher: String::new(),
+        last_chat: None,
     };
     while let Some(Ok(msg)) = stream.next().await {
         match msg {
@@ -104,6 +109,9 @@ struct Session {
     /// Sent in `hello`; NEP-413 seat auth must sign it (no replay across sockets).
     nonce: [u8; 32],
     room: Option<RoomRef>,
+    /// Spectator's chat name (`account` from `watch`).
+    watcher: String,
+    last_chat: Option<Instant>,
 }
 
 type Reply = Result<(), &'static str>;
@@ -130,6 +138,12 @@ impl Session {
                 Ok(())
             }
             "rematch" => self.rematch(),
+            "set" => self.set(m),
+            "begin" => self.begin(),
+            "chat" => {
+                self.chat(m);
+                Ok(())
+            }
             "pong" => {
                 self.conn.pong.notify_one();
                 Ok(())
@@ -225,6 +239,9 @@ impl Session {
             r.stage = stage_of(&m["stage"]);
         });
         self.conn.send(&json!({ "t": "room", "code": at.code }));
+        if let Some(r) = at.get_mut(&mut st.rooms) {
+            r.welcome(&self.conn);
+        }
         st.lobby.push(&self.app);
         self.room = Some(at);
         Ok(())
@@ -241,10 +258,8 @@ impl Session {
             .filter(|r| r.status == Status::Waiting && r.seats.len() == 1)
             .map(|r| (r.handle(), r.match_id))
             .ok_or("Room not found or already full")?;
-        let mut chain_match = None;
         if let Some(id) = match_id {
-            chain_match = self.app.get_match(id).await;
-            match &chain_match {
+            match &self.app.get_match(id).await {
                 None if self.app.on_chain() => return Err("Match not found on-chain"),
                 Some(x) if x.game != GAME => return Err(OTHER_GAME),
                 Some(x) if x.status != "live" => {
@@ -259,16 +274,17 @@ impl Session {
                 return Err(DENIED);
             }
         }
-        {
-            let mut st = self.app.lock();
-            let r = at
-                .get_mut(&mut st.rooms)
-                .filter(|r| r.seats.len() == 1 && r.status == Status::Waiting)
-                .ok_or("Room already full")?;
-            r.seats.push(self.seat(m, "Guest", account));
-        }
-        self.room = Some(at.clone());
-        tokio::spawn(game::begin(self.app.clone(), at, chain_match));
+        let mut st = self.app.lock();
+        let r = at
+            .get_mut(&mut st.rooms)
+            .filter(|r| r.seats.len() == 1 && r.status == Status::Waiting)
+            .ok_or("Room already full")?;
+        r.seats.push(self.seat(m, "Guest", account));
+        self.conn
+            .send(&json!({ "t": "room", "code": at.code, "seat": 1 }));
+        r.welcome(&self.conn);
+        st.lobby.push(&self.app);
+        self.room = Some(at);
         Ok(())
     }
 
@@ -317,6 +333,9 @@ impl Session {
                 });
                 self.conn
                     .send(&json!({ "t": "room", "code": at.code, "seat": me }));
+                if let Some(r) = at.get_mut(&mut st.rooms) {
+                    r.welcome(&self.conn);
+                }
                 st.lobby.push(&self.app);
                 self.room = Some(at);
             }
@@ -334,9 +353,13 @@ impl Session {
                 } else {
                     r.seats.insert(0, mine);
                 }
+                self.conn
+                    .send(&json!({ "t": "room", "code": r.code, "seat": me }));
+                r.welcome(&self.conn);
                 let at = r.handle();
                 drop(st);
                 self.room = Some(at.clone());
+                // tournaments have no host to press Start
                 tokio::spawn(game::begin(self.app.clone(), at, Some(mv)));
             }
         }
@@ -355,7 +378,9 @@ impl Session {
         }
         r.spectators.insert(self.conn.id, self.conn.clone());
         self.room = Some(r.handle());
+        self.watcher = str_of(&m["account"], 64);
         self.conn.send(&spec_msg(r));
+        r.welcome(&self.conn);
         st.lobby.push(&self.app);
         Ok(())
     }
@@ -424,9 +449,91 @@ impl Session {
             return Ok(());
         }
         r.reset();
+        r.push_state();
         drop(st);
         tokio::spawn(game::begin(self.app.clone(), at.clone(), None));
         Ok(())
+    }
+
+    /// Waiting room: sender updates own name/dna; host also the stage.
+    fn set(&self, m: &Value) -> Reply {
+        let at = self.room.as_ref().ok_or("Not in a room")?;
+        let mut st = self.app.lock();
+        let st = &mut *st;
+        let r = at.get_mut(&mut st.rooms).ok_or("Not in a room")?;
+        let i = r
+            .seat_of(&self.conn)
+            .ok_or("Spectators can't change the room")?;
+        if r.status != Status::Waiting {
+            return Err("Match already started");
+        }
+        let stage = match &m["stage"] {
+            Value::Null => None,
+            _ if i != 0 => return Err("Only the host can change the arena"),
+            v => Some(v.as_str().and_then(StageId::parse).ok_or("Unknown arena")?),
+        };
+        let name = str_of(&m["name"], 24);
+        let seat = &mut r.seats[i];
+        if !name.is_empty() {
+            seat.name = name;
+        }
+        if !m["dna"].is_null() {
+            seat.dna = sanitize(&m["dna"]);
+        }
+        if let Some(stage) = stage {
+            r.stage = stage;
+        }
+        r.push_state();
+        st.lobby.push(&self.app);
+        Ok(())
+    }
+
+    fn begin(&self) -> Reply {
+        let at = self.room.as_ref().ok_or("Not in a room")?;
+        let mut st = self.app.lock();
+        let r = at.get_mut(&mut st.rooms).ok_or("Not in a room")?;
+        if r.seat_of(&self.conn) != Some(0) {
+            return Err("Only the host can start");
+        }
+        if r.status != Status::Waiting {
+            return Err("Match already started");
+        }
+        if r.players().count() != 2 {
+            return Err("Waiting for a challenger");
+        }
+        drop(st);
+        tokio::spawn(game::begin(self.app.clone(), at.clone(), None));
+        Ok(())
+    }
+
+    fn chat(&mut self, m: &Value) {
+        let text: String = str_of(&m["text"], usize::MAX)
+            .trim()
+            .chars()
+            .take(CHAT_MAX)
+            .collect();
+        if text.is_empty() || self.last_chat.is_some_and(|t| t.elapsed() < CHAT_GAP) {
+            return;
+        }
+        let Some(at) = &self.room else { return };
+        let mut st = self.app.lock();
+        let Some(r) = at.get_mut(&mut st.rooms) else {
+            return;
+        };
+        let (from, seat) = match r.seat_of(&self.conn) {
+            Some(i) => (r.seats[i].name.clone(), i as i32),
+            None if self.watcher.is_empty() => ("Spectator".into(), -1),
+            None => (self.watcher.clone(), -1),
+        };
+        self.last_chat = Some(Instant::now());
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as u64);
+        let line = json!({ "from": from, "seat": seat, "text": text, "ts": ts });
+        let mut msg = line.clone();
+        msg["t"] = "chat".into();
+        broadcast(r.everyone(), &msg);
+        r.add_chat(line);
     }
 
     fn relay(&self, raw: &Utf8Bytes) {
@@ -448,17 +555,30 @@ impl Session {
         let Some(r) = at.get_mut(&mut st.rooms) else {
             return;
         };
-        let Some(i) = r.seat_of(&self.conn) else {
-            r.spectators.remove(&self.conn.id);
-            return st.lobby.push(&self.app);
-        };
-        r.seats[i].conn = None;
-        if let Some(other) = r.opponent(i) {
-            other.send(&json!({ "t": "left" }));
+        match r.seat_of(&self.conn) {
+            None => {
+                r.spectators.remove(&self.conn.id);
+            }
+            // host left, or `match` room (its no_show tracks the 1st arrival): room goes away
+            Some(i) if r.status == Status::Waiting && (i == 0 || r.no_show.is_some()) => {
+                let r = st.rooms.remove(&at.code).expect("just found");
+                broadcast(
+                    r.everyone().filter(|c| c.id != self.conn.id),
+                    &json!({ "t": "left" }),
+                );
+                return st.lobby.push(&self.app);
+            }
+            Some(i) if r.status == Status::Waiting => {
+                r.seats.remove(i);
+            }
+            Some(i) => {
+                r.seats[i].conn = None;
+                if let Some(other) = r.opponent(i) {
+                    other.send(&json!({ "t": "left" }));
+                }
+            }
         }
-        if r.status == Status::Waiting {
-            st.rooms.remove(&at.code);
-            st.lobby.push(&self.app);
-        }
+        r.push_state();
+        st.lobby.push(&self.app);
     }
 }

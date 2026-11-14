@@ -69,6 +69,19 @@ pub fn room_row(r: &Room) -> Value {
     })
 }
 
+pub fn room_state(r: &Room) -> Value {
+    let seats: Vec<Value> = r
+        .seats
+        .iter()
+        .map(|s| json!({ "name": s.name, "dna": s.dna, "account": s.account, "connected": s.conn.is_some() }))
+        .collect();
+    json!({
+        "t": "roomstate", "code": r.code, "status": r.status.as_str(), "stage": r.stage.name(), "stake": r.stake,
+        "matchId": r.match_id, "bettable": r.bettable, "pub": r.public, "view": r.view, "seats": seats,
+        "spectators": r.spectators.len(),
+    })
+}
+
 pub fn spec_msg(r: &Room) -> Value {
     json!({
         "t": "spec", "code": r.code, "stage": r.stage.name(), "status": r.status.as_str(), "winner": r.winner,

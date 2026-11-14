@@ -1,15 +1,17 @@
 use crate::App;
-use crate::protocol::lobby_msg;
+use crate::protocol::{lobby_msg, room_state};
 use crate::referee::Referee;
 use crate::session::{Conn, broadcast};
 use brawler_sim::{StageId, genes::Dna};
 use rand::Rng;
-use std::collections::HashMap;
+use serde_json::{Value, json};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const CODE_LETTERS: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ";
 const LOBBY_THROTTLE: Duration = Duration::from_millis(500);
+const CHAT_KEEP: usize = 50;
 
 pub struct Seat {
     pub conn: Option<Arc<Conn>>,
@@ -73,6 +75,8 @@ pub struct Room {
     /// Bumped per rematch so a stale DONE_TTL timer can't remove the next game.
     pub round: u32,
     pub rematch: [bool; 2],
+    /// Last CHAT_KEEP lines `{from, seat, text, ts}`.
+    pub chat: VecDeque<Value>,
 }
 
 impl Room {
@@ -107,6 +111,27 @@ impl Room {
 
     pub fn players(&self) -> impl Iterator<Item = &Arc<Conn>> {
         self.seats.iter().filter_map(|s| s.conn.as_ref())
+    }
+
+    pub fn everyone(&self) -> impl Iterator<Item = &Arc<Conn>> {
+        self.players().chain(self.spectators.values())
+    }
+
+    pub fn push_state(&self) {
+        broadcast(self.everyone(), &room_state(self));
+    }
+
+    /// Newcomer `c`: everyone gets `roomstate`, `c` gets the `chatlog`.
+    pub fn welcome(&self, c: &Conn) {
+        self.push_state();
+        c.send(&json!({ "t": "chatlog", "lines": self.chat }));
+    }
+
+    pub fn add_chat(&mut self, line: Value) {
+        if self.chat.len() == CHAT_KEEP {
+            self.chat.pop_front();
+        }
+        self.chat.push_back(line);
     }
 }
 
@@ -173,6 +198,7 @@ impl Shared {
             no_show: None,
             round: 0,
             rematch: [false; 2],
+            chat: VecDeque::new(),
         };
         configure(&mut r);
         let at = r.handle();

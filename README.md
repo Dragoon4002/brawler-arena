@@ -27,6 +27,7 @@ npm run dev -w @xyz/market
 ```
 
 - Server env: `PORT NEAR_RPC CONTRACT_ID MONSTERS_ID REFEREE_ID REFEREE_KEY`. No CONTRACT_ID = free rooms only.
+- Room lobby: a staked guest who leaves before the host presses Start frees the seat, but their stake stays in the on-chain match (no refund flow yet).
 - Client env (build-time): `NEXT_PUBLIC_SERVER_URL` (required in prod), `NEXT_PUBLIC_PLATFORM_ID`, `NEXT_PUBLIC_MARKET_URL`, `NEXT_PUBLIC_MONSTERS_ID`, `NEXT_PUBLIC_ASSET_URL`. Market: `NEXT_PUBLIC_BRAWLER_URL`.
 - Golden vectors: `node --experimental-strip-types scripts/golden.ts` after any TS sim change, then `cargo test`.
 - New game: `games/<id>/{client,server}`, `register_game(id, referee, assets?)` on platform.
