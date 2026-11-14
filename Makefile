@@ -1,6 +1,6 @@
 COMPOSE := docker compose -f infra/compose.yml
 
-.PHONY: dev down logs test
+.PHONY: dev down logs test wasm e2e
 
 dev: ## backend svcs (brawler ws :8787)
 	$(COMPOSE) up --build -d
@@ -17,3 +17,11 @@ test:
 	cargo test --workspace
 	cd contracts/platform && cargo test
 	cd games/brawler/contract && cargo test
+	$(MAKE) e2e
+
+wasm:
+	cd contracts/platform && cargo near build non-reproducible-wasm
+	cd games/brawler/contract && cargo near build non-reproducible-wasm
+
+e2e: wasm ## sandbox: real wasm + xcc
+	cd contracts/e2e && cargo test -- --nocapture

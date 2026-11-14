@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings --test src/sim/sim.test.ts src/net.test.ts src/genes.test.ts src/market.test.ts src/nft.test.ts"
+    "test": "node --experimental-strip-types --no-warnings --test src/sim/sim.test.ts src/net.test.ts src/genes.test.ts src/market.test.ts src/nft.test.ts",
+    "godot:build": "node --experimental-strip-types --no-warnings ../godot/tools/export-data.ts && mkdir -p public/godot/game && \"${GODOT:-godot}\" --headless --path ../godot --export-release Web"
   },
   "dependencies": {
     "@hot-labs/near-connect": "^0.11.4",

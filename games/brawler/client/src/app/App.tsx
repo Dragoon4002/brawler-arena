@@ -7,6 +7,7 @@ import { Title, Play, Collection, Detail, Breed, Account } from './screens.tsx';
 import { Arena } from './arena.tsx';
 import { Lobby, Watch } from './rooms.tsx';
 import { Market, Season, TournamentPage, Tournaments } from './economy.tsx';
+import { GodotPage } from './godot.tsx';
 
 function useHash() {
   const [h, setH] = useState(location.hash || '#/');
@@ -20,6 +21,7 @@ function useHash() {
 
 function Routes() {
   const [page = '', arg] = useHash();
+  if (location.pathname.replace(/\/+$/, '') === '/godot') return <GodotPage />; // path route: export lives under /godot/game/
   if (page === 'fight') return <Arena key={arg} demo={DEMO ? arg : undefined} />;
   if (page === 'watch' && arg) return <Watch key={arg} code={arg} />;
   if (page === '') return <Title />;

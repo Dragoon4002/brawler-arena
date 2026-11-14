@@ -1,0 +1,12 @@
+[package]
+name = "e2e"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# sandbox tests: real wasm, real xcc. wasm built by `make e2e`
+[dev-dependencies]
+near-workspaces = "0.24"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+anyhow = "1"
+serde_json = "1"
