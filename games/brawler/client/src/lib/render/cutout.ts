@@ -1,6 +1,7 @@
 // Cutout heroes: image parts cut in Blender (games/brawler/sprites/cutout/cut.py) driven by the same Pose as rig.ts.
 // The source art is the idle pose, so every bone rotates by (pose - POSES.idle). Render-only.
 import { POSES, type Pose } from './rig.ts';
+import type { Dna } from '../genes.ts';
 
 type V = [number, number];
 interface Part { name: string; bone: keyof Pose | 'cape'; parent: string | null; pivot: V; at: V; img: HTMLImageElement }
@@ -9,6 +10,12 @@ interface Hero { feet: V; hip: V; height: number; parts: Part[]; byName: Map<str
 const I = POSES.idle;
 const HEIGHT = 100; // game units for the full image height
 const heroes = new Map<string, Hero | null>();
+
+// Hero per monster, derived from DNA so every client agrees with no extra data on the wire.
+// Five equal 72° hue bands, each centred on that hero's colour: red, green, teal, blue, purple.
+export const HERO_IDS = ['bramdra', 'makvel', 'grodrasu', 'lortor', 'torfen'] as const;
+export type HeroId = typeof HERO_IDS[number];
+export const heroOf = (dna: Dna): HeroId => HERO_IDS[Math.round(dna.hue / 72) % 5];
 
 // Starts loading on first call; null until every part image is ready (caller falls back to the vector rig).
 export function hero(name: string): Hero | null {

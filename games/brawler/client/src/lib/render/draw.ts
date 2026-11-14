@@ -2,14 +2,16 @@
 import { STAGES, HURT_H, MAX_HP, hitboxOf, type GameState, type SimEvent, type StageId } from '../sim/sim.ts';
 import { paintBackground, paintStage, paintFront } from './stage.ts';
 import { drawMonster, poseFor, type Look } from './rig.ts';
-import { drawHero, hero } from './cutout.ts';
+import { drawHero, hero, heroOf } from './cutout.ts';
 import { drawSheet, sheet } from './sheet.ts';
-import { lookOf, randomDna } from '../genes.ts';
+import { paintArtBackground, paintArtStage } from './artstage.ts';
+import { lookOf, randomDna, type Dna } from '../genes.ts';
 
 export const W = 1280, H = 720;
 
 // Per-match players (set from the chosen monsters). Defaults: two fixed demo monsters.
-const LOOKS: Look[] = [lookOf({ ...randomDna(7), hue: 172 }), lookOf({ ...randomDna(8), hue: 24 })];
+const DNAS: Dna[] = [{ ...randomDna(7), hue: 172 }, { ...randomDna(8), hue: 24 }];
+const LOOKS: Look[] = DNAS.map(lookOf), HEROES: string[] = DNAS.map(heroOf);
 const NAMES = ['P1', 'P2'];
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; size: number; color: string; kind: 'spark' | 'dust' | 'ring' | 'beam' }
@@ -22,8 +24,8 @@ export function createRenderer(canvas: HTMLCanvasElement) {
   const squash = [0, 0];
   let showBoxes = false;
   let stageId: StageId = 'ember';
-  // ?p1=lortor&p2=torfen swaps a seat's vector monster for an image hero (art test); &style=sheet uses the sprite sheet.
-  const q = new URLSearchParams(location.search), HEROES = [q.get('p1'), q.get('p2')], SHEET = q.get('style') === 'sheet';
+  // Debug: ?p1=<hero>&p2=<hero> overrides the DNA-derived hero; &style=sheet draws the sprite sheet instead of the cutout rig.
+  const q = new URLSearchParams(location.search), PICK = [q.get('p1'), q.get('p2')], SHEET = q.get('style') === 'sheet';
   const onKey = (e: KeyboardEvent) => { if (e.code === 'Backquote') showBoxes = !showBoxes; };
   addEventListener('keydown', onKey);
 
@@ -88,7 +90,7 @@ export function createRenderer(canvas: HTMLCanvasElement) {
       ctx.translate(f.x, f.y);
       if (f.invuln > 0 && Math.floor(s.frame / 4) % 2) ctx.globalAlpha = f.state === 'dodge' ? 0.55 : 0.35;
       ctx.scale(f.facing * (1 + squash[i]), 1 - squash[i]);
-      const flash = f.hitlag > 0 && f.state === 'hitstun', name = HEROES[i];
+      const flash = f.hitlag > 0 && f.state === 'hitstun', name = PICK[i] ?? HEROES[i];
       const sh = name && SHEET ? sheet(name) : null, h = name && !SHEET ? hero(name) : null;
       if (sh) drawSheet(ctx, sh, f, s.frame, p.r, flash);
       else if (h) drawHero(ctx, p, h, flash);
@@ -184,19 +186,25 @@ export function createRenderer(canvas: HTMLCanvasElement) {
     if (s.stage !== stageId) { stageId = s.stage; parts.length = 0; }
     updateCamera(s);
     const t = performance.now() / 1000;
-    paintBackground(ctx, stageId, cam);
+    if (!paintArtBackground(ctx, stageId, cam, W, H)) paintBackground(ctx, stageId, cam);
     ctx.save();
     const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
     shake *= 0.85;
     ctx.translate(W / 2 + sx, H / 2 + sy); ctx.scale(cam.z, cam.z); ctx.translate(-cam.x, -cam.y);
-    paintStage(ctx, stageId, t); fighters(s); particles(); paintFront(ctx, stageId, t);
+    const art = paintArtStage(ctx, stageId); // ?art trial: painted platforms replace procedural stage + front layer
+    if (!art) paintStage(ctx, stageId, t);
+    fighters(s); particles();
+    if (!art) paintFront(ctx, stageId, t);
     ctx.restore();
     hud(s, banner, info);
   }
 
   return {
     draw, onEvents,
-    setPlayers: (names: string[], looks?: Look[]) => { NAMES.splice(0, 2, ...names); if (looks) LOOKS.splice(0, 2, ...looks); },
+    setPlayers: (names: string[], dnas?: Dna[]) => {
+      NAMES.splice(0, 2, ...names);
+      if (dnas) { LOOKS.splice(0, 2, ...dnas.map(lookOf)); HEROES.splice(0, 2, ...dnas.map(heroOf)); }
+    },
     destroy: () => { removeEventListener('keydown', onKey); fit.disconnect(); },
   };
 }

@@ -130,7 +130,7 @@ button.hub-count, .link { cursor: pointer; }
 .hub-tag { font-family: var(--font-display); font-size: 17px; padding: 4px 12px; background: var(--gloss), var(--panel-2); border: 2px solid var(--ink); border-radius: 8px; box-shadow: 0 3px 0 var(--ink); }
 .hub-tag.gen { background: var(--gloss), var(--teal); color: var(--ink); }
 .hub-tag.rec { background: var(--gloss), var(--ember); color: var(--ink); }
-.hub-mon { display: grid; padding: 0; border: 0; background: none; cursor: pointer; width: min(100%, 420px, 48vh); filter: drop-shadow(0 10px 0 rgb(12 8 22 / 0.4)); }
+.hub-mon { display: grid; padding: 0; border: 0; background: none; cursor: pointer; width: min(100%, 420px, 48vh); filter: drop-shadow(0 10px 0 rgb(12 8 22 / 0.4)); translate: 0 12%; /* portrait feet sit at 86% of the box: drop onto the name plate */ }
 .hub-name { display: flex; align-items: center; gap: 12px; }
 .hub-plate { display: grid; justify-items: center; padding: 6px 22px 8px; cursor: pointer; font: inherit; color: var(--cream); background: var(--grain), var(--shade), var(--ink); border: 3px solid var(--panel-2); border-radius: 12px; box-shadow: 0 4px 0 var(--ink); }
 .hub-plate h1 { font-size: clamp(30px, 4.2vw, 48px); text-align: center; }

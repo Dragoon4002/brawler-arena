@@ -46,21 +46,21 @@ impl StageId {
     pub fn def(self) -> &'static StageDef {
         static EMBER: StageDef = StageDef {
             solids: &[Rect {
-                x0: 380.,
-                x1: 1220.,
+                x0: 296.,
+                x1: 1304.,
                 y: 600.,
                 y1: 700.,
             }],
             soft: &[
                 Ledge {
-                    x0: 470.,
-                    x1: 720.,
-                    y: 430.,
+                    x0: 420.,
+                    x1: 713.,
+                    y: 429.,
                 },
                 Ledge {
-                    x0: 880.,
-                    x1: 1130.,
-                    y: 430.,
+                    x0: 887.,
+                    x1: 1180.,
+                    y: 429.,
                 },
             ],
             blast: Blast {
@@ -74,33 +74,33 @@ impl StageId {
         static GROVE: StageDef = StageDef {
             solids: &[
                 Rect {
-                    x0: 330.,
-                    x1: 690.,
+                    x0: 81.,
+                    x1: 686.,
                     y: 620.,
                     y1: 700.,
                 },
                 Rect {
-                    x0: 910.,
-                    x1: 1270.,
+                    x0: 914.,
+                    x1: 1519.,
                     y: 620.,
                     y1: 700.,
                 },
             ],
             soft: &[
                 Ledge {
-                    x0: 440.,
-                    x1: 620.,
-                    y: 450.,
+                    x0: 241.,
+                    x1: 582.,
+                    y: 472.,
                 },
                 Ledge {
-                    x0: 700.,
-                    x1: 900.,
-                    y: 320.,
+                    x0: 646.,
+                    x1: 954.,
+                    y: 343.,
                 },
                 Ledge {
-                    x0: 980.,
-                    x1: 1160.,
-                    y: 450.,
+                    x0: 1018.,
+                    x1: 1359.,
+                    y: 472.,
                 },
             ],
             blast: Blast {
@@ -113,26 +113,26 @@ impl StageId {
         };
         static DOCKS: StageDef = StageDef {
             solids: &[Rect {
-                x0: 300.,
-                x1: 1300.,
+                x0: 296.,
+                x1: 1304.,
                 y: 640.,
                 y1: 690.,
             }],
             soft: &[
                 Ledge {
-                    x0: 520.,
-                    x1: 640.,
-                    y: 500.,
+                    x0: 530.,
+                    x1: 668.,
+                    y: 501.,
                 },
                 Ledge {
-                    x0: 740.,
-                    x1: 860.,
-                    y: 380.,
+                    x0: 730.,
+                    x1: 870.,
+                    y: 383.,
                 },
                 Ledge {
-                    x0: 960.,
-                    x1: 1080.,
-                    y: 500.,
+                    x0: 932.,
+                    x1: 1070.,
+                    y: 501.,
                 },
             ],
             blast: Blast {

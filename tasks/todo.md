@@ -122,3 +122,11 @@ Est: ~1-2 days of sessions.
 - [x] Verified: all poses + attack strikes (scratch gallery), demo bot fight renders
 - [x] Sprite sheet (Blender mesh-deform renders, sprites/build.py, render/sheet.ts) -> client/public/chars/<hero>/sheet.*; `&style=sheet`
 - [ ] User picks preferred style
+
+## Art stages + heroes as defaults (staging)
+- [x] Merge origin/main into staging (Arena.tsx conflict resolved)
+- [x] Stage geometry from painted art: stages.ts + sim/src/stages.rs, golden regen, sim/server/client tests green, godot data.json re-exported
+- [x] Art is default render (fight, thumbnails, backdrops); procedural fallback while loading; grove keeps procedural sky (needs platform-free bg)
+- [x] Heroes from DNA (5 equal hue bands) in fights + portraits; cutout rig default; ?p1/?p2/&style=sheet debug only
+- [x] Bot follows stage solids (crosses grove gap)
+- [ ] Godot visuals still procedural (geometry synced only)

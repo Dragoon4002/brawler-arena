@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { archetype, lookOf, STAT_KEYS, type Dna, type Monster } from '@/lib/genes.ts';
 import { drawMonster, idlePose, type Pose } from '@/lib/render/rig.ts';
+import { drawHero, hero, heroOf } from '@/lib/render/cutout.ts';
 import { drawStageThumb } from '@/lib/render/stage.ts';
 import type { StageId } from '@/lib/stages.ts';
 
@@ -40,9 +41,10 @@ export function Portrait({ dna, size = 200, pose, flip = false, className = 'por
       ctx.translate(size / 2, size * 0.86); ctx.scale(k * (flip ? -1 : 1), k);
       ctx.fillStyle = 'rgb(12 8 22 / 0.35)';
       ctx.beginPath(); ctx.ellipse(0, 4, 38, 8, 0, 0, Math.PI * 2); ctx.fill();
-      drawMonster(ctx, pose ?? idlePose(t), look, false);
+      const h = hero(heroOf(dna)); // vector monster until the hero's parts load
+      if (h) drawHero(ctx, pose ?? idlePose(t), h, false); else drawMonster(ctx, pose ?? idlePose(t), look, false);
       t++;
-      if (!reduceMotion() && !pose) raf = requestAnimationFrame(paint);
+      if (!h || (!reduceMotion() && !pose)) raf = requestAnimationFrame(paint);
     };
     paint();
     return () => cancelAnimationFrame(raf);
@@ -92,8 +94,8 @@ export function ArenaBackdrop({ id, className }: { id: StageId; className?: stri
       if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
       const s = Math.max(w / 1280, h / 720);
       ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (w - 1280 * s) / 2, dpr * (h - 720 * s) / 2);
-      drawStageThumb(ctx, id, 1280, 720, performance.now() / 1000); // seconds, same clock as the fight renderer
-      if (!reduceMotion()) raf = requestAnimationFrame(paint);
+      const ready = drawStageThumb(ctx, id, 1280, 720, performance.now() / 1000); // seconds, same clock as the fight renderer
+      if (!ready || !reduceMotion()) raf = requestAnimationFrame(paint);
     };
     paint();
     const onResize = () => { if (reduceMotion()) paint(); };
@@ -110,8 +112,10 @@ export function StageThumb({ id, className }: { id: StageId; className?: string 
     const w = c.clientWidth || 320, h = Math.round(w * 9 / 16);
     c.width = w * dpr; c.height = h * dpr;
     const ctx = c.getContext('2d')!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawStageThumb(ctx, id, w, h);
+    let raf = 0;
+    const paint = () => { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); if (!drawStageThumb(ctx, id, w, h)) raf = requestAnimationFrame(paint); };
+    paint();
+    return () => cancelAnimationFrame(raf);
   }, [id]);
   return <canvas ref={ref} className={className} style={{ width: '100%', aspectRatio: '16 / 9' }} aria-hidden="true" />;
 }
