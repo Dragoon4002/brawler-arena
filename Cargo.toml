@@ -1,4 +1,4 @@
 [workspace]
 resolver = "3"
-members = ["games/brawler/sim"]
+members = ["crates/near-svc", "games/brawler/sim", "games/brawler/server"]
 exclude = ["contracts", "games/brawler/contract"]

@@ -7,8 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "server": "node --experimental-strip-types --no-warnings ../relay/relay.ts",
-    "test": "node --experimental-strip-types --no-warnings --test src/sim/sim.test.ts src/net.test.ts src/genes.test.ts src/market.test.ts src/nft.test.ts ../relay/auth.test.ts"
+    "test": "node --experimental-strip-types --no-warnings --test src/sim/sim.test.ts src/net.test.ts src/genes.test.ts src/market.test.ts src/nft.test.ts"
   },
   "dependencies": {
     "@xyz/platform": "*",
