@@ -109,6 +109,8 @@ h1.row-ico, h2.row-ico, h3.row-ico { display: flex; }
 .hub-count .ico { width: 26px; height: 26px; }
 .hub-count i { font-style: normal; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
 .hub-count.wallet { color: var(--gold); }
+button.hub-count, .link { cursor: pointer; }
+.link { padding: 0; font: inherit; color: var(--gold); text-decoration: underline; background: none; border: 0; }
 .hub-side { display: grid; align-content: center; gap: 14px; }
 .hub-side.left { grid-area: left; justify-items: start; }
 .hub-side.right { grid-area: right; justify-items: end; }
